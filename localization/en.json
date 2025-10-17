@@ -1,26 +1,3 @@
 {
-  "appName": "JT Cheater App",
-  "common": {
-    "home": "Home",
-    "history": "History",
-    "profile": "Profile",
-    "uploadPhoto": "Upload Photo",
-    "internetConnectionAlert": "There’s an issue with your internet connection. Please try again.",
-    "couldn'tUploadPhotoAlert": "Invalid photo. Check the file type and size, then try again."
-  },
-  "locationFinder": {
-    "title": "Location Finder",
-    "description": "Upload a photo and reveal its hidden location and time details.",
-    "analyzeLocation": "Analyze Location",
-    "photoTitle": "Photo Title",
-    "approvedExamples": "Approved Examples",
-    "exampleToSkip": "Example to Skip",
-    "analyzingLocationDescription":"Extracting location and time details from the uploaded photo.",
-    "notifyMeWhenReady": "Notify me when ready",
-    "hideThisScreen": "Hide this screen",
-    "openInMaps": "Open in Maps",
-    "estimatedLocation": "Estimated Location",
-    "approximateTime": "Approximate Time",
-    "peapleDetected": "People Detected"
-  }
+  "appName": "Geliom"
 }
