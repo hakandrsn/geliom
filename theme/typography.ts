@@ -1,10 +1,11 @@
 
 
 export interface Fonts {
+    light: string;
     regular: string;
     medium: string;
-    light: string;
     semibold: string;
+    bold: string;
 }
 
 interface TypographyVariant {
@@ -13,101 +14,160 @@ interface TypographyVariant {
     defaultFontWeight: keyof Fonts;
     letterSpacing?: number;
     fontVariant?: string[];
-    // İsterseniz letterSpacing gibi başka varsayılan özellikler de ekleyebilirsiniz
-    // letterSpacing?: number;
 }
 
 export type TypographyKeys = {
-    h1: TypographyVariant;
-    h2: TypographyVariant;
-    h3: TypographyVariant;
-    h4: TypographyVariant;
-    h5: TypographyVariant;
-    h6: TypographyVariant;
-    h7: TypographyVariant;
-    body: TypographyVariant;
-    body2: TypographyVariant;
-    caption: TypographyVariant;
+    // Başlık seviyeleri - Geliom için optimize edilmiş
+    h1: TypographyVariant;      // Ana başlık (Geliom logo, ana ekran)
+    h2: TypographyVariant;      // Sayfa başlıkları
+    h3: TypographyVariant;      // Bölüm başlıkları
+    h4: TypographyVariant;      // Alt başlıklar
+    h5: TypographyVariant;      // Küçük başlıklar
+    h6: TypographyVariant;      // Mini başlıklar
+    
+    // Gövde metinleri - Sosyal etkileşim için optimize
+    body: TypographyVariant;    // Ana metin (mesajlar, açıklamalar)
+    bodyLarge: TypographyVariant; // Büyük gövde metni
+    bodySmall: TypographyVariant; // Küçük gövde metni
+    
+    // Özel kullanımlar
+    caption: TypographyVariant; // Küçük açıklamalar, zaman damgaları
+    button: TypographyVariant;  // Buton metinleri
+    label: TypographyVariant;   // Form etiketleri
+    
+    // Sosyal özellikler için
+    status: TypographyVariant;  // Durum metinleri ("Müsaitim", "Meşgulüm")
+    nickname: TypographyVariant; // Takma isimler
+    groupName: TypographyVariant; // Grup isimleri
 };
 
-// Projenizde kullanacağınız font ailelerini burada tanımlayın
-// Fontları projenize nasıl ekleyeceğinizi Expo dökümanlarından öğrenebilirsiniz.
+// Comfortaa font ailesi - Geliom'un doğal ve samimi hissi için
 export const fonts: Fonts = {
-    light: 'Outfit-Light',
-    regular: 'Outfit-Regular',
-    medium: 'Outfit-Medium',
-    semibold: 'Outfit-SemiBold', // 'bold' yerine 'semibold' kullanmak daha doğru
+    light: 'Comfortaa-Light',
+    regular: 'Comfortaa-Regular',
+    medium: 'Comfortaa-Medium',
+    semibold: 'Comfortaa-SemiBold',
+    bold: 'Comfortaa-Bold',
 };
 
 export const typography: TypographyKeys = {
+    // Ana başlık - Geliom logo ve hoş geldin mesajları için
     h1: {
-        fontSize: 48,
-        lineHeight: 72,
-        defaultFontWeight: 'regular',
-        letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
-    },
-    h2: {
-        fontSize: 40,
-        lineHeight: 60,
-        defaultFontWeight: 'regular',
-        letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
-    },
-    h3: {
         fontSize: 32,
-        lineHeight: 48,
-        defaultFontWeight: 'regular',
-        letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
+        lineHeight: 40,
+        defaultFontWeight: 'bold',
+        letterSpacing: -0.5,
     },
-    h4: {
-        fontSize: 24,
+    
+    // Sayfa başlıkları - "Gruplarım", "Profilim" gibi
+    h2: {
+        fontSize: 28,
         lineHeight: 36,
-        defaultFontWeight: 'regular',
-        letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
+        defaultFontWeight: 'semibold',
+        letterSpacing: -0.3,
     },
-    h5: {
+    
+    // Bölüm başlıkları - "Arkadaşlar", "Aile" gibi grup kategorileri
+    h3: {
+        fontSize: 24,
+        lineHeight: 32,
+        defaultFontWeight: 'semibold',
+        letterSpacing: -0.2,
+    },
+    
+    // Alt başlıklar - Grup isimleri, etkinlik başlıkları
+    h4: {
         fontSize: 20,
-        lineHeight: 30,
-        defaultFontWeight: 'regular',
+        lineHeight: 28,
+        defaultFontWeight: 'medium',
         letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
     },
-    h6: {
+    
+    // Küçük başlıklar - Ayar kategorileri
+    h5: {
         fontSize: 18,
-        lineHeight: 30,
-        defaultFontWeight: 'regular',
+        lineHeight: 24,
+        defaultFontWeight: 'medium',
         letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
     },
-    h7: {
+    
+    // Mini başlıklar - Form başlıkları
+    h6: {
+        fontSize: 16,
+        lineHeight: 22,
+        defaultFontWeight: 'medium',
+        letterSpacing: 0,
+    },
+    
+    // Ana gövde metni - Açıklamalar, mesajlar
+    body: {
         fontSize: 16,
         lineHeight: 24,
         defaultFontWeight: 'regular',
         letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
     },
-    body: {
-        fontSize: 14,
-        lineHeight: 18,
+    
+    // Büyük gövde metni - Önemli açıklamalar
+    bodyLarge: {
+        fontSize: 18,
+        lineHeight: 26,
         defaultFontWeight: 'regular',
         letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
     },
-    body2: {
+    
+    // Küçük gövde metni - İkincil bilgiler
+    bodySmall: {
+        fontSize: 14,
+        lineHeight: 20,
+        defaultFontWeight: 'regular',
+        letterSpacing: 0,
+    },
+    
+    // Küçük açıklamalar - Zaman damgaları, yardımcı metinler
+    caption: {
         fontSize: 12,
         lineHeight: 16,
         defaultFontWeight: 'regular',
-        letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
+        letterSpacing: 0.2,
     },
-    caption: {
-        fontSize: 10,
-        lineHeight: 15,
-        defaultFontWeight: 'regular',
+    
+    // Buton metinleri - CTA butonları
+    button: {
+        fontSize: 16,
+        lineHeight: 20,
+        defaultFontWeight: 'semibold',
+        letterSpacing: 0.1,
+    },
+    
+    // Form etiketleri
+    label: {
+        fontSize: 14,
+        lineHeight: 18,
+        defaultFontWeight: 'medium',
         letterSpacing: 0,
-        fontVariant: ['no-common-ligatures']
+    },
+    
+    // Durum metinleri - "Müsaitim", "Meşgulüm" gibi
+    status: {
+        fontSize: 15,
+        lineHeight: 20,
+        defaultFontWeight: 'medium',
+        letterSpacing: 0,
+    },
+    
+    // Takma isimler - Kişiselleştirilmiş isimler
+    nickname: {
+        fontSize: 16,
+        lineHeight: 22,
+        defaultFontWeight: 'medium',
+        letterSpacing: 0,
+    },
+    
+    // Grup isimleri - Grup kartlarında
+    groupName: {
+        fontSize: 18,
+        lineHeight: 24,
+        defaultFontWeight: 'semibold',
+        letterSpacing: -0.1,
     },
 };

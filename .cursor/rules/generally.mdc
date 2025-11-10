@@ -1,0 +1,8 @@
+---
+alwaysApply: true
+---
+
+**rule** never use shadow
+**rule** everytime use Stylesheet
+**rule** use must use shared component firstly
+**rule** every constant value should be in constant folder

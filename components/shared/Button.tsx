@@ -36,12 +36,7 @@ export default function Button({
 }: ButtonProps) {   
     const { colors } = useTheme();
 
-    // --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
-
-    // 1. İki farklı durum için iki ayrı değişken tanımlıyoruz:
-    // a) Butonun stilinin disabled/pasif görünüp görünmeyeceği
-    const shouldApplyDisabledStyle = disabled || loading || passive;
-    // b) Butonun gerçekten tıklanamaz olup olmayacağı
+    // Tıklanabilirliği `isEffectivelyDisabled`'a bağlıyoruz
     const isEffectivelyDisabled = (disabled || loading) && !passive;
 
     const defaultTextVariant = size === 'large' ? 'h6' : 'body2';
@@ -51,9 +46,9 @@ export default function Button({
         return { start: { x: 1, y: 0 }, end: { x: 0, y: 0 } };
     }
 
-    // 2. Tüm stil (renk, opaklık) koşullarını `shouldApplyDisabledStyle`'a bağlıyoruz
+    // Tüm stil (renk, opaklık) koşullarını `shouldApplyDisabledStyle`'a bağlıyoruz
     const getTextColor = () => {
-        if (shouldApplyDisabledStyle) return colors.secondaryText;
+        if (isEffectivelyDisabled) return colors.secondaryText;
         if (variant === 'outline') return colors.primary;
         return colors.text;
     };
@@ -78,7 +73,7 @@ export default function Button({
     const containerStyle = [
         styles.baseContainer,
         size === 'large' ? styles.largeContainer : styles.smallContainer,
-        shouldApplyDisabledStyle && { opacity: 0.6 },
+        isEffectivelyDisabled && { opacity: 0.6 },
         style,
     ];
 
@@ -88,7 +83,7 @@ export default function Button({
             activeOpacity={0.8}
             onPress={onPress} disabled={isEffectivelyDisabled} style={containerStyle} {...props}>
                 <LinearGradient
-                    colors={shouldApplyDisabledStyle ? [colors.disabled, colors.disabled] : colors.linearGradient as [string, string]}
+                    colors={isEffectivelyDisabled ? [colors.disabled, colors.disabled] : colors.linearGradient as [string, string]}
                     start={getGradientStartAndEnd().start}
                     end={getGradientStartAndEnd().end}
                     style={[
@@ -113,7 +108,7 @@ export default function Button({
         return (
             <TouchableOpacity activeOpacity={0.8} onPress={onPress} disabled={isEffectivelyDisabled} style={containerStyle} {...props}>
                 <LinearGradient
-                    colors={shouldApplyDisabledStyle ? [colors.disabled, colors.disabled] : colors.linearGradient as [string, string]}
+                    colors={isEffectivelyDisabled ? [colors.disabled, colors.disabled] : colors.linearGradient as [string, string]}
                     start={getGradientStartAndEnd().start}
                     end={getGradientStartAndEnd().end}
                     style={[
@@ -127,14 +122,13 @@ export default function Button({
         );
     }
 
-    // 3. Tıklanabilirliği `isEffectivelyDisabled`'a bağlıyoruz
     return (
         <TouchableOpacity
             activeOpacity={0.8}
             onPress={onPress}
             disabled={isEffectivelyDisabled}
             style={[
-                { backgroundColor: shouldApplyDisabledStyle ? colors.disabled : colors.primary },
+                { backgroundColor: isEffectivelyDisabled ? colors.disabled : colors.primary },
                 containerStyle,
             ]}
             {...props}
@@ -174,9 +168,8 @@ const styles = StyleSheet.create({
     contentPadding: {
         paddingHorizontal: 16,
     },
-    // --- YENİ EKLENEN STİL ---
     borderFrame: {
-        padding: 1, // Bu 1px'lik kenarlık kalınlığını oluşturur
+        padding: 1,
     },
     iconWrapper: {
         marginRight: 8,
@@ -194,7 +187,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     largeBorderRadius: { borderRadius: 28 },
-    largeInnerRadius: { borderRadius: 27 }, // Dıştakinden 1px küçük
+    largeInnerRadius: { borderRadius: 27 },
     smallBorderRadius: { borderRadius: 20 },
-    smallInnerRadius: { borderRadius: 19 }, // Dıştakinden 1px küçük
+    smallInnerRadius: { borderRadius: 19 },
 });
