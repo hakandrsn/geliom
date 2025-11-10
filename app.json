@@ -1,15 +1,16 @@
 {
   "expo": {
-    "name": "geliom",
+    "name": "Geliom",
     "slug": "geliom",
-    "version": "1.0.0",
+    "version": "0.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "geliom",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eoist.geliom"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +20,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.eoist.geliom"
     },
     "web": {
       "output": "static",
@@ -40,7 +42,19 @@
         }
       ],
       "expo-build-properties",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Comfortaa-Light.ttf",
+            "./assets/fonts/Comfortaa-Regular.ttf",
+            "./assets/fonts/Comfortaa-Medium.ttf",
+            "./assets/fonts/Comfortaa-SemiBold.ttf",
+            "./assets/fonts/Comfortaa-Bold.ttf"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
