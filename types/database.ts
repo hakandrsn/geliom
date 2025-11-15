@@ -1,9 +1,11 @@
 export interface User {
   id: string; // UUID - auth.users'dan referans
-  custom_user_id: string; // TEXT UK
+  custom_user_id: string; // TEXT UK - 8 karakterli unique kod (grup davetiyesi için)
+  email?: string; // TEXT - Kullanıcı email adresi
   display_name?: string; // TEXT
   photo_url?: string; // TEXT
-  mood_id?: number; // INT FK - moods tablosuna referans
+  /** @deprecated Use user_group_moods table instead. This field is kept for backward compatibility. */
+  mood_id?: number; // INT FK - moods tablosuna referans (DEPRECATED - use user_group_moods)
   show_mood?: boolean; // BOOLEAN
   onesignal_player_id?: string; // TEXT
   updated_at?: string; // TIMESTAMPTZ
@@ -18,7 +20,7 @@ export interface Mood {
 export interface Group {
   id: string; // UUID PK
   owner_id: string; // UUID FK
-  type?: string; // TEXT
+  type: string; // TEXT NOT NULL
   name: string; // TEXT
   invite_code: string; // TEXT UK
   member_limit?: number; // INT
@@ -41,14 +43,22 @@ export interface Nickname {
 export interface Status {
   id: number; // INT PK
   text: string; // TEXT
-  notifies?: boolean; // BOOLEAN
-  is_custom?: boolean; // BOOLEAN
+  notifies: boolean; // BOOLEAN NOT NULL DEFAULT false
+  is_custom: boolean; // BOOLEAN NOT NULL DEFAULT false
   owner_id?: string; // UUID FK - Eğer custom ise sahibi
 }
 
 export interface UserStatus {
   user_id: string; // UUID PK, FK
+  group_id?: string; // UUID FK - NULL ise global status (tüm gruplar için geçerli)
   status_id: number; // INT FK
+  updated_at?: string; // TIMESTAMPTZ
+}
+
+export interface UserGroupMood {
+  user_id: string; // UUID PK, FK
+  group_id?: string; // UUID FK - NULL ise global mood (tüm gruplar için geçerli)
+  mood_id: number; // INT FK
   updated_at?: string; // TIMESTAMPTZ
 }
 
@@ -92,6 +102,10 @@ export type CreateStatus = Omit<Status, 'id'>;
 export type UpdateStatus = Partial<Omit<Status, 'id'>>;
 
 export type CreateUserStatus = Omit<UserStatus, 'updated_at'>;
+export type UpdateUserStatus = Partial<Omit<UserStatus, 'user_id' | 'group_id' | 'updated_at'>>;
+
+export type CreateUserGroupMood = Omit<UserGroupMood, 'updated_at'>;
+export type UpdateUserGroupMood = Partial<Omit<UserGroupMood, 'user_id' | 'group_id' | 'updated_at'>>;
 
 export type CreateMutedNotification = MutedNotification;
 
@@ -117,6 +131,10 @@ export interface GroupMemberWithUser extends GroupMember {
 
 export interface UserStatusWithStatus extends UserStatus {
   status?: Status;
+}
+
+export interface UserGroupMoodWithMood extends UserGroupMood {
+  mood?: Mood;
 }
 
 export interface ScheduledEventWithDetails extends ScheduledEvent {

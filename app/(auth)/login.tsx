@@ -1,285 +1,243 @@
-import { supabase } from "@/api/supabase";
-import { BaseLayout, Typography } from "@/components/shared";
+import { signInWithApple, signInWithGoogle } from "@/api/provider-auth";
+import { Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as AuthSession from 'expo-auth-session';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Platform,
-    StyleSheet,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function Login() {
-  const { colors, toggleTheme, isDark } = useTheme();
-  const [isLoading, setIsLoading] = useState(false);
+  const { colors } = useTheme();
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [isLoadingApple, setIsLoadingApple] = useState(false);
 
-  // Google ile giriş - Supabase OAuth kullanarak
+  // Helper to manage loading state for both
+  const isLoading = isLoadingGoogle || isLoadingApple;
+
+  // Google ile giriş
   const handleGoogleLogin = async () => {
     try {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: AuthSession.makeRedirectUri(),
-        },
-      });
+      console.log('🔵 Google login başlatılıyor...');
+      setIsLoadingGoogle(true);
 
-      if (error) {
-        Alert.alert('Hata', 'Google ile giriş yapılamadı: ' + error.message);
-        return;
-      }
+      const result = await signInWithGoogle();
+      console.log('🔵 Google login sonucu:', result);
 
-      // OAuth flow başarıyla başlatıldı
-      // Kullanıcı auth state change listener'ı aracılığıyla yönlendirilecek
-    } catch (error) {
-      Alert.alert('Hata', 'Google ile giriş yapılamadı');
-      console.error('Google login error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Apple ile giriş - Expo Apple Authentication kullanarak
-  const handleAppleLogin = async () => {
-    try {
-      setIsLoading(true);
-
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-
-      if (credential.identityToken) {
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: 'apple',
-          token: credential.identityToken,
-        });
-
-        if (error) {
-          Alert.alert('Hata', 'Apple ile giriş yapılamadı: ' + error.message);
+      if (result.error) {
+        console.error('❌ Google login hatası:', result.error);
+        if (result.error.code === 'CANCELLED') {
+          console.log('ℹ️ Kullanıcı girişi iptal etti');
+          setIsLoadingGoogle(false); // Stop loading on cancel
           return;
         }
 
-        if (data.session) {
-          router.replace('/');
-        }
-      }
-    } catch (error: any) {
-      if (error.code === 'ERR_REQUEST_CANCELED') {
-        // Kullanıcı iptal etti, hata gösterme
+        Alert.alert('Hata', result.error.message || 'Google ile giriş yapılamadı');
+        setIsLoadingGoogle(false); // Stop loading on error
         return;
       }
+
+      console.log('✅ OAuth flow başarıyla tamamlandı');
+      // Auth state change listener will handle navigation,
+      // so we can set loading to false here or let the listener manage it.
+      // For a better UX, we'll let the listener handle the global auth state.
+      // If auth state doesn't change, loading might get stuck.
+      // Let's stop loading if the process finishes, auth listener will redirect anyway.
+      // Note: If auth is fast, this might be okay.
+      // If we *don't* set loading to false, we rely on the auth listener.
+      // Let's keep the user's original logic: don't set loading to false on success.
+    } catch (error) {
+      console.error('❌ Google login exception:', error);
+      Alert.alert('Hata', 'Google ile giriş yapılamadı');
+      setIsLoadingGoogle(false); // Stop loading on exception
+    }
+  };
+
+  // Apple ile giriş
+  const handleAppleLogin = async () => {
+    try {
+      setIsLoadingApple(true);
+
+      const { error } = await signInWithApple();
+
+      if (error) {
+        if (error.code === 'CANCELLED') {
+          console.log('ℹ️ Kullanıcı Apple girişi iptal etti');
+          // Important: Set loading to false on cancel
+          setIsLoadingApple(false);
+          return;
+        }
+
+        Alert.alert('Hata', error.message || 'Apple ile giriş yapılamadı');
+        setIsLoadingApple(false); // Stop loading on error
+        return;
+      }
+
+      // Başarılı - auth state change listener yönlendirecek
+      // We don't set loading to false, similar to Google login
+    } catch (error) {
       Alert.alert('Hata', 'Apple ile giriş yapılamadı');
       console.error('Apple login error:', error);
-    } finally {
-      setIsLoading(false);
+      setIsLoadingApple(false); // Stop loading on exception
     }
   };
 
   return (
-    <BaseLayout
-      fullScreen={true}
-      headerShow={true}
-      header={{
-        rightIcon: {
-          icon: <Ionicons name={isDark ? "sunny" : "moon"} size={24} color={colors.white} />,
-          onPress: toggleTheme,
-        },
-        backgroundColor: 'transparent',
-      }}
+    // Use the theme background color
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={['top', 'bottom']}
     >
-      {/* Background with gradient */}
-      <LinearGradient
-        colors={[colors.primary, colors.secondary, colors.tertiary]}
-        style={styles.backgroundGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        {/* Decorative circles for nature theme */}
-        <View style={[styles.decorativeCircle, styles.circle1, { backgroundColor: colors.overlay }]} />
-        <View style={[styles.decorativeCircle, styles.circle2, { backgroundColor: colors.overlay }]} />
-        <View style={[styles.decorativeCircle, styles.circle3, { backgroundColor: colors.overlay }]} />
-        
-        {/* Main content with blur effect */}
-        <View style={styles.contentContainer}>
-          {/* Logo and welcome section */}
-          <View style={styles.logoSection}>
-            <View style={styles.logoContainer}>
-              <Typography variant="h1" color={colors.white} style={styles.logoText}>
-                Geliom
+      {/* Main content area, centered and balanced */}
+      <View style={styles.contentContainer}>
+
+        {/* Top section with app icon, name, and description */}
+        <View style={styles.topSection}>
+          {/* Nature-themed icon */}
+          <Ionicons
+            name="leaf-outline"
+            size={80}
+            color={colors.primary}
+            style={styles.logoIcon}
+          />
+          <Typography variant="h1" color={colors.text} style={styles.appName}>
+            Geliom
+          </Typography>
+          <Typography variant="bodyLarge" color={colors.secondaryText} style={styles.description}>
+            Arkadaşlarınla ve ailenle anlık bağlantı kur
+          </Typography>
+        </View>
+
+        {/* Bottom section with login buttons and terms */}
+        <View style={styles.bottomSection}>
+          <View style={styles.buttonContainer}>
+            {/* Google Login Button */}
+            <TouchableOpacity
+              style={[
+                styles.loginButton,
+                {
+                  // Use cardBackground for better dark mode compatibility
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.stroke,
+                  shadowColor: colors.shadow,
+                },
+              ]}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoadingGoogle ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="logo-google" size={24} color="#4285F4" />
+              )}
+              <Typography
+                variant="button"
+                color={colors.text}
+                style={styles.buttonText}
+              >
+                Google ile Giriş Yap
               </Typography>
-              <Typography variant="body" color={colors.white} style={styles.logoSubtext}>
-                🌿 Doğal bağlantılar kur
-              </Typography>
-            </View>
+              {/* Spacer view to keep text centered */}
+              <View style={styles.buttonIconSpacer} />
+            </TouchableOpacity>
+
+            {/* Apple Login - Only show on iOS */}
+            {Platform.OS === 'ios' && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                // WHITE_OUTLINE looks much better on light/dark themed backgrounds
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+                cornerRadius={16}
+                style={styles.appleButton}
+                onPress={handleAppleLogin}
+                // Note: The Apple button has its own loading state,
+                // so we don't need to check isLoadingApple here.
+              />
+            )}
           </View>
 
-          {/* Login section with blur */}
-          <BlurView intensity={20} tint={isDark ? 'dark' : 'light'} style={styles.loginContainer}>
-            <View style={styles.loginContent}>
-              <Typography variant="h2" color={colors.text} style={styles.welcomeTitle}>
-                Hoş Geldin! 👋
-              </Typography>
-              
-              <Typography variant="body" color={colors.secondaryText} style={styles.welcomeSubtitle}>
-                Arkadaşlarınla ve ailenle bağlantı kurmak için giriş yap
-              </Typography>
-
-              {/* Login buttons */}
-              <View style={styles.buttonContainer}>
-                {/* Google Login */}
-                <TouchableOpacity
-                  style={[styles.loginButton, { backgroundColor: colors.white }]}
-                  onPress={handleGoogleLogin}
-                  disabled={isLoading}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="logo-google" size={24} color="#4285F4" />
-                  <Typography variant="button" color={colors.text} style={styles.buttonText}>
-                    Google ile Giriş Yap
-                  </Typography>
-                </TouchableOpacity>
-
-                {/* Apple Login - Only show on iOS with native component */}
-                {Platform.OS === 'ios' && (
-                  <AppleAuthentication.AppleAuthenticationButton
-                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                    buttonStyle={isDark ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                    cornerRadius={16}
-                    style={styles.appleButton}
-                    onPress={handleAppleLogin}
-                  />
-                )}
-              </View>
-
-              {/* Terms and privacy */}
-              <Typography variant="caption" color={colors.secondaryText} style={styles.termsText}>
-                Giriş yaparak Kullanım Şartları ve Gizlilik Politikası'nı kabul etmiş olursunuz
-              </Typography>
-            </View>
-          </BlurView>
+          {/* Terms and privacy */}
+          <Typography variant="caption" color={colors.secondaryText} style={styles.termsText}>
+            Giriş yaparak Kullanım Şartları ve Gizlilik Politikası'nı kabul etmiş olursunuz
+          </Typography>
         </View>
-      </LinearGradient>
-    </BaseLayout>
+      </View>
+    </SafeAreaView>
   );
 }
 
+// A more compact, centered, and theme-aware stylesheet
 const styles = StyleSheet.create({
-  backgroundGradient: {
+  container: {
     flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  decorativeCircle: {
-    position: 'absolute',
-    borderRadius: 9999,
-  },
-  circle1: {
-    width: 200,
-    height: 200,
-    top: -50,
-    right: -50,
-  },
-  circle2: {
-    width: 150,
-    height: 150,
-    bottom: 100,
-    left: -30,
-  },
-  circle3: {
-    width: 100,
-    height: 100,
-    top: '40%',
-    right: 20,
   },
   contentContainer: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'space-around', // Balances top and bottom sections
     paddingHorizontal: 24,
-    paddingVertical: 60,
+    paddingVertical: 32,
   },
-  logoSection: {
-    flex: 1,
-    justifyContent: 'center',
+  topSection: {
     alignItems: 'center',
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
+  logoIcon: {
+    marginBottom: 16,
   },
-  logoText: {
-    textAlign: 'center',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  logoSubtext: {
-    textAlign: 'center',
-    opacity: 0.9,
-  },
-  loginContainer: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    marginBottom: 40,
-  },
-  loginContent: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  welcomeTitle: {
+  appName: {
     textAlign: 'center',
     marginBottom: 8,
   },
-  welcomeSubtitle: {
+  description: {
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  bottomSection: {
+    width: '100%',
   },
   buttonContainer: {
     width: '100%',
-    gap: 16,
+    gap: 16, // Space between buttons
     marginBottom: 24,
   },
   loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 24,
     borderRadius: 16,
-    shadowColor: '#000',
+    minHeight: 56, // Match Apple button height
+    borderWidth: 1,
+    // Shadow for depth
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    gap: 12,
+    shadowRadius: 5,
+    elevation: 3, // for Android
   },
   buttonText: {
-    flex: 1,
+    flex: 1, // Allows text to be centered
     textAlign: 'center',
+    marginLeft: 12,
+  },
+  // This spacer helps center the text when the icon is on the left
+  buttonIconSpacer: {
+    width: 24, // Same width as the icon
   },
   appleButton: {
-    height: 56,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    height: 56, // Standard height
+    width: '100%',
   },
   termsText: {
     textAlign: 'center',
     lineHeight: 18,
-    opacity: 0.8,
+    paddingHorizontal: 20,
   },
 });

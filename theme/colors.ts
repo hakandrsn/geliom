@@ -7,9 +7,8 @@ export const lightColors = {
   
   // GeliomButton renkleri - Sadece kullanılan renkler
   forest: '#1B5E20',         // 9. Active state - Koyu orman yeşili
-  sage: '#87A96B',           // 13. Passive state - Adaçayı yeşili
+  sage: 'rgba(1, 121, 111, 0.5)',           // 13. Passive state - Adaçayı yeşili
   pine: '#01796F',           // 17. Loading state - Çam yeşili
-  
   // Gradient tonları - Doğal geçişler
   linearGradient: ['#2E7D32', '#4CAF50'],
   
@@ -54,7 +53,7 @@ export const darkColors = {
   
   // GeliomButton renkleri - Dark mode versiyonları
   forest: '#2E7D32',         // 9. Active state - Orman yeşili (daha açık)
-  sage: '#9CCC65',           // 13. Passive state - Adaçayı yeşili (daha açık)
+  sage: 'rgba(1, 121, 111, 0.5)',           // 13. Passive state - Adaçayı yeşili (daha açık)
   pine: '#26A69A',           // 17. Loading state - Çam yeşili (daha açık)
   
   // Gradient tonları
