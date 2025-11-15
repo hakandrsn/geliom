@@ -1,0 +1,119 @@
+---
+alwaysApply: true
+description: supabase table definitions
+---
+
+**users** 
+create table public.users (
+  id uuid not null,
+  custom_user_id text not null,
+  email text null,
+  display_name text null,
+  photo_url text null,
+  show_mood boolean not null default false,
+  onesignal_player_id text null,
+  updated_at timestamp with time zone null default now(),
+  mood_id integer null,
+  constraint users_pkey primary key (id),
+  constraint users_custom_user_id_key unique (custom_user_id),
+  constraint users_id_fkey foreign KEY (id) references auth.users (id) on delete CASCADE,
+  constraint users_mood_id_fkey foreign KEY (mood_id) references moods (id)
+) TABLESPACE pg_default;
+
+**user_statuses**
+create table public.user_statuses (
+  user_id uuid not null,
+  status_id integer not null,
+  updated_at timestamp with time zone null default now(),
+  constraint user_statuses_pkey primary key (user_id),
+  constraint user_statuses_status_id_fkey foreign KEY (status_id) references statuses (id),
+  constraint user_statuses_user_id_fkey foreign KEY (user_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+**subcriptions**
+create table public.subscriptions (
+  user_id uuid not null,
+  status text not null default 'free'::text,
+  expires_at timestamp with time zone null,
+  constraint subscriptions_pkey primary key (user_id),
+  constraint subscriptions_user_id_fkey foreign KEY (user_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+**statuses**
+create table public.statuses (
+  id serial not null,
+  text text not null,
+  notifies boolean not null default false,
+  is_custom boolean not null default false,
+  owner_id uuid null,
+  constraint statuses_pkey primary key (id),
+  constraint statuses_owner_id_fkey foreign KEY (owner_id) references users (id) on delete set null
+) TABLESPACE pg_default;
+
+**scheduled_events**
+create table public.scheduled_events (
+  id uuid not null default gen_random_uuid (),
+  group_id uuid not null,
+  creator_id uuid not null,
+  title text not null,
+  event_time timestamp with time zone not null,
+  notification_time timestamp with time zone null,
+  created_at timestamp with time zone null default now(),
+  constraint scheduled_events_pkey primary key (id),
+  constraint scheduled_events_creator_id_fkey foreign KEY (creator_id) references users (id) on delete CASCADE,
+  constraint scheduled_events_group_id_fkey foreign KEY (group_id) references groups (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+**nicknames**
+create table public.nicknames (
+  group_id uuid not null,
+  setter_user_id uuid not null,
+  target_user_id uuid not null,
+  nickname text not null,
+  constraint nicknames_pkey primary key (group_id, setter_user_id, target_user_id),
+  constraint nicknames_group_id_fkey foreign KEY (group_id) references groups (id) on delete CASCADE,
+  constraint nicknames_setter_user_id_fkey foreign KEY (setter_user_id) references users (id) on delete CASCADE,
+  constraint nicknames_target_user_id_fkey foreign KEY (target_user_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+**muted_notifications**
+create table public.muted_notifications (
+  muter_user_id uuid not null,
+  muted_user_id uuid not null,
+  constraint muted_notifications_pkey primary key (muter_user_id, muted_user_id),
+  constraint muted_notifications_muted_user_id_fkey foreign KEY (muted_user_id) references users (id) on delete CASCADE,
+  constraint muted_notifications_muter_user_id_fkey foreign KEY (muter_user_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+**moods**
+create table public.moods (
+  id serial not null,
+  text text not null,
+  emoji text null,
+  constraint moods_pkey primary key (id),
+  constraint moods_text_key unique (text)
+) TABLESPACE pg_default;
+
+**groups**
+create table public.groups (
+  id uuid not null default gen_random_uuid (),
+  owner_id uuid not null,
+  type text not null,
+  name text not null,
+  invite_code text not null,
+  member_limit integer not null default 5,
+  created_at timestamp with time zone null default now(),
+  constraint groups_pkey primary key (id),
+  constraint groups_invite_code_key unique (invite_code),
+  constraint groups_owner_id_fkey foreign KEY (owner_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+**group_members**
+create table public.group_members (
+  group_id uuid not null,
+  user_id uuid not null,
+  joined_at timestamp with time zone null default now(),
+  constraint group_members_pkey primary key (group_id, user_id),
+  constraint group_members_group_id_fkey foreign KEY (group_id) references groups (id) on delete CASCADE,
+  constraint group_members_user_id_fkey foreign KEY (user_id) references users (id) on delete CASCADE
+) TABLESPACE pg_default;

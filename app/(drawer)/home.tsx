@@ -1,5 +1,8 @@
+import { useGroupMoodsRealtime } from "@/api/moods";
+import { useGroupStatusesRealtime } from "@/api/statuses";
 import { BaseLayout, Typography } from "@/components/shared";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGroupContext } from "@/contexts/GroupContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { MOCK_MOODS } from "@/types/user";
 import { useNavigation } from '@react-navigation/native';
@@ -8,8 +11,13 @@ import { TouchableOpacity, View } from "react-native";
 
 export default function HomeScreen() {
     const { user, signOut } = useAuth();
+    const { selectedGroup } = useGroupContext();
     const { colors, toggleTheme, isDark } = useTheme();
     const navigation = useNavigation();
+
+    // Seçili grup için realtime subscription'lar
+    useGroupStatusesRealtime(selectedGroup?.id || '');
+    useGroupMoodsRealtime(selectedGroup?.id || '');
 
     return (
         <BaseLayout

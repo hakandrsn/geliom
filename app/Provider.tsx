@@ -1,6 +1,7 @@
 import { AuthProvider } from '@/contexts/AuthContext';
+import { BottomSheetProvider } from '@/contexts/BottomSheetContext';
+import { GroupProvider } from '@/contexts/GroupContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from "expo-font";
@@ -24,7 +25,7 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 // Merkezi Provider Component'i - Sadece provider'ları wrap eder
-export function Provider({ children }: { children: React.ReactNode }) {
+export default function Provider({ children }: { children: React.ReactNode }) {
 
   const [fontsLoaded, error] = useFonts({
     'Comfortaa-Light': require('@/assets/fonts/Comfortaa-Light.ttf'),
@@ -43,11 +44,13 @@ export function Provider({ children }: { children: React.ReactNode }) {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
-            <AuthProvider>
-              <BottomSheetModalProvider>
-                {children}
-              </BottomSheetModalProvider>
-            </AuthProvider>
+            <BottomSheetProvider>
+              <AuthProvider>
+                <GroupProvider>
+                  {children}
+                </GroupProvider>
+              </AuthProvider>
+            </BottomSheetProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </GestureHandlerRootView>

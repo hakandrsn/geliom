@@ -6,3 +6,4 @@ alwaysApply: true
 **rule** everytime use Stylesheet
 **rule** use must use shared component firstly
 **rule** every constant value should be in constant folder
+**rule** if neccassery create component but if already have same component use it.

@@ -1,16 +1,14 @@
 // Geliom User Types - Supabase schema'ya uygun
+// NOT: custom_user_id kaldırıldı - Supabase auth.users UUID direkt kullanılıyor
 
-export interface GeliomUser {
-  id: string;
-  email: string;
-  display_name: string;
-  custom_user_id: string;
-  show_mood: boolean;
-  current_mood_id?: string;
-  onesignal_player_id?: string;
-  created_at: string;
-  updated_at: string;
-}
+import type { User } from './database';
+
+// GeliomUser artık database.ts'deki User tipini kullanıyor
+// Eski kullanımlar için backward compatibility
+export type GeliomUser = User & {
+  email?: string; // Auth'dan gelen email (users tablosunda yok)
+  current_mood_id?: string; // mood_id ile aynı (string format)
+};
 
 export interface UserMood {
   id: string;
@@ -53,13 +51,12 @@ export const MOCK_STATUSES = [
 
 export const MOCK_USER: GeliomUser = {
   id: 'mock-user-123',
+  custom_user_id: 'MOCK1234',
   email: 'hakan@geliom.app',
   display_name: 'Hakan Dursun',
-  custom_user_id: 'hakan_dev',
   show_mood: true,
   current_mood_id: '1', // Mutlu
   onesignal_player_id: undefined,
-  created_at: '2024-01-15T10:30:00Z',
   updated_at: new Date().toISOString(),
 };
 

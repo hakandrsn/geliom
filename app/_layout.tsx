@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
-import { Provider } from './Provider';
+import Provider from './Provider';
 
 // Ana Layout Component'i - Sadece yapıyı gösterir ve routing yapar
 function RootLayoutContent() {
@@ -10,27 +10,28 @@ function RootLayoutContent() {
   const router = useRouter();
 
   useEffect(() => {
-    // Mock data ile çalışırken routing'i bypass et
-    // Gerçek auth sistemi aktif olduğunda bu kısım geri açılacak
-    
     // Yükleme tamamlanmadıysa bir şey yapma.
-    if (isLoading) return;
+    if (isLoading) {
+      console.log('🔵 Layout: Loading, routing bekleniyor...');
+      return;
+    }
 
-    // Mock için login bypass - direkt ana sayfada kal
-    console.log('Layout routing bypassed for mock data');
+    console.log('🔵 Layout: Routing kontrolü - session:', !!session, 'segments:', segments);
     
-    // Gerçek auth için aşağıdaki kod aktif edilecek:
-    /*
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {
+      console.log('🔵 Layout: Session yok, login sayfasına yönlendiriliyor...');
       router.replace('/(auth)/login');
     }
     else if (session && inAuthGroup) {
-      router.replace('/');
+      console.log('🔵 Layout: Session var ve auth grubunda, ana sayfaya yönlendiriliyor...');
+      router.replace('/(drawer)/home');
     }
-    */
-  }, [session, isLoading, segments]);
+    else if (session && !inAuthGroup) {
+      console.log('🔵 Layout: Session var, zaten doğru sayfada');
+    }
+  }, [session, isLoading, segments, router]);
 
   // Yönlendirme mantığı tamamlandığında, ilgili ekranı göster.
   return <Slot />;

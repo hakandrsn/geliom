@@ -10,7 +10,13 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eoist.geliom"
+      "bundleIdentifier": "com.eoist.geliom",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "aps-environment": "production",
+        "com.apple.developer.networking.wifi-info": true
+      },
+      "appleTeamId": "NHKQ38KYTV"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,6 +25,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "googleServicesFile": "./google-services.json",
+
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.eoist.geliom"
@@ -41,7 +49,19 @@
           }
         }
       ],
-      "expo-build-properties",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ],
       "expo-localization",
       [
         "expo-font",
@@ -54,7 +74,8 @@
             "./assets/fonts/Comfortaa-Bold.ttf"
           ]
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

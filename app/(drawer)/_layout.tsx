@@ -1,9 +1,15 @@
+import { GroupHeader } from '@/components/shared/GroupHeader';
+import { GroupListBottomSheet } from '@/components/shared/GroupListBottomSheet';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBottomSheet } from '@/contexts/BottomSheetContext';
+import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import React from 'react';
+import { useRouter } from 'expo-router';
+import React, { useCallback } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import GroupStackLayout from './(group)/_layout';
 import ApiTestScreen from './api-test';
 import CustomDrawerContent from './CustomDrawerContent';
 import HomeScreen from './home';
@@ -11,9 +17,36 @@ import ShowroomScreen from './showroom';
 
 const Drawer = createDrawerNavigator();
 
+type DrawerParamList = {
+    home: undefined;
+    showroom: undefined;
+    'api-test': undefined;
+    '(group)': undefined;
+};
+
 export default function DrawerLayout() {
     const { isLoading, session } = useAuth();
+    const { selectedGroup, groups } = useGroupContext();
+    const { openBottomSheet } = useBottomSheet();
     const { colors } = useTheme();
+    const router = useRouter();
+
+    const createHandleGroupHeaderPress = useCallback((navigation: any) => {
+        return () => {
+            // Eğer grup yoksa, direkt create-group sayfasına git
+            if (!selectedGroup || groups.length === 0) {
+                // Expo Router kullanarak navigate et
+                router.push('/(drawer)/(group)/create-group');
+                return;
+            }
+            
+            // Grup varsa bottom sheet aç
+            openBottomSheet(<GroupListBottomSheet />, {
+                snapPoints: ['70%'],
+                enablePanDownToClose: true,
+            });
+        };
+    }, [openBottomSheet, selectedGroup, groups, router]);
 
     // Loading state
     if (isLoading) {
@@ -59,13 +92,13 @@ export default function DrawerLayout() {
             <Drawer.Screen
                 name="home"
                 component={HomeScreen}
-                options={{
-                    title: 'Geliom 🌿',
+                options={({ navigation }) => ({
+                    headerTitle: () => <GroupHeader group={selectedGroup} onPress={createHandleGroupHeaderPress(navigation)} />,
                     drawerLabel: 'Ana Sayfa',
                     drawerIcon: ({ color, size }) => (
                         <Ionicons name="home" size={size} color={color} />
                     ),
-                }}
+                })}
             />
             <Drawer.Screen
                 name="showroom"
@@ -87,6 +120,14 @@ export default function DrawerLayout() {
                     drawerIcon: ({ color, size }) => (
                         <Ionicons name="code-slash" size={size} color={color} />
                     ),
+                }}
+            />
+            <Drawer.Screen
+                name="(group)"
+                component={GroupStackLayout}
+                options={{
+                    headerShown: false, // Stack navigator kendi header'ını kullanacak
+                    drawerItemStyle: { display: 'none' }, // Drawer menüsünde gösterme
                 }}
             />
         </Drawer.Navigator>
