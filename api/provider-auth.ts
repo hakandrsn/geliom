@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import type {
@@ -32,7 +33,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
   try {
     console.log('🔵 signInWithGoogle başlatılıyor...');
     console.log('🔵 Redirect URL:', REDIRECT_URL);
-    
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -69,7 +70,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
     }
 
     console.log('✅ OAuth URL alındı, web browser açılıyor:', data.url);
-    
+
     // Web browser'da OAuth URL'ini aç
     const result = await WebBrowser.openAuthSessionAsync(
       data.url,
@@ -90,7 +91,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
 
     if (result.type === 'success' && result.url) {
       console.log('✅ OAuth callback URL alındı:', result.url);
-      
+
       // URL'den hash fragment'i çıkar (React Native'de query params yerine hash kullanılır)
       const hashParams = new URLSearchParams(result.url.split('#')[1] || '');
       const accessToken = hashParams.get('access_token');
@@ -103,7 +104,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
         console.log('✅ Tokens alındı, session oluşturuluyor...');
         console.log('🔵 Access token (ilk 20 karakter):', accessToken.substring(0, 20));
         console.log('🔵 Refresh token (ilk 20 karakter):', refreshToken.substring(0, 20));
-        
+
         try {
           // Session'ı set et
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
@@ -137,30 +138,30 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
           console.log('✅ Session başarıyla oluşturuldu');
           console.log('✅ Session user:', sessionData.session.user?.email);
           console.log('✅ Session expires at:', sessionData.session.expires_at);
-          
+
           // Session'ın gerçekten set edildiğini doğrula (polling, max 3 saniye)
           const maxWaitTime = 3000; // 3 saniye
           const pollInterval = 100; // 100ms
           const startTime = Date.now();
           let verified = false;
-          
+
           while (Date.now() - startTime < maxWaitTime && !verified) {
             const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-            
+
             if (verifySession && verifySession.user?.id === sessionData.session.user?.id) {
               console.log('✅ Session doğrulandı, user:', verifySession.user?.email);
               verified = true;
               break;
             }
-            
+
             if (verifyError) {
               console.error('❌ Session doğrulama hatası:', verifyError);
             }
-            
+
             // Bir sonraki kontrol için bekle
             await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
-          
+
           if (!verified) {
             console.error('❌ Session doğrulanamadı - timeout');
             return {
@@ -170,7 +171,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
               },
             };
           }
-          
+
           // Auth state change listener otomatik tetiklenecek
           return { error: null };
         } catch (error) {
@@ -191,7 +192,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
 
         if (queryAccessToken && queryRefreshToken) {
           console.log('✅ Tokens query params\'tan alındı, session oluşturuluyor...');
-          
+
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: queryAccessToken,
             refresh_token: queryRefreshToken,
@@ -220,30 +221,30 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
 
           console.log('✅ Session başarıyla oluşturuldu');
           console.log('✅ Session user:', sessionData.session.user?.email);
-          
+
           // Session'ın gerçekten set edildiğini doğrula (polling, max 3 saniye)
           const maxWaitTime = 3000; // 3 saniye
           const pollInterval = 100; // 100ms
           const startTime = Date.now();
           let verified = false;
-          
+
           while (Date.now() - startTime < maxWaitTime && !verified) {
             const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-            
+
             if (verifySession && verifySession.user?.id === sessionData.session.user?.id) {
               console.log('✅ Session doğrulandı, user:', verifySession.user?.email);
               verified = true;
               break;
             }
-            
+
             if (verifyError) {
               console.error('❌ Session doğrulama hatası:', verifyError);
             }
-            
+
             // Bir sonraki kontrol için bekle
             await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
-          
+
           if (!verified) {
             console.error('❌ Session doğrulanamadı - timeout');
             return {
@@ -253,7 +254,7 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
               },
             };
           }
-          
+
           return { error: null };
         }
 
@@ -319,17 +320,43 @@ export async function signInWithApple(): Promise<{ error: AuthError | null }> {
       };
     }
 
+    // Bundle identifier'ı al (Supabase Apple provider client_id olarak kullanılır)
+    const bundleIdentifier = Constants.expoConfig?.ios?.bundleIdentifier || 'com.eoist.geliom';
+
+    console.log('🍎 Apple login - Bundle identifier:', bundleIdentifier);
+    console.log('🍎 Apple login - Identity token alındı');
+
     // Supabase'e identity token ile giriş yap
+    // client_id parametresi, Supabase'deki Apple provider'ın Service ID'si ile eşleşmeli
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: 'apple',
       token: credential.identityToken,
+      // client_id: bundleIdentifier, // Supabase'in signInWithIdToken'ı client_id'yi desteklemiyor
+      // Bunun yerine Supabase dashboard'da Apple provider'ın Service ID'si bundle identifier ile eşleşmeli
     });
 
     if (error) {
+      // "Unacceptable audience" hatası genellikle Expo Go kullanımından veya Supabase yapılandırmasından kaynaklanır
+      let errorMessage = error.message;
+
+      if (error.message?.includes('Unacceptable audience') || error.message?.includes('audience')) {
+        errorMessage = `Apple login hatası: Token audience uyumsuzluğu. 
+        
+Bu hata genellikle şu durumlardan kaynaklanır:
+1. Expo Go kullanıyorsanız, development build kullanmanız gerekiyor
+2. Supabase dashboard'da Apple provider'ın Service ID'si "${bundleIdentifier}" ile eşleşmeli
+3. Apple Developer Console'da Service ID'nin bundle identifier'ı "${bundleIdentifier}" olmalı
+
+Lütfen Supabase dashboard'da Apple provider ayarlarını kontrol edin.`;
+      }
+
+      console.error('❌ Apple sign in error:', error);
+      console.error('❌ Bundle identifier:', bundleIdentifier);
+
       return {
         error: {
           code: 'PROVIDER_ERROR',
-          message: error.message,
+          message: errorMessage,
           originalError: error,
         },
       };
@@ -347,30 +374,30 @@ export async function signInWithApple(): Promise<{ error: AuthError | null }> {
 
     console.log('✅ Apple sign in: Session başarıyla oluşturuldu');
     console.log('✅ Session user:', data.session.user?.email);
-    
+
     // Session'ın gerçekten set edildiğini doğrula (polling, max 3 saniye)
     const maxWaitTime = 3000; // 3 saniye
     const pollInterval = 100; // 100ms
     const startTime = Date.now();
     let verified = false;
-    
+
     while (Date.now() - startTime < maxWaitTime && !verified) {
       const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-      
+
       if (verifySession && verifySession.user?.id === data.session.user?.id) {
         console.log('✅ Apple sign in: Session doğrulandı, user:', verifySession.user?.email);
         verified = true;
         break;
       }
-      
+
       if (verifyError) {
         console.error('❌ Apple sign in: Session doğrulama hatası:', verifyError);
       }
-      
+
       // Bir sonraki kontrol için bekle
       await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
-    
+
     if (!verified) {
       console.error('❌ Apple sign in: Session doğrulanamadı - timeout');
       return {
@@ -449,7 +476,7 @@ export async function createOrUpdateUserProfile(
 ): Promise<{ data: any | null; error: AuthError | null }> {
   try {
     console.log('🔵 createOrUpdateUserProfile başlatıldı, user ID:', normalizedData.id);
-    
+
     // Database trigger anında çalıştığı için kullanıcı zaten oluşturulmuş olmalı
     // Sadece profil bilgilerini güncelle
     const updateData: UpdateUser = {
@@ -503,7 +530,7 @@ export async function createOrUpdateUserProfile(
       if (error.code === 'PGRST116') {
         console.log('⏳ User profile henüz oluşturulmamış, kısa bir bekleme...');
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         const { data: retryData, error: retryError } = await supabase
           .from('users')
           .update(filteredUpdateData)
@@ -558,11 +585,11 @@ export async function createOrUpdateUserProfile(
  */
 export function getProviderFromUser(user: User): AuthProvider {
   const providers = user.app_metadata?.providers || [];
-  
+
   if (providers.includes('apple')) {
     return 'apple';
   }
-  
+
   if (providers.includes('google')) {
     return 'google';
   }

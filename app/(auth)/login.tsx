@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   StyleSheet,
   TouchableOpacity,
@@ -101,13 +102,8 @@ export default function Login() {
         {/* Top section with app icon, name, and description */}
         <View style={styles.topSection}>
           {/* Nature-themed icon */}
-          <Ionicons
-            name="leaf-outline"
-            size={80}
-            color={colors.primary}
-            style={styles.logoIcon}
-          />
-          <Typography variant="h1" color={colors.text} style={styles.appName}>
+          <Image source={require('@/assets/images/icon.png')} style={styles.logoIcon} />
+          <Typography variant="h2" color={colors.text} style={styles.appName}>
             Geliom
           </Typography>
           <Typography variant="bodyLarge" color={colors.secondaryText} style={styles.description}>
@@ -189,6 +185,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoIcon: {
+    width: 80,
+    height: 80,
     marginBottom: 16,
   },
   appName: {

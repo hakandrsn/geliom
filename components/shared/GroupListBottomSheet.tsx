@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
-export const GroupListBottomSheet: React.FC = () => {
+export default function GroupListBottomSheet() {
   const { selectedGroup, setSelectedGroup, groups, isLoading } = useGroupContext();
   const { closeBottomSheet } = useBottomSheet();
   const { colors } = useTheme();

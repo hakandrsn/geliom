@@ -1,28 +1,14 @@
-import { GroupHeader } from '@/components/shared/GroupHeader';
-import { GroupListBottomSheet } from '@/components/shared/GroupListBottomSheet';
+import { CustomDrawerContent } from '@/components';
+import { GroupHeader, GroupListBottomSheet } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBottomSheet } from '@/contexts/BottomSheetContext';
 import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import { createDrawerNavigator } from '@react-navigation/drawer';
 import { useRouter } from 'expo-router';
+import { Drawer } from 'expo-router/drawer';
 import React, { useCallback } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import GroupStackLayout from './(group)/_layout';
-import ApiTestScreen from './api-test';
-import CustomDrawerContent from './CustomDrawerContent';
-import HomeScreen from './home';
-import ShowroomScreen from './showroom';
-
-const Drawer = createDrawerNavigator();
-
-type DrawerParamList = {
-    home: undefined;
-    showroom: undefined;
-    'api-test': undefined;
-    '(group)': undefined;
-};
 
 export default function DrawerLayout() {
     const { isLoading, session } = useAuth();
@@ -63,7 +49,7 @@ export default function DrawerLayout() {
     }
 
     return (
-        <Drawer.Navigator
+        <Drawer
             drawerContent={(props) => <CustomDrawerContent {...props} />}
             screenOptions={{
                 headerShown: true,
@@ -91,7 +77,6 @@ export default function DrawerLayout() {
         >
             <Drawer.Screen
                 name="home"
-                component={HomeScreen}
                 options={({ navigation }) => ({
                     headerTitle: () => <GroupHeader group={selectedGroup} onPress={createHandleGroupHeaderPress(navigation)} />,
                     drawerLabel: 'Ana Sayfa',
@@ -102,7 +87,6 @@ export default function DrawerLayout() {
             />
             <Drawer.Screen
                 name="showroom"
-                component={ShowroomScreen}
                 options={{
                     title: 'Component Showroom',
                     drawerLabel: 'Showroom',
@@ -113,7 +97,6 @@ export default function DrawerLayout() {
             />
             <Drawer.Screen
                 name="api-test"
-                component={ApiTestScreen}
                 options={{
                     title: 'API Test',
                     drawerLabel: 'API Test',
@@ -124,12 +107,11 @@ export default function DrawerLayout() {
             />
             <Drawer.Screen
                 name="(group)"
-                component={GroupStackLayout}
                 options={{
                     headerShown: false, // Stack navigator kendi header'ını kullanacak
                     drawerItemStyle: { display: 'none' }, // Drawer menüsünde gösterme
                 }}
             />
-        </Drawer.Navigator>
+        </Drawer>
     );
 }
