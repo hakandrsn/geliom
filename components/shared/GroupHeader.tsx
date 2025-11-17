@@ -10,7 +10,7 @@ interface GroupHeaderProps {
   onPress: () => void;
 }
 
-export const GroupHeader: React.FC<GroupHeaderProps> = ({ group, onPress }) => {
+export default function GroupHeader({ group, onPress }: GroupHeaderProps) {
   const { colors } = useTheme();
 
   return (

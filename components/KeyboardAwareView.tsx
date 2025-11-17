@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-    GestureResponderEvent,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleProp,
-    StyleSheet,
-    ViewStyle,
+  GestureResponderEvent,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleProp,
+  StyleSheet,
+  ViewStyle,
 } from 'react-native';
 
 interface KeyboardAwareViewProps {
@@ -40,13 +40,7 @@ interface KeyboardAwareViewProps {
  * 'flexGrow: 1' ekler. Bu sayede içerik kısayken bile ekranı doldurur
  * (örn: 'justifyContent: 'space-between'' ile butonu en alta itmek için).
  */
-export const KeyboardAwareView: React.FC<KeyboardAwareViewProps> = ({
-  children,
-  style,
-  contentContainerStyle,
-  keyboardVerticalOffset = 0, // Genelde BaseLayout'tan geldiği için 0 veya header yüksekliği
-  onTouchStart,
-}) => {
+export default function KeyboardAwareView({ children, style, contentContainerStyle, keyboardVerticalOffset = 0, onTouchStart }: KeyboardAwareViewProps) {
   return (
     <KeyboardAvoidingView
       style={[styles.container, style]}
@@ -69,7 +63,7 @@ export const KeyboardAwareView: React.FC<KeyboardAwareViewProps> = ({
       </ScrollView>
     </KeyboardAvoidingView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
