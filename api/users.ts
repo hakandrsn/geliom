@@ -88,8 +88,17 @@ export const useCurrentUser = () => {
     enabled: true,
     retry: (failureCount, error: any) => {
       // PGRST116 hatası için retry yap (database trigger henüz çalışmamış olabilir)
+      // Ama retry sonrası hala bulunamazsa, kullanıcı DB'den silinmiş olabilir
       if (error?.code === 'PGRST116' && failureCount < 3) {
         return true;
+      }
+      // Retry sonrası hala PGRST116 gelirse, kullanıcı DB'den silinmiş olabilir
+      // Özel error code ile throw et, AuthContext logout yapacak
+      if (error?.code === 'PGRST116' && failureCount >= 3) {
+        const userNotFoundError = new Error('User not found in database after retries');
+        (userNotFoundError as any).code = 'USER_NOT_FOUND';
+        (userNotFoundError as any).originalError = error;
+        throw userNotFoundError;
       }
       // Diğer hatalar için retry yapma
       return false;
@@ -151,7 +160,17 @@ export const useUpdateUser = () => {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        // Kullanıcı bulunamadıysa (DB'den silinmişse), özel error code ile throw et
+        // AuthContext bu hatayı yakalayıp logout yapacak
+        if (error.code === 'PGRST116') {
+          const userNotFoundError = new Error('User not found in database');
+          (userNotFoundError as any).code = 'USER_NOT_FOUND';
+          (userNotFoundError as any).originalError = error;
+          throw userNotFoundError;
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -175,6 +194,37 @@ export const useDeleteUser = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userKeys.all });
+    },
+  });
+};
+
+export const useUpdateUserAvatar = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ userId, avatar }: { userId: string; avatar: string | null }): Promise<User> => {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ avatar })
+        .eq('id', userId)
+        .select()
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          const userNotFoundError = new Error('User not found in database');
+          (userNotFoundError as any).code = 'USER_NOT_FOUND';
+          (userNotFoundError as any).originalError = error;
+          throw userNotFoundError;
+        }
+        throw error;
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: userKeys.all });
+      queryClient.invalidateQueries({ queryKey: userKeys.detail(data.id) });
+      queryClient.invalidateQueries({ queryKey: userKeys.current() });
     },
   });
 };

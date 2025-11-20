@@ -1,9 +1,10 @@
-import { Typography } from '@/components/shared';
-import { useTheme } from '@/contexts/ThemeContext';
-import type { GroupWithOwner } from '@/types/database';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
+import type { GroupWithOwner } from '../../types/database';
+import { BouncyButton } from '../anim/AnimatedComponents';
+import Typography from './Typography';
 
 interface GroupHeaderProps {
   group: GroupWithOwner | null;
@@ -13,48 +14,68 @@ interface GroupHeaderProps {
 export default function GroupHeader({ group, onPress }: GroupHeaderProps) {
   const { colors } = useTheme();
 
+  // Grup adını max 15 karakter göster
+  const displayName = group?.name 
+    ? group.name.length > 15 
+      ? group.name.substring(0, 15) + '...' 
+      : group.name
+    : 'Birlik Oluştur';
+
   return (
-    <TouchableOpacity
-      style={styles.container}
+    <BouncyButton
       onPress={onPress}
-      activeOpacity={0.7}
+      style={[styles.container, { backgroundColor: colors.cardBackground + '80', borderColor: colors.stroke }]}
     >
       <View style={styles.content}>
+        <View style={[styles.iconBox, { backgroundColor: colors.primary }]}>
+          <Ionicons name="people" size={14} color="white" />
+        </View>
+        
         <Typography
           variant="h6"
           color={colors.text}
           style={styles.groupName}
           numberOfLines={1}
         >
-          {group?.name || 'Create first group'}
+          {displayName}
         </Typography>
+        
         <Ionicons
-          name={group?.name ? "chevron-down" : "add-circle-outline"}
-          size={20}
+          name="chevron-down"
+          size={16}
           color={colors.secondaryText}
           style={styles.icon}
         />
       </View>
-    </TouchableOpacity>
+    </BouncyButton>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignSelf: 'flex-start', // Sadece kendi içeriğini kaplasın
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  iconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   groupName: {
-    maxWidth: 200,
+    fontSize: 14,
+    maxWidth: 120, // Max genişlik sınırı (15 karakter için yeterli)
   },
   icon: {
-    marginLeft: 4,
+    marginLeft: 2,
   },
 });
-

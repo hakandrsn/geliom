@@ -1,247 +1,154 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-    CreateMutedNotification,
-    MutedNotification
-} from '../types/database';
 import { supabase } from './supabase';
 
-// Query Keys
-export const notificationKeys = {
-  all: ['notifications'] as const,
-  muted: () => [...notificationKeys.all, 'muted'] as const,
-  mutedBy: (muterId: string) => [...notificationKeys.muted(), 'by', muterId] as const,
-  mutedFor: (mutedId: string) => [...notificationKeys.muted(), 'for', mutedId] as const,
-  isMuted: (muterId: string, mutedId: string) => [...notificationKeys.muted(), 'check', muterId, mutedId] as const,
-};
+/**
+ * Bildirim gönderme API'si
+ * Supabase Edge Function'ı çağırır
+ */
 
-// Queries
-export const useMutedNotifications = (muterId: string) => {
-  return useQuery({
-    queryKey: notificationKeys.mutedBy(muterId),
-    queryFn: async (): Promise<MutedNotification[]> => {
-      const { data, error } = await supabase
-        .from('muted_notifications')
-        .select('*')
-        .eq('muter_user_id', muterId);
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!muterId,
+interface SendNotificationParams {
+  user_ids?: string[]; // DEPRECATED - Artık kullanılmıyor, receiver_ids kullanılacak
+  receiver_ids: string[]; // Alıcı kullanıcı ID'leri (Supabase user IDs - external_id olarak kullanılacak)
+  sender_id?: string; // Bildirim gönderen kullanıcı ID (rate limiting için)
+  receiver_id_to_player_id?: Record<string, string>; // DEPRECATED - Artık kullanılmıyor
+  group_id: string;
+  group_name: string;
+  title: string;
+  message: string;
+  type: 'join_request' | 'join_request_status' | 'status_update' | 'mood_update' | 'event_reminder';
+}
+
+/**
+ * Bildirim gönder
+ */
+export const sendNotification = async (params: SendNotificationParams) => {
+  const { data, error } = await supabase.functions.invoke('send-notification', {
+    body: params,
   });
-};
-
-export const useWhoMutedUser = (mutedUserId: string) => {
-  return useQuery({
-    queryKey: notificationKeys.mutedFor(mutedUserId),
-    queryFn: async (): Promise<MutedNotification[]> => {
-      const { data, error } = await supabase
-        .from('muted_notifications')
-        .select('*')
-        .eq('muted_user_id', mutedUserId);
       
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!mutedUserId,
-  });
-};
+  if (error) {
+    // Rate limit hatası kontrolü
+    if (error.message?.includes('rate_limit_exceeded') || data?.error === 'rate_limit_exceeded') {
+      const rateLimitError = new Error(data?.message || 'Çok sık bildirim gönderiyorsunuz. Lütfen bekleyin.');
+      (rateLimitError as any).code = 'RATE_LIMIT_EXCEEDED';
+      (rateLimitError as any).wait_until = data?.wait_until;
+      (rateLimitError as any).wait_seconds = data?.wait_seconds;
+      throw rateLimitError;
+    }
+    
+    console.error('Bildirim gönderme hatası:', error);
+    throw error;
+  }
 
-export const useIsMuted = (muterId: string, mutedUserId: string) => {
-  return useQuery({
-    queryKey: notificationKeys.isMuted(muterId, mutedUserId),
-    queryFn: async (): Promise<boolean> => {
-      const { data, error } = await supabase
-        .from('muted_notifications')
-        .select('muter_user_id')
-        .eq('muter_user_id', muterId)
-        .eq('muted_user_id', mutedUserId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') throw error;
-      return !!data;
-    },
-    enabled: !!(muterId && mutedUserId),
-  });
-};
-
-export const useAllMutedNotifications = () => {
-  return useQuery({
-    queryKey: notificationKeys.muted(),
-    queryFn: async (): Promise<MutedNotification[]> => {
-      const { data, error } = await supabase
-        .from('muted_notifications')
-        .select('*');
-      
-      if (error) throw error;
-      return data || [];
-    },
-  });
-};
-
-// Mutations
-export const useMuteNotifications = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (muteData: CreateMutedNotification): Promise<MutedNotification> => {
-      const { data, error } = await supabase
-        .from('muted_notifications')
-        .insert(muteData)
-        .select()
-        .single();
-      
-      if (error) throw error;
       return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.mutedBy(data.muter_user_id) });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.mutedFor(data.muted_user_id) });
-      queryClient.invalidateQueries({ 
-        queryKey: notificationKeys.isMuted(data.muter_user_id, data.muted_user_id) 
-      });
-    },
+};
+
+/**
+ * Grup katılma isteği bildirimi gönder
+ */
+export const sendJoinRequestNotification = async (
+  groupOwnerId: string, // Supabase user ID (external_id olarak kullanılacak)
+  groupId: string,
+  groupName: string,
+  requesterName: string,
+  requesterId: string // Rate limiting için
+) => {
+  return sendNotification({
+    receiver_ids: [groupOwnerId], // Supabase user ID = OneSignal external_id
+    sender_id: requesterId,
+    group_id: groupId,
+    group_name: groupName,
+    title: 'Yeni Katılma İsteği',
+    message: `${requesterName} grubunuza katılmak istiyor`,
+    type: 'join_request',
   });
 };
 
-export const useUnmuteNotifications = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ 
-      muterId, 
-      mutedUserId 
-    }: { 
-      muterId: string; 
-      mutedUserId: string;
-    }): Promise<void> => {
-      const { error } = await supabase
-        .from('muted_notifications')
-        .delete()
-        .eq('muter_user_id', muterId)
-        .eq('muted_user_id', mutedUserId);
-      
-      if (error) throw error;
-    },
-    onSuccess: (_, { muterId, mutedUserId }) => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.mutedBy(muterId) });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.mutedFor(mutedUserId) });
-      queryClient.invalidateQueries({ 
-        queryKey: notificationKeys.isMuted(muterId, mutedUserId) 
-      });
-    },
+/**
+ * Katılma isteği durumu bildirimi gönder (onaylandı/reddedildi)
+ */
+export const sendJoinRequestStatusNotification = async (
+  requesterId: string, // Supabase user ID (external_id olarak kullanılacak)
+  groupId: string,
+  groupName: string,
+  status: 'approved' | 'rejected',
+  groupOwnerId: string // Rate limiting için
+) => {
+  const title = status === 'approved' ? 'Katılma İsteği Onaylandı' : 'Katılma İsteği Reddedildi';
+  const message =
+    status === 'approved'
+      ? `${groupName} grubuna katılma isteğiniz onaylandı!`
+      : `${groupName} grubuna katılma isteğiniz reddedildi.`;
+
+  return sendNotification({
+    receiver_ids: [requesterId], // Supabase user ID = OneSignal external_id
+    sender_id: groupOwnerId,
+    group_id: groupId,
+    group_name: groupName,
+    title,
+    message,
+    type: 'join_request_status',
   });
 };
 
-export const useToggleMuteNotifications = () => {
-  const muteNotifications = useMuteNotifications();
-  const unmuteNotifications = useUnmuteNotifications();
-  
-  return useMutation({
-    mutationFn: async ({ 
-      muterId, 
-      mutedUserId, 
-      isMuted 
-    }: { 
-      muterId: string; 
-      mutedUserId: string; 
-      isMuted: boolean;
-    }): Promise<void> => {
-      if (isMuted) {
-        await unmuteNotifications.mutateAsync({ muterId, mutedUserId });
-      } else {
-        await muteNotifications.mutateAsync({ 
-          muter_user_id: muterId, 
-          muted_user_id: mutedUserId 
-        });
-      }
-    },
+/**
+ * Durum güncellemesi bildirimi gönder
+ */
+export const sendStatusUpdateNotification = async (
+  receiverIds: string[], // Supabase user IDs (external_id olarak kullanılacak)
+  groupId: string,
+  groupName: string,
+  userName: string,
+  statusText: string,
+  senderId: string // Rate limiting için
+) => {
+  return sendNotification({
+    receiver_ids: receiverIds, // Supabase user IDs = OneSignal external_id
+    sender_id: senderId,
+    group_id: groupId,
+    group_name: groupName,
+    title: 'Durum Güncellendi',
+    message: `${userName} durumunu "${statusText}" olarak güncelledi`,
+    type: 'status_update',
   });
 };
 
-// Bulk Operations
-export const useMuteMultipleUsers = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ 
-      muterId, 
-      mutedUserIds 
-    }: { 
-      muterId: string; 
-      mutedUserIds: string[];
-    }): Promise<MutedNotification[]> => {
-      const muteData = mutedUserIds.map(mutedUserId => ({
-        muter_user_id: muterId,
-        muted_user_id: mutedUserId,
-      }));
-
-      const { data, error } = await supabase
-        .from('muted_notifications')
-        .insert(muteData)
-        .select();
-      
-      if (error) throw error;
-      return data || [];
-    },
-    onSuccess: (_, { muterId }) => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.mutedBy(muterId) });
-    },
+/**
+ * Mood güncellemesi bildirimi gönder
+ */
+export const sendMoodUpdateNotification = async (
+  receiverIds: string[], // Supabase user IDs (external_id olarak kullanılacak)
+  groupId: string,
+  groupName: string,
+  userName: string,
+  moodText: string,
+  senderId: string // Rate limiting için
+) => {
+  return sendNotification({
+    receiver_ids: receiverIds, // Supabase user IDs = OneSignal external_id
+    sender_id: senderId,
+    group_id: groupId,
+    group_name: groupName,
+    title: 'Mood Güncellendi',
+    message: `${userName} mood'unu "${moodText}" olarak güncelledi`,
+    type: 'mood_update',
   });
 };
 
-export const useUnmuteAllNotifications = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (muterId: string): Promise<void> => {
-      const { error } = await supabase
-        .from('muted_notifications')
-        .delete()
-        .eq('muter_user_id', muterId);
-      
-      if (error) throw error;
-    },
-    onSuccess: (_, muterId) => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-      queryClient.invalidateQueries({ queryKey: notificationKeys.mutedBy(muterId) });
-    },
-  });
-};
-
-// Realtime Subscription Hook
-export const useMutedNotificationsRealtime = (userId?: string) => {
-  const queryClient = useQueryClient();
-
-  return useQuery({
-    queryKey: ['muted-notifications-realtime', userId],
-    queryFn: () => {
-      const channel = supabase
-        .channel(`muted-notifications-changes${userId ? `-${userId}` : ''}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'muted_notifications',
-            ...(userId && { filter: `muter_user_id=eq.${userId}` }),
-          },
-          () => {
-            queryClient.invalidateQueries({ queryKey: notificationKeys.all });
-            if (userId) {
-              queryClient.invalidateQueries({ queryKey: notificationKeys.mutedBy(userId) });
-            }
-          }
-        )
-        .subscribe();
-
-      return channel;
-    },
-    staleTime: Infinity,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+/**
+ * Etkinlik hatırlatıcısı bildirimi gönder
+ */
+export const sendEventReminderNotification = async (
+  receiverIds: string[], // Supabase user IDs (external_id olarak kullanılacak)
+  groupId: string,
+  groupName: string,
+  eventTitle: string
+) => {
+  return sendNotification({
+    receiver_ids: receiverIds, // Supabase user IDs = OneSignal external_id
+    group_id: groupId,
+    group_name: groupName,
+    title: 'Etkinlik Hatırlatıcısı',
+    message: `${eventTitle} için 1 saat kaldı!`,
+    type: 'event_reminder',
   });
 };

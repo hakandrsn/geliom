@@ -4,6 +4,7 @@ export interface User {
   email?: string; // TEXT - Kullanıcı email adresi
   display_name?: string; // TEXT
   photo_url?: string; // TEXT
+  avatar?: string | null; // TEXT - Avatar dosya adı (örn: "bear.png", "man-1.png")
   /** @deprecated Use user_group_moods table instead. This field is kept for backward compatibility. */
   mood_id?: number; // INT FK - moods tablosuna referans (DEPRECATED - use user_group_moods)
   show_mood?: boolean; // BOOLEAN
@@ -46,6 +47,7 @@ export interface Status {
   notifies: boolean; // BOOLEAN NOT NULL DEFAULT false
   is_custom: boolean; // BOOLEAN NOT NULL DEFAULT false
   owner_id?: string; // UUID FK - Eğer custom ise sahibi
+  messages?: string[]; // TEXT[] - Bildirim mesajları (rastgele seçilecek)
 }
 
 export interface UserStatus {
@@ -83,6 +85,15 @@ export interface ScheduledEvent {
   created_at?: string; // TIMESTAMPTZ
 }
 
+export interface GroupJoinRequest {
+  id: string; // UUID PK
+  group_id: string; // UUID FK
+  requester_id: string; // UUID FK
+  status: 'pending' | 'approved' | 'rejected'; // TEXT
+  created_at?: string; // TIMESTAMPTZ
+  updated_at?: string; // TIMESTAMPTZ
+}
+
 // Create/Update types (without auto-generated fields)
 export type CreateUser = Omit<User, 'id' | 'updated_at'>;
 export type UpdateUser = Partial<Omit<User, 'id'>>;
@@ -115,6 +126,9 @@ export type UpdateSubscription = Partial<Omit<Subscription, 'user_id'>>;
 export type CreateScheduledEvent = Omit<ScheduledEvent, 'id' | 'created_at'>;
 export type UpdateScheduledEvent = Partial<Omit<ScheduledEvent, 'id' | 'created_at'>>;
 
+export type CreateGroupJoinRequest = Omit<GroupJoinRequest, 'id' | 'created_at' | 'updated_at' | 'status'>;
+export type UpdateGroupJoinRequest = Partial<Omit<GroupJoinRequest, 'id' | 'group_id' | 'requester_id' | 'created_at'>>;
+
 // Response types with relations
 export interface UserWithMood extends User {
   mood?: Mood;
@@ -141,3 +155,22 @@ export interface ScheduledEventWithDetails extends ScheduledEvent {
   group?: Group;
   creator?: User;
 }
+
+export interface GroupJoinRequestWithDetails extends GroupJoinRequest {
+  group?: GroupWithOwner;
+  requester?: User;
+}
+
+export interface PendingNotification {
+  id: string; // UUID PK
+  sender_id: string; // UUID FK
+  receiver_ids: string[]; // UUID[]
+  group_id: string; // UUID FK
+  status_id: number; // INT FK
+  scheduled_at: string; // TIMESTAMPTZ
+  created_at?: string; // TIMESTAMPTZ
+  updated_at?: string; // TIMESTAMPTZ
+}
+
+export type CreatePendingNotification = Omit<PendingNotification, 'id' | 'created_at' | 'updated_at'>;
+export type UpdatePendingNotification = Partial<Omit<PendingNotification, 'id' | 'sender_id' | 'group_id' | 'created_at'>>;

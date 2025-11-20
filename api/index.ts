@@ -6,102 +6,110 @@ export * from '../types/database';
 
 // Users API
 export {
-    // Mutations
-    useCreateUser, useCurrentUser, useDeleteUser,
-    // Query Keys
-    userKeys, useUpdateUser, useUser, useUserByCustomId,
-    // Queries
-    useUsers,
-    // Realtime
-    useUsersRealtime
+  // Mutations
+  useCreateUser, useCurrentUser, useDeleteUser,
+  // Query Keys
+  userKeys, useUpdateUser, useUser, useUserByCustomId,
+  // Queries
+  useUsers,
+  // Realtime
+  useUsersRealtime
 } from './users';
 
 // Moods API
 export {
-    // Query Keys
-    moodKeys,
-    // Mutations
-    useCreateMood, useDeleteMood, useMood,
-    useMoodByText,
-    // Queries
-    useMoods,
-    // Realtime
-    useMoodsRealtime, useUpdateMood
+  // Query Keys
+  moodKeys,
+  // Mutations
+  useCreateMood, useDeleteMood, useMood,
+  useMoodByText,
+  // Queries
+  useMoods,
+  // Realtime
+  useMoodsRealtime, useUpdateMood
 } from './moods';
 
 // Groups API
 export {
-    // Query Keys
-    groupKeys,
-    // Mutations
-    useCreateGroup, useDeleteGroup, useGroup,
-    useGroupByInviteCode, useGroupMembers, useGroupMembersRealtime,
-    // Queries
-    useGroups,
-    // Realtime
-    useGroupsRealtime, useIsGroupMember, useJoinGroup,
-    useLeaveGroup, useUpdateGroup, useUserGroups
+  // Query Keys
+  groupKeys, useApproveJoinRequest,
+  // Mutations
+  useCreateGroup,
+  // Join Requests
+  useCreateJoinRequest, useDeleteGroup, useGroup,
+  useGroupByInviteCode, useGroupJoinRequests,
+  // Join Requests Realtime
+  useGroupJoinRequestsRealtime, useGroupMembers, useGroupMembersRealtime,
+  // Queries
+  useGroups,
+  // Realtime
+  useGroupsRealtime, useIsGroupMember, useJoinGroup,
+  useLeaveGroup, useMyJoinRequests, useMyJoinRequestsRealtime, useRejectJoinRequest, useTransferGroupOwnership, useUpdateGroup, useUserGroups
 } from './groups';
 
 // Nicknames API
 export {
-    // Query Keys
-    nicknameKeys,
-    // Mutations
-    useCreateNickname, useDeleteNickname,
-    // Queries
-    useGroupNicknames, useNickname,
-    // Realtime
-    useNicknamesRealtime, useUpdateNickname, useUpsertNickname, useUserNicknames,
-    useUserSetNicknames
+  // Query Keys
+  nicknameKeys,
+  // Mutations
+  useCreateNickname, useDeleteNickname,
+  // Queries
+  useGroupNicknames, useNickname,
+  // Realtime
+  useNicknamesRealtime, useUpdateNickname, useUpsertNickname, useUserNicknames,
+  useUserSetNicknames
 } from './nicknames';
 
 // Statuses API
 export {
-    // Query Keys
-    statusKeys,
-    // Mutations
-    useCreateStatus, useCustomStatuses, useDefaultStatuses, useDeleteStatus, useRemoveUserStatus, userStatusKeys, useSetUserStatus, useStatus,
-    // Queries
-    useStatuses,
-    // Realtime
-    useStatusesRealtime, useUpdateStatus, useUserStatus, useUserStatusesRealtime, useUsersWithStatuses
+  // Query Keys
+  statusKeys,
+  // Mutations
+  useCreateStatus, useCustomStatuses, useDefaultStatuses, useDeleteStatus, useRemoveUserStatus, userStatusKeys, useSetUserStatus, useStatus,
+  // Queries
+  useStatuses,
+  // Realtime
+  useStatusesRealtime, useUpdateStatus, useUserStatus, useUserStatusesRealtime, useUsersWithStatuses
 } from './statuses';
 
-// Notifications API
+// Notifications API (Bildirim gönderme fonksiyonları)
 export {
-    // Query Keys
-    notificationKeys, useAllMutedNotifications, useIsMuted,
-    // Queries
-    useMutedNotifications,
-    // Realtime
-    useMutedNotificationsRealtime, useMuteMultipleUsers,
-    // Mutations
-    useMuteNotifications, useToggleMuteNotifications, useUnmuteAllNotifications, useUnmuteNotifications, useWhoMutedUser
+  sendEventReminderNotification, sendJoinRequestNotification,
+  sendJoinRequestStatusNotification, sendMoodUpdateNotification, sendNotification, sendStatusUpdateNotification
 } from './notifications';
+
+// Muted Notifications API
+export {
+  mutedKeys,
+  useIsMuted as useIsUserMuted,
+  useMutedNotifications as useMutedNotificationsList,
+  useMuteUser,
+  useToggleMuteUser,
+  useUnmuteUser
+} from './muted';
 
 // Subscriptions API
 export {
-    // Query Keys
-    subscriptionKeys, useCancelSubscription,
-    // Mutations
-    useCreateSubscription, useCurrentUserSubscription, useDeleteSubscription, useIsSubscriptionActive,
-    // Realtime
-    useSubscriptionRealtime, useUpdateSubscription,
-    // Queries
-    useUserSubscription
+  // Query Keys
+  subscriptionKeys, useCancelSubscription,
+  // Mutations
+  useCreateSubscription, useCurrentUserSubscription, useDeleteSubscription, useIsSubscriptionActive,
+  // Realtime
+  useSubscriptionRealtime, useUpdateSubscription,
+  // Queries
+  useUserSubscription
 } from './subscriptions';
 
 // Events API
 export {
-    // Query Keys
-    eventKeys,
-    // Mutations
-    useCreateEvent, useDeleteEvent, useEvent, useEventsRealtime,
-    // Queries
-    useGroupEvents,
-    // Realtime
-    useGroupEventsRealtime, useUpcomingGroupEvents, useUpdateEvent, useUserCreatedEvents, useUserGroupsEvents
+  // Query Keys
+  eventKeys,
+  // Mutations
+  useCreateEvent, useDeleteEvent, useEvent, useEventsRealtime,
+  // Queries
+  useGroupEvents,
+  // Realtime
+  useGroupEventsRealtime, useUpcomingGroupEvents, useUpdateEvent, useUserCreatedEvents, useUserGroupsEvents
 } from './events';
 
 // Utility functions for common operations
