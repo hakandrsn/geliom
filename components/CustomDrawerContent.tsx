@@ -1,16 +1,23 @@
 import { Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBottomSheet } from '@/contexts/BottomSheetContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerContentComponentProps, DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
     const { colors, toggleTheme, isDark } = useTheme();
     const { user, signOut } = useAuth();
+    const { closeBottomSheet } = useBottomSheet();
     const insets = useSafeAreaInsets();
+
+    // Drawer açıldığında bottom sheet'i kapat
+    useEffect(() => {
+        closeBottomSheet();
+    }, [closeBottomSheet]);
 
     const handleSignOut = () => {
         props.navigation.closeDrawer();

@@ -1,16 +1,16 @@
-import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import React, { ReactNode } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   ViewStyle,
 } from 'react-native';
+import { useTheme } from '../../contexts/ThemeContext';
+// Yeni animasyon bileşenini import ediyoruz
+import { BouncyButton } from '../anim/AnimatedComponents';
 
-// Geliom'un ana button sistemi - Forest, Sage, Pine temalı
 export type GeliomButtonState = 'active' | 'passive' | 'loading';
 export type GeliomButtonSize = 'small' | 'medium' | 'large' | 'xl';
 export type GeliomButtonLayout = 'default' | 'icon-left' | 'icon-right' | 'icon-only' | 'full-width';
@@ -36,14 +36,14 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
   disabled = false,
   style,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
-  // Adaçayı tarzı - organik, yumuşak, doğal padding ve radius sistemi
+  // Adaçayı tarzı organik boyutlandırma
   const sageStyleConfig = {
     small: {
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 14, // Adaçayı yaprağı gibi yumuşak
+      borderRadius: 14,
       fontSize: 14,
       iconSize: 16,
       minHeight: 32,
@@ -52,7 +52,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     medium: {
       paddingHorizontal: 18,
       paddingVertical: 12,
-      borderRadius: 18, // Organik yuvarlaklık
+      borderRadius: 18,
       fontSize: 16,
       iconSize: 18,
       minHeight: 42,
@@ -61,7 +61,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     large: {
       paddingHorizontal: 24,
       paddingVertical: 16,
-      borderRadius: 22, // Daha belirgin organik form
+      borderRadius: 22,
       fontSize: 18,
       iconSize: 20,
       minHeight: 52,
@@ -70,7 +70,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     xl: {
       paddingHorizontal: 32,
       paddingVertical: 20,
-      borderRadius: 26, // Büyük organik form
+      borderRadius: 26,
       fontSize: 20,
       iconSize: 24,
       minHeight: 62,
@@ -80,41 +80,39 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 
   const currentConfig = sageStyleConfig[size];
 
-  // Renk sistemi - Forest (Active), Sage (Passive), Pine (Loading)
   const getStateColors = () => {
-    const baseColors = {
-      forest: (colors as any).forest || '#1B5E20',    // 9. Active
-      sage: (colors as any).sage || '#87A96B',        // 13. Passive  
-      pine: (colors as any).pine || '#01796F',        // 17. Loading
-    };
+    // Tema renklerinden güvenli erişim
+    const forest = colors.primary;
+    const sage = colors.tertiary; 
+    const pine = colors.secondary;
 
     switch (state) {
       case 'active':
         return {
-          backgroundColor: baseColors.forest,
-          textColor: colors.white,
-          shadowColor: baseColors.forest,
+          backgroundColor: forest,
+          textColor: '#FFFFFF',
+          shadowColor: forest,
           borderColor: 'transparent',
         };
       case 'passive':
         return {
-          backgroundColor: baseColors.sage,
-          textColor: colors.white,
-          shadowColor: baseColors.sage,
+          backgroundColor: sage + '40', // %40 opaklık
+          textColor: colors.primary,
+          shadowColor: 'transparent',
           borderColor: 'transparent',
         };
       case 'loading':
         return {
-          backgroundColor: baseColors.pine,
-          textColor: colors.white,
-          shadowColor: baseColors.pine,
+          backgroundColor: pine,
+          textColor: '#FFFFFF',
+          shadowColor: pine,
           borderColor: 'transparent',
         };
       default:
         return {
-          backgroundColor: baseColors.forest,
-          textColor: colors.white,
-          shadowColor: baseColors.forest,
+          backgroundColor: forest,
+          textColor: '#FFFFFF',
+          shadowColor: forest,
           borderColor: 'transparent',
         };
     }
@@ -122,7 +120,6 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 
   const stateColors = getStateColors();
 
-  // Layout sistemleri
   const getLayoutStyle = (): ViewStyle => {
     const baseStyle: ViewStyle = {
       flexDirection: 'row',
@@ -146,9 +143,9 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
       case 'icon-only':
         return { 
           ...baseStyle, 
-          paddingHorizontal: currentConfig.paddingVertical, // Kare form için
-          aspectRatio: 1,
-          width: currentConfig.minHeight,
+          paddingHorizontal: 0,
+          width: currentConfig.minHeight, // Kare form
+          justifyContent: 'center',
         };
       case 'full-width':
         return { ...baseStyle, width: '100%' };
@@ -159,10 +156,8 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 
   const buttonStyle = getLayoutStyle();
 
-  // Icon render
   const renderIcon = () => {
     if (!icon) return null;
-    
     return (
       <Ionicons 
         name={icon} 
@@ -172,10 +167,9 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     );
   };
 
-  // Text render
   const renderText = () => {
     if (layout === 'icon-only') return null;
-    if (state === 'loading') return null; // Loading state'de text gizli
+    if (state === 'loading') return null;
     
     return (
       <Text style={[styles.text, { 
@@ -187,36 +181,23 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     );
   };
 
-  // Loading indicator
   const renderLoading = () => {
     if (state !== 'loading') return null;
-    
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator 
-          size="small" 
-          color={stateColors.textColor} 
-        />
-        {layout !== 'icon-only' && (
-          <Text style={[styles.text, { 
-            color: stateColors.textColor,
-            fontSize: currentConfig.fontSize,
-          }]}>
-            Yükleniyor...
-          </Text>
-        )}
+        <ActivityIndicator size="small" color={stateColors.textColor} />
       </View>
     );
   };
 
+  // TouchableOpacity yerine BouncyButton kullanıyoruz
   return (
-    <TouchableOpacity
+    <BouncyButton
       onPress={onPress}
-      activeOpacity={0.8}
       disabled={disabled || state === 'loading'}
       style={[
         buttonStyle,
-        styles.shadow,
+        state === 'active' && styles.shadow, // Sadece active iken gölge
         { shadowColor: stateColors.shadowColor },
         style,
       ]}
@@ -230,7 +211,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
           {layout === 'icon-right' && renderIcon()}
         </>
       )}
-    </TouchableOpacity>
+    </BouncyButton>
   );
 };
 
@@ -238,17 +219,18 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: 'Comfortaa-SemiBold',
     textAlign: 'center',
+    fontWeight: '600',
   },
   shadow: {
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
 });
 

@@ -2,7 +2,7 @@ import { useUserGroups } from '@/api/groups';
 import { useAuth } from '@/contexts/AuthContext';
 import type { GroupWithOwner } from '@/types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const SELECTED_GROUP_STORAGE_KEY = '@geliom:selected_group_id';
 
@@ -23,18 +23,14 @@ const GroupContext = createContext<GroupContextValue>({
 export function GroupProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [selectedGroup, setSelectedGroupState] = useState<GroupWithOwner | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   // Kullanıcının tüm gruplarını fetch et
-  const { data: groups = [], isLoading: groupsLoading } = useUserGroups(user?.id || '');
+  const { data: groups = [], isLoading: groupsLoading, error: groupsError } = useUserGroups(user?.id || '');
 
-  // AsyncStorage'dan seçili grup ID'sini yükle
+  // AsyncStorage'dan seçili grup ID'sini yükle (sadece bir kez, gruplar yüklendiğinde)
   useEffect(() => {
     const loadSelectedGroup = async () => {
-      if (!user?.id) {
-        setIsLoading(false);
-        return;
-      }
+      if (!user?.id || groupsLoading) return;
 
       try {
         const storedGroupId = await AsyncStorage.getItem(SELECTED_GROUP_STORAGE_KEY);
@@ -43,7 +39,6 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
           const group = groups.find(g => g.id === storedGroupId);
           if (group) {
             setSelectedGroupState(group);
-            setIsLoading(false);
             return;
           }
         }
@@ -56,13 +51,11 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Error loading selected group:', error);
-      } finally {
-        setIsLoading(false);
       }
     };
 
     loadSelectedGroup();
-  }, [user?.id, groups, selectedGroup]);
+  }, [user?.id, groups, groupsLoading, selectedGroup]);
 
   // Seçili grubu set et ve AsyncStorage'a kaydet
   const setSelectedGroup = useCallback(async (group: GroupWithOwner | null) => {
@@ -96,12 +89,16 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
     }
   }, [groups, selectedGroup, setSelectedGroup]);
 
-  const value: GroupContextValue = {
-    selectedGroup,
-    setSelectedGroup,
-    isLoading: isLoading || groupsLoading,
-    groups,
-  };
+  // Context value'yu memoize et - groups array referansı değiştiğinde güncellenir
+  // structuralSharing: false sayesinde her zaman yeni array referansı gelir
+  const value: GroupContextValue = useMemo(() => {
+    return {
+      selectedGroup,
+      setSelectedGroup,
+      isLoading: groupsLoading,
+      groups,
+    };
+  }, [selectedGroup, setSelectedGroup, groupsLoading, groups]);
 
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }
@@ -111,6 +108,7 @@ export const useGroupContext = (): GroupContextValue => {
   if (!context) {
     throw new Error('useGroupContext must be used within a GroupProvider');
   }
+  
   return context;
 };
 

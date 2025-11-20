@@ -1,94 +1,148 @@
-// Light theme colors - Doğa temalı yeşil tonlar
-export const lightColors = {
-  // Ana renkler - Canlı yeşil tonları
-  primary: '#2E7D32',        // Orman yeşili
-  secondary: '#4CAF50',      // Çimen yeşili
-  tertiary: '#81C784',       // Açık yeşil
+/**
+ * Theme Interface
+ * Light ve Dark mod arasında tutarlılığı garanti eder.
+ */
+export interface ThemeColors {
+  // Ana Marka Renkleri
+  primary: string;
+  secondary: string;
+  tertiary: string;
+
+  // Component Durumları (GeliomButton vb. için)
+  forest: string; // Active State
+  sage: string;   // Passive State
+  pine: string;   // Loading State
   
-  // GeliomButton renkleri - Sadece kullanılan renkler
-  forest: '#1B5E20',         // 9. Active state - Koyu orman yeşili
-  sage: 'rgba(1, 121, 111, 0.5)',           // 13. Passive state - Adaçayı yeşili
-  pine: '#01796F',           // 17. Loading state - Çam yeşili
-  // Gradient tonları - Doğal geçişler
-  linearGradient: ['#2E7D32', '#4CAF50'],
+  // Gradyanlar
+  linearGradient: string[];
+
+  // Tipografi
+  text: string;
+  secondaryText: string;
+  lightText: string;
+
+  // Arkaplanlar
+  background: string;
+  secondaryBackground: string;
+  cardBackground: string;
+
+  // Durum Renkleri
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
+
+  // Nötr Renkler
+  black: string;
+  white: string;
+  gray: string;
+  lightGray: string;
+
+  // Etkileşim Elemanları
+  disabled: string;
+  stroke: string;
+  shadow: string;
+
+  // Katmanlar
+  overlay: string;
+  blurBackground: string;
+}
+
+/**
+ * Light Theme - Social Harmony (Temiz, İndigo & Gül)
+ */
+export const lightColors: ThemeColors = {
+  // Marka - Modern, Güvenilir, Enerjik
+  primary: '#4F46E5',        // Indigo 600
+  secondary: '#E11D48',      // Rose 600
+  tertiary: '#8B5CF6',       // Violet 500
   
-  // Metin renkleri
-  text: '#1B5E20',           // Koyu yeşil metin
-  secondaryText: '#4E7C4F',  // Orta ton yeşil
-  lightText: '#81C784',      // Açık yeşil metin
+  // Component Durumları (Doğa isimleri fonksiyona eşlendi)
+  forest: '#4338CA',         // Indigo 700 (Aktif/Güçlü)
+  sage: 'rgba(99, 102, 241, 0.15)', // Indigo 500 @ 15% (Pasif/Hafif)
+  pine: '#6366F1',           // Indigo 500 (Yükleniyor/Canlı)
   
-  // Arkaplan renkleri
-  background: '#F1F8E9',     // Çok açık yeşil arkaplan
-  secondaryBackground: '#E8F5E8', // İkincil arkaplan
-  cardBackground: '#FFFFFF', // Kart arkaplanı
+  linearGradient: ['#4F46E5', '#7C3AED'], // Indigo'dan Violet'e
   
-  // Sistem renkleri
-  success: '#4CAF50',        // Başarı yeşili
-  warning: '#FF9800',        // Turuncu uyarı
-  error: '#F44336',          // Kırmızı hata
-  info: '#2196F3',           // Mavi bilgi
+  // Tipografi - Slate Serisi (Yüksek Okunabilirlik)
+  text: '#0F172A',           // Slate 900
+  secondaryText: '#475569',  // Slate 600
+  lightText: '#94A3B8',      // Slate 400
   
-  // Nötr renkler
-  black: '#1B5E20',          // Koyu yeşil siyah
-  white: '#FFFFFF',          // Beyaz
-  gray: '#9E9E9E',           // Gri
-  lightGray: '#E0E0E0',      // Açık gri
+  // Arkaplanlar
+  background: '#F8FAFC',     // Slate 50
+  secondaryBackground: '#F1F5F9', // Slate 100
+  cardBackground: '#FFFFFF', // Saf Beyaz
   
-  // Etkileşim renkleri
-  disabled: '#C8E6C9',       // Pasif yeşil
-  stroke: '#A5D6A7',         // Çerçeve yeşili
-  shadow: 'rgba(46, 125, 50, 0.1)', // Yeşil gölge
+  // Durumlar
+  success: '#10B981',        // Emerald 500
+  warning: '#F59E0B',        // Amber 500
+  error: '#EF4444',          // Red 500
+  info: '#3B82F6',           // Blue 500
   
-  // Blur ve overlay renkleri
-  overlay: 'rgba(46, 125, 50, 0.6)',     // Yeşil overlay
-  blurBackground: 'rgba(241, 248, 233, 0.8)', // Blur arkaplan
+  // Nötrler
+  black: '#020617',          // Slate 950
+  white: '#FFFFFF',
+  gray: '#64748B',           // Slate 500
+  lightGray: '#E2E8F0',      // Slate 200
+  
+  // Etkileşim
+  disabled: '#CBD5E1',       // Slate 300
+  stroke: '#E2E8F0',         // Slate 200
+  shadow: 'rgba(79, 70, 229, 0.15)', // İndigo tonlu gölge
+  
+  // Katmanlar
+  overlay: 'rgba(15, 23, 42, 0.6)',     // Koyu Slate Overlay
+  blurBackground: 'rgba(255, 255, 255, 0.85)',
 };
 
-// Dark theme colors - Gece doğası teması
-export const darkColors = {
-  // Ana renkler - Daha yumuşak yeşil tonlar
-  primary: '#4CAF50',        // Parlak yeşil
-  secondary: '#66BB6A',      // Orta yeşil
-  tertiary: '#81C784',       // Açık yeşil
+/**
+ * Dark Theme - Deep Night Social (Göz yormayan Slate & Neon)
+ */
+export const darkColors: ThemeColors = {
+  // Marka - Karanlık modda görünürlük için daha açık/neon tonlar
+  primary: '#818CF8',        // Indigo 400
+  secondary: '#FB7185',      // Rose 400
+  tertiary: '#A78BFA',       // Violet 400
   
-  // GeliomButton renkleri - Dark mode versiyonları
-  forest: '#2E7D32',         // 9. Active state - Orman yeşili (daha açık)
-  sage: 'rgba(1, 121, 111, 0.5)',           // 13. Passive state - Adaçayı yeşili (daha açık)
-  pine: '#26A69A',           // 17. Loading state - Çam yeşili (daha açık)
+  // Component Durumları
+  forest: '#6366F1',         // Indigo 500 (Aktif)
+  sage: 'rgba(129, 140, 248, 0.2)', // Indigo 400 @ 20% (Pasif)
+  pine: '#4F46E5',           // Indigo 600 (Yükleniyor)
   
-  // Gradient tonları
-  linearGradient: ['#4CAF50', '#66BB6A'],
+  linearGradient: ['#6366F1', '#8B5CF6'],
   
-  // Metin renkleri
-  text: '#E8F5E8',           // Açık yeşil metin
-  secondaryText: '#A5D6A7',  // Orta ton yeşil
-  lightText: '#C8E6C9',      // Çok açık yeşil
+  // Tipografi
+  text: '#F8FAFC',           // Slate 50
+  secondaryText: '#CBD5E1',  // Slate 300
+  lightText: '#64748B',      // Slate 500
   
-  // Arkaplan renkleri
-  background: '#0D1B0F',     // Çok koyu yeşil arkaplan
-  secondaryBackground: '#1B2E1F', // İkincil koyu arkaplan
-  cardBackground: '#263238', // Kart arkaplanı
+  // Arkaplanlar
+  background: '#020617',     // Slate 950 (Derin Lacivert/Siyah)
+  secondaryBackground: '#0F172A', // Slate 900
+  cardBackground: '#1E293B', // Slate 800
   
-  // Sistem renkleri
-  success: '#4CAF50',        // Başarı yeşili
-  warning: '#FF9800',        // Turuncu uyarı
-  error: '#F44336',          // Kırmızı hata
-  info: '#2196F3',           // Mavi bilgi
+  // Durumlar
+  success: '#34D399',        // Emerald 400
+  warning: '#FBBF24',        // Amber 400
+  error: '#F87171',          // Red 400
+  info: '#60A5FA',           // Blue 400
   
-  // Nötr renkler
-  black: '#000000',          // Siyah
-  white: '#E8F5E8',          // Yeşilimsi beyaz
-  gray: '#616161',           // Gri
-  lightGray: '#424242',      // Koyu gri
+  // Nötrler
+  black: '#000000',
+  white: '#F8FAFC',
+  gray: '#94A3B8',           // Slate 400
+  lightGray: '#334155',      // Slate 700
   
-  // Etkileşim renkleri
-  disabled: '#2E4B32',       // Pasif koyu yeşil
-  stroke: '#4E7C4F',         // Çerçeve yeşili
-  shadow: 'rgba(76, 175, 80, 0.2)', // Yeşil gölge
+  // Etkileşim
+  disabled: '#334155',       // Slate 700
+  stroke: '#334155',         // Slate 700
+  shadow: 'rgba(0, 0, 0, 0.5)', // Derin siyah gölge
   
-  // Blur ve overlay renkleri
-  overlay: 'rgba(76, 175, 80, 0.4)',     // Yeşil overlay
-  blurBackground: 'rgba(13, 27, 15, 0.9)', // Blur arkaplan
+  // Katmanlar
+  overlay: 'rgba(0, 0, 0, 0.7)',
+  blurBackground: 'rgba(30, 41, 59, 0.8)', // Slate 800 bazlı
 };
 
-export type Colors = typeof lightColors;
+// Styled-components veya hook'larda kullanım için export
+export type Colors = ThemeColors;

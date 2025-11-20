@@ -17,7 +17,7 @@ export interface BottomSheetOptions {
 interface BottomSheetContextValue {
     openBottomSheet: (content: ReactNode, options?: BottomSheetOptions) => void;
     closeBottomSheet: () => void;
-    snapToIndex: (index: number) => void; // Bu satırı ekle
+    snapToIndex: (index: number) => void;
     isOpen: boolean;
 }
 
@@ -44,9 +44,8 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
     // Default snap points - dynamic sizing için CONTENT_HEIGHT kullanılacak
     const snapPoints = useMemo(() => options.snapPoints || ['60%'], [options.snapPoints]);
 
-    // Open Bottom Sheet
+    // Open Bottom Sheet - Direkt content kabul ediyor
     const openBottomSheet = useCallback((newContent: ReactNode, newOptions?: BottomSheetOptions) => {
-        setContent(newContent);
         setOptions({
             enablePanDownToClose: newOptions?.enablePanDownToClose ?? true,
             enableOverlayTap: newOptions?.enableOverlayTap ?? true,
@@ -55,6 +54,8 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
             handleIndicatorStyle: newOptions?.handleIndicatorStyle,
             backgroundStyle: newOptions?.backgroundStyle,
         });
+        
+        setContent(newContent);
         setIsOpen(true);
         bottomSheetRef.current?.snapToIndex(newOptions?.index ?? 0);
     }, []);

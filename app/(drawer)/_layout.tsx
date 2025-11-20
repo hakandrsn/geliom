@@ -1,14 +1,15 @@
-import { CustomDrawerContent } from '@/components';
-import { GroupHeader, GroupListBottomSheet } from '@/components/shared';
-import { useAuth } from '@/contexts/AuthContext';
-import { useBottomSheet } from '@/contexts/BottomSheetContext';
-import { useGroupContext } from '@/contexts/GroupContext';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useGroupJoinRequests, useGroupJoinRequestsRealtime } from '@/api/groups';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React, { useCallback } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { CustomDrawerContent } from '../../components';
+import { GroupHeader, GroupListBottomSheet } from '../../components/shared';
+import { useAuth } from '../../contexts/AuthContext';
+import { useBottomSheet } from '../../contexts/BottomSheetContext';
+import { useGroupContext } from '../../contexts/GroupContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function DrawerLayout() {
     const { isLoading, session } = useAuth();
@@ -16,25 +17,44 @@ export default function DrawerLayout() {
     const { openBottomSheet } = useBottomSheet();
     const { colors } = useTheme();
     const router = useRouter();
+    const { user } = useAuth();
+
+    const isOwner = selectedGroup?.owner_id === user?.id;
+    
+    // Katılma isteklerini çek (sadece owner için)
+    const { data: joinRequests = [] } = useGroupJoinRequests(selectedGroup?.id || '', 'pending');
+    const pendingRequestsCount = joinRequests.length;
+    
+    // Realtime subscription
+    useGroupJoinRequestsRealtime(selectedGroup?.id || '');
 
     const createHandleGroupHeaderPress = useCallback((navigation: any) => {
         return () => {
-            // Eğer grup yoksa, direkt create-group sayfasına git
             if (!selectedGroup || groups.length === 0) {
-                // Expo Router kullanarak navigate et
                 router.push('/(drawer)/(group)/create-group');
                 return;
             }
             
-            // Grup varsa bottom sheet aç
-            openBottomSheet(<GroupListBottomSheet />, {
-                snapPoints: ['70%'],
+            // Her açılışta yeni key ile render et - context güncellemelerini almak için
+            openBottomSheet(<GroupListBottomSheet key={Date.now()} />, {
+                snapPoints: ['60%'],
                 enablePanDownToClose: true,
             });
         };
     }, [openBottomSheet, selectedGroup, groups, router]);
 
-    // Loading state
+    const handleGroupManagementPress = () => {
+        if (selectedGroup) {
+            router.push('/(drawer)/(group)/group-management');
+        }
+    };
+
+    const handleJoinRequestsPress = () => {
+        if (selectedGroup) {
+            router.push('/(drawer)/(group)/join-requests');
+        }
+    };
+
     if (isLoading) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -43,10 +63,7 @@ export default function DrawerLayout() {
         );
     }
 
-    // Auth olmamış kullanıcıları redirect et
-    if (!session) {
-        return null; // Auth layout handle edecek
-    }
+    if (!session) return null;
 
     return (
         <Drawer
@@ -56,13 +73,14 @@ export default function DrawerLayout() {
                 headerStyle: {
                     backgroundColor: colors.background,
                     shadowColor: 'transparent',
-                    elevation: 0,
+                    elevation: 0, // Android gölgesini kaldır
+                    borderBottomWidth: 0, // iOS çizgisini kaldır
                 },
                 headerTintColor: colors.text,
                 headerTitleStyle: {
                     fontFamily: 'Comfortaa-SemiBold',
-                    fontSize: 18,
                 },
+                headerTitleAlign: 'center', // Başlığı ortala
                 drawerStyle: {
                     backgroundColor: colors.background,
                     width: '80%',
@@ -79,39 +97,83 @@ export default function DrawerLayout() {
                 name="home"
                 options={({ navigation }) => ({
                     headerTitle: () => <GroupHeader group={selectedGroup} onPress={createHandleGroupHeaderPress(navigation)} />,
+                    headerRight: () => (
+                        <View style={styles.headerRight}>
+                            {selectedGroup && (
+                                <TouchableOpacity
+                                    onPress={handleGroupManagementPress}
+                                    style={[styles.actionButton, { backgroundColor: colors.cardBackground + '80', borderColor: colors.stroke }]}
+                                >
+                                    <Ionicons name="settings-outline" size={18} color={colors.text} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    ),
                     drawerLabel: 'Ana Sayfa',
                     drawerIcon: ({ color, size }) => (
-                        <Ionicons name="home" size={size} color={color} />
+                        <Ionicons name="home-outline" size={size} color={color} />
                     ),
                 })}
             />
+            {/* Diğer ekranları gizliyoruz, single page hissi için */}
             <Drawer.Screen
                 name="showroom"
                 options={{
-                    title: 'Component Showroom',
-                    drawerLabel: 'Showroom',
-                    drawerIcon: ({ color, size }) => (
-                        <Ionicons name="color-palette" size={size} color={color} />
-                    ),
+                    drawerItemStyle: { display: 'none' }
                 }}
             />
             <Drawer.Screen
                 name="api-test"
                 options={{
-                    title: 'API Test',
-                    drawerLabel: 'API Test',
-                    drawerIcon: ({ color, size }) => (
-                        <Ionicons name="code-slash" size={size} color={color} />
-                    ),
+                    drawerItemStyle: { display: 'none' }
                 }}
             />
             <Drawer.Screen
                 name="(group)"
                 options={{
-                    headerShown: false, // Stack navigator kendi header'ını kullanacak
-                    drawerItemStyle: { display: 'none' }, // Drawer menüsünde gösterme
+                    headerShown: false,
+                    drawerItemStyle: { display: 'none' },
+                }}
+            />
+            <Drawer.Screen
+                name="search-user"
+                options={{
+                    drawerItemStyle: { display: 'none' },
                 }}
             />
         </Drawer>
     );
 }
+
+const styles = StyleSheet.create({
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingRight: 16,
+    },
+    actionButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    badge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    badgeText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+});

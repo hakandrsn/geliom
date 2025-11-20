@@ -539,6 +539,20 @@ export async function createOrUpdateUserProfile(
           .single();
 
         if (retryError) {
+          // Retry sonrası hala bulunamadıysa, kullanıcı DB'den silinmiş olabilir
+          // Bu durumda özel error code döndür, AuthContext logout yapacak
+          if (retryError.code === 'PGRST116') {
+            console.warn('⚠️ Kullanıcı DB\'de bulunamadı (retry sonrası), logout gerekli');
+            return {
+              data: null,
+              error: {
+                code: 'USER_NOT_FOUND',
+                message: 'Kullanıcı veritabanında bulunamadı',
+                originalError: retryError,
+              },
+            };
+          }
+          
           console.error('❌ User update retry error:', retryError);
           return {
             data: null,

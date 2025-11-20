@@ -1,12 +1,14 @@
+import { NotificationHandler } from '@/components/NotificationHandler';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { BottomSheetProvider } from '@/contexts/BottomSheetContext';
 import { GroupProvider } from '@/contexts/GroupContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { initializeOneSignal } from '@/services/onesignal';
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from "expo-font";
 import * as SplashScreen from 'expo-splash-screen';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -35,6 +37,13 @@ export default function Provider({ children }: { children: React.ReactNode }) {
     'Comfortaa-Bold': require('@/assets/fonts/Comfortaa-Bold.ttf'),
   });
 
+  // OneSignal'i initialize et (uygulama başladığında bir kez)
+  useEffect(() => {
+    initializeOneSignal().catch((error) => {
+      console.error('❌ OneSignal initialization hatası:', error);
+    });
+  }, []);
+
   if (!fontsLoaded && !error) {
     return null;
   }
@@ -44,13 +53,14 @@ export default function Provider({ children }: { children: React.ReactNode }) {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
-            <BottomSheetProvider>
-              <AuthProvider>
-                <GroupProvider>
+            <AuthProvider>
+              <GroupProvider>
+                <BottomSheetProvider>
+                  <NotificationHandler />
                   {children}
-                </GroupProvider>
-              </AuthProvider>
-            </BottomSheetProvider>
+                </BottomSheetProvider>
+              </GroupProvider>
+            </AuthProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </GestureHandlerRootView>

@@ -1,3 +1,4 @@
+export { default as AvatarSelector } from './AvatarSelector';
 export { default as BaseLayout } from './BaseLayout';
 export { default as BlurButton } from './BlurButton';
 export { default as Button } from './Button';
