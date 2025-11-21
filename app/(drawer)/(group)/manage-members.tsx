@@ -16,7 +16,10 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -408,8 +411,15 @@ export default function ManageMembersScreen() {
         animationType="slide"
         onRequestClose={() => setNicknameModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <Typography variant="h6" style={styles.modalTitle}>
               Takma Ad {selectedMember?.user?.display_name ? `(${selectedMember.user.display_name})` : ''}
             </Typography>
@@ -450,7 +460,8 @@ export default function ManageMembersScreen() {
               </GeliomButton>
             </View>
           </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
       
       {/* Transfer Ownership Modal */}
@@ -592,6 +603,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
     width: '90%',

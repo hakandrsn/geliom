@@ -16,6 +16,7 @@ export interface Mood {
   id: number; // INT PK
   text: string; // TEXT UK
   emoji?: string; // TEXT
+  group_id?: string; // UUID FK - Custom mood'lar için grup ID'si (NULL ise tüm gruplar için geçerli)
 }
 
 export interface Group {
@@ -47,6 +48,8 @@ export interface Status {
   notifies: boolean; // BOOLEAN NOT NULL DEFAULT false
   is_custom: boolean; // BOOLEAN NOT NULL DEFAULT false
   owner_id?: string; // UUID FK - Eğer custom ise sahibi
+  group_id?: string; // UUID FK - Custom status'ler için grup ID'si (NULL ise tüm gruplar için geçerli)
+  emoji?: string; // TEXT - Status emoji'si
   messages?: string[]; // TEXT[] - Bildirim mesajları (rastgele seçilecek)
 }
 

@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function GroupManagementScreen() {
   const { user } = useAuth();
@@ -22,6 +22,8 @@ export default function GroupManagementScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [newStatusText, setNewStatusText] = useState('');
+  const [newStatusEmoji, setNewStatusEmoji] = useState('');
+  const [notifiesStatus, setNotifiesStatus] = useState(false);
   const [moodModalVisible, setMoodModalVisible] = useState(false);
   const [newMoodText, setNewMoodText] = useState('');
   const [newMoodEmoji, setNewMoodEmoji] = useState('');
@@ -104,32 +106,38 @@ export default function GroupManagementScreen() {
   };
 
   const handleCreateStatus = async () => {
-    if (!newStatusText.trim() || !isOwner || !user?.id) return;
+    if (!newStatusText.trim() || !isOwner || !user?.id || !selectedGroup?.id) return;
     
     try {
       await createStatus.mutateAsync({
         text: newStatusText.trim(),
-        notifies: false,
+        notifies: notifiesStatus, // Kullanıcı seçimi
         is_custom: true,
         owner_id: user.id,
-        messages: [],
+        group_id: selectedGroup.id, // Custom status'ler grup bazlı
+        emoji: newStatusEmoji.trim() || undefined, // Emoji opsiyonel
+        messages: undefined, // messages opsiyonel, undefined gönder
       });
       setStatusModalVisible(false);
       setNewStatusText('');
+      setNewStatusEmoji('');
+      setNotifiesStatus(false);
       Alert.alert('Başarılı', 'Özel durum oluşturuldu');
     } catch (error: any) {
       console.error('Status oluşturma hatası:', error);
-      Alert.alert('Hata', error.message || 'Durum oluşturulamadı');
+      const errorMessage = error?.message || error?.code || 'Durum oluşturulamadı';
+      Alert.alert('Hata', errorMessage);
     }
   };
 
   const handleCreateMood = async () => {
-    if (!newMoodText.trim() || !isOwner || !user?.id) return;
+    if (!newMoodText.trim() || !isOwner || !user?.id || !selectedGroup?.id) return;
     
     try {
       await createMood.mutateAsync({
         text: newMoodText.trim(),
         emoji: newMoodEmoji.trim() || undefined,
+        group_id: selectedGroup.id, // Custom mood'lar grup bazlı
       });
       setMoodModalVisible(false);
       setNewMoodText('');
@@ -137,7 +145,8 @@ export default function GroupManagementScreen() {
       Alert.alert('Başarılı', 'Özel mood oluşturuldu');
     } catch (error: any) {
       console.error('Mood oluşturma hatası:', error);
-      Alert.alert('Hata', error.message || 'Mood oluşturulamadı');
+      const errorMessage = error?.message || error?.code || 'Mood oluşturulamadı';
+      Alert.alert('Hata', errorMessage);
     }
   };
 
@@ -272,6 +281,25 @@ export default function GroupManagementScreen() {
                 <Ionicons name="chevron-forward" size={18} color={colors.secondaryText} />
               </View>
             </TouchableOpacity>
+
+            {/* Status ve Mood Sırala */}
+            <TouchableOpacity
+              onPress={() => router.push('/(drawer)/(group)/reorder-status-mood')}
+              style={[styles.settingItem, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
+            >
+              <View style={styles.settingItemContent}>
+                <Ionicons name="reorder-three-outline" size={20} color={colors.primary} />
+                <View style={styles.settingItemText}>
+                  <Typography variant="body" color={colors.text}>
+                    Status ve Mood Sırala
+                  </Typography>
+                  <Typography variant="caption" color={colors.secondaryText}>
+                    Status ve mood sıralamasını düzenle
+                  </Typography>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.secondaryText} />
+              </View>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -309,8 +337,15 @@ export default function GroupManagementScreen() {
         animationType="slide"
         onRequestClose={() => setGroupNameModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
               Grup Adını Değiştir
             </Typography>
@@ -353,8 +388,9 @@ export default function GroupManagementScreen() {
                 Kaydet
               </GeliomButton>
             </View>
-          </View>
-        </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Özel Durum Ekle Modal */}
@@ -364,8 +400,15 @@ export default function GroupManagementScreen() {
         animationType="slide"
         onRequestClose={() => setStatusModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
               Özel Durum Ekle
             </Typography>
@@ -383,6 +426,32 @@ export default function GroupManagementScreen() {
               maxLength={50}
             />
             
+            <TextInput
+              style={[styles.modalInput, { 
+                backgroundColor: colors.background, 
+                color: colors.text,
+                borderColor: colors.stroke 
+              }]}
+              placeholder="Emoji (opsiyonel, örn: 📅)"
+              placeholderTextColor={colors.secondaryText}
+              value={newStatusEmoji}
+              onChangeText={setNewStatusEmoji}
+              maxLength={2}
+            />
+            
+            {/* Notifies Switch */}
+            <View style={[styles.switchContainer, { borderColor: colors.stroke }]}>
+              <Typography variant="body" color={colors.text} style={{ flex: 1 }}>
+                Bildirim gönder
+              </Typography>
+              <Switch
+                value={notifiesStatus}
+                onValueChange={setNotifiesStatus}
+                trackColor={{ false: colors.stroke, true: colors.primary }}
+                thumbColor={colors.white}
+              />
+            </View>
+            
             <View style={styles.modalActions}>
               <GeliomButton
                 state="passive"
@@ -390,6 +459,8 @@ export default function GroupManagementScreen() {
                 onPress={() => {
                   setStatusModalVisible(false);
                   setNewStatusText('');
+                  setNewStatusEmoji('');
+                  setNotifiesStatus(false);
                 }}
                 style={styles.modalButton}
               >
@@ -406,7 +477,8 @@ export default function GroupManagementScreen() {
               </GeliomButton>
             </View>
           </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Özel Mood Ekle Modal */}
@@ -416,8 +488,15 @@ export default function GroupManagementScreen() {
         animationType="slide"
         onRequestClose={() => setMoodModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.modalScrollContent}
+          >
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
               Özel Mood Ekle
             </Typography>
@@ -472,7 +551,8 @@ export default function GroupManagementScreen() {
               </GeliomButton>
             </View>
           </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </BaseLayout>
   );
@@ -508,9 +588,9 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    paddingHorizontal: 12,
   },
   contentContainer: {
-    padding: 24,
   },
   emptyContainer: {
     flex: 1,
@@ -583,6 +663,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   modalContent: {
     width: '90%',
     maxWidth: 400,
@@ -608,6 +694,15 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+    borderBottomWidth: 1,
   },
 });
 

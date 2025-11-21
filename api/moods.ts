@@ -26,14 +26,18 @@ export const userGroupMoodKeys = {
 };
 
 // Queries
-export const useMoods = () => {
+export const useMoods = (groupId?: string) => {
   return useQuery({
-    queryKey: moodKeys.lists(),
+    queryKey: [...moodKeys.lists(), groupId || 'all'],
     queryFn: async (): Promise<Mood[]> => {
-      const { data, error } = await supabase
-        .from('moods')
-        .select('*')
-        .order('text');
+      let query = supabase.from('moods').select('*');
+      
+      if (groupId) {
+        // Grup özel mood'lar + default mood'lar (group_id IS NULL)
+        query = query.or(`group_id.eq.${groupId},group_id.is.null`);
+      }
+      
+      const { data, error } = await query.order('text');
       
       if (error) throw error;
       return data || [];
@@ -90,8 +94,12 @@ export const useCreateMood = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: moodKeys.all });
+      // Custom mood oluşturulduysa, o grubun mood'larını da invalidate et
+      if (data.group_id) {
+        queryClient.invalidateQueries({ queryKey: [...moodKeys.lists(), data.group_id] });
+      }
     },
   });
 };

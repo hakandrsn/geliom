@@ -2,7 +2,9 @@ import { useMoods, useSetUserGroupMood } from '@/api/moods';
 import { GeliomButton, Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import React, { useCallback } from 'react';
+import { getMoodOrder } from '@/utils/storage';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 
 interface MoodSelectorProps {
@@ -14,11 +16,54 @@ function MoodSelector({ groupId, currentMoodId }: MoodSelectorProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
   
-  // Varsayılan mood'ları çek
-  const { data: moods, isLoading } = useMoods();
+  // Tüm mood'ları çek (default + custom, seçili grup için)
+  const { data: allMoods = [], isLoading } = useMoods(groupId);
   
   // Mood güncelleme mutasyonu
   const setMoodMutation = useSetUserGroupMood();
+  
+  // Local storage'dan sıralamayı al
+  const [moodOrder, setMoodOrder] = useState<number[]>([]);
+  
+  // Ekran focus olduğunda sıralamayı yeniden yükle
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        getMoodOrder(user.id).then(setMoodOrder);
+      }
+    }, [user?.id])
+  );
+  
+  // Mood'ları sırala (tüm mood'lar - custom + default)
+  const sortedMoods = useMemo(() => {
+    if (moodOrder.length === 0) {
+      // Sıralama yoksa: Custom'lar önce, sonra default'lar
+      const customMoods = allMoods.filter(m => m.group_id != null);
+      const defaultMoods = allMoods.filter(m => m.group_id == null);
+      return [...customMoods, ...defaultMoods];
+    }
+    
+    // Sıralamaya göre tüm mood'ları düzenle (custom + default)
+    const ordered: typeof allMoods = [];
+    const unordered: typeof allMoods = [];
+    
+    // Sıralamaya göre tüm mood'ları ekle (custom + default)
+    moodOrder.forEach((moodId) => {
+      const mood = allMoods.find(m => m.id === moodId);
+      if (mood) {
+        ordered.push(mood);
+      }
+    });
+    
+    // Sıralamada olmayan mood'ları sona ekle
+    allMoods.forEach((mood) => {
+      if (!moodOrder.includes(mood.id) && !ordered.find(m => m.id === mood.id)) {
+        unordered.push(mood);
+      }
+    });
+    
+    return [...ordered, ...unordered];
+  }, [allMoods, moodOrder]);
 
   const handleMoodPress = useCallback(async (moodId: number) => {
     if (!user) return;
@@ -49,7 +94,7 @@ function MoodSelector({ groupId, currentMoodId }: MoodSelectorProps) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {moods?.map((mood) => {
+        {sortedMoods.map((mood) => {
           const isActive = currentMoodId === mood.id;
 
           return (

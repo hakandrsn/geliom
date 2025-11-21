@@ -7,7 +7,7 @@ import { ActivityIndicator, View } from "react-native";
 
 export default function Index() {
   const { initializeAuth, isLoading, session } = useAuth();
-  const { colors } = useTheme();
+  const { colors ,toggleTheme} = useTheme();
   const router = useRouter();
 
   // Auth'u başlat

@@ -15,22 +15,22 @@ export default function GroupHeader({ group, onPress }: GroupHeaderProps) {
   const { colors } = useTheme();
 
   // Grup adını max 15 karakter göster
-  const displayName = group?.name 
-    ? group.name.length > 15 
-      ? group.name.substring(0, 15) + '...' 
+  const displayName = group?.name
+    ? group.name.length > 15
+      ? group.name.substring(0, 15) + '...'
       : group.name
     : 'Birlik Oluştur';
 
   return (
     <BouncyButton
       onPress={onPress}
-      style={[styles.container, { backgroundColor: colors.cardBackground + '80', borderColor: colors.stroke }]}
+      style={[styles.container]}
     >
       <View style={styles.content}>
         <View style={[styles.iconBox, { backgroundColor: colors.primary }]}>
           <Ionicons name="people" size={14} color="white" />
         </View>
-        
+
         <Typography
           variant="h6"
           color={colors.text}
@@ -39,7 +39,7 @@ export default function GroupHeader({ group, onPress }: GroupHeaderProps) {
         >
           {displayName}
         </Typography>
-        
+
         <Ionicons
           name="chevron-down"
           size={16}
@@ -56,7 +56,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    borderWidth: 1,
     alignSelf: 'flex-start', // Sadece kendi içeriğini kaplasın
   },
   content: {
