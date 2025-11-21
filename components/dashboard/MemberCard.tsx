@@ -11,13 +11,18 @@ interface MemberCardProps {
   status?: UserStatusWithStatus;
   mood?: UserGroupMoodWithMood;
   isMe?: boolean;
+  nickname?: string;
 }
 
-export default function MemberCard({ member, status, mood, isMe }: MemberCardProps) {
+export default function MemberCard({ member, status, mood, isMe, nickname }: MemberCardProps) {
   const { colors } = useTheme();
   const user = member.user;
 
   if (!user) return null;
+  
+  // Görüntülenecek isim: nickname varsa onu, yoksa display_name veya custom_user_id
+  const displayName = nickname || user.display_name || user.custom_user_id;
+  const realName = nickname ? (user.display_name || user.custom_user_id) : undefined;
 
   // Durum rengi ve ikonu (Varsayılan: gri/bilinmiyor)
   const statusColor = status?.status?.is_custom ? colors.primary : (status?.status?.notifies ? colors.warning : colors.secondaryText);
@@ -50,15 +55,26 @@ export default function MemberCard({ member, status, mood, isMe }: MemberCardPro
       {/* İsim ve Durum */}
       <View style={styles.infoContainer}>
         <View style={styles.nameRow}>
-          <Typography 
-            variant="body" 
-            fontWeight="semibold" 
-            color={colors.text}
-            numberOfLines={1}
-            style={{ flex: 1 }}
-          >
-            {user.display_name} {isMe && '(Sen)'}
-          </Typography>
+          <View style={{ flex: 1 }}>
+            <Typography 
+              variant="body" 
+              fontWeight="semibold" 
+              color={colors.text}
+              numberOfLines={1}
+            >
+              {displayName} {isMe && '(Sen)'}
+            </Typography>
+            {realName && (
+              <Typography 
+                variant="caption" 
+                color={colors.secondaryText}
+                numberOfLines={1}
+                style={{ marginTop: 2 }}
+              >
+                {realName}
+              </Typography>
+            )}
+          </View>
         </View>
 
         {/* Durum Göstergesi */}

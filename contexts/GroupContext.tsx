@@ -30,12 +30,12 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
   // AsyncStorage'dan seçili grup ID'sini yükle (sadece bir kez, gruplar yüklendiğinde)
   useEffect(() => {
     const loadSelectedGroup = async () => {
-      if (!user?.id || groupsLoading) return;
+      if (!user?.id || groupsLoading || groups.length === 0) return;
 
       try {
         const storedGroupId = await AsyncStorage.getItem(SELECTED_GROUP_STORAGE_KEY);
         
-        if (storedGroupId && groups.length > 0) {
+        if (storedGroupId) {
           const group = groups.find(g => g.id === storedGroupId);
           if (group) {
             setSelectedGroupState(group);
@@ -44,7 +44,7 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Eğer stored group bulunamadıysa veya yoksa, ilk grubu seç
-        if (groups.length > 0 && !selectedGroup) {
+        if (groups.length > 0) {
           const firstGroup = groups[0];
           setSelectedGroupState(firstGroup);
           await AsyncStorage.setItem(SELECTED_GROUP_STORAGE_KEY, firstGroup.id);
@@ -55,7 +55,7 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadSelectedGroup();
-  }, [user?.id, groups, groupsLoading, selectedGroup]);
+  }, [user?.id, groups, groupsLoading]);
 
   // Seçili grubu set et ve AsyncStorage'a kaydet
   const setSelectedGroup = useCallback(async (group: GroupWithOwner | null) => {

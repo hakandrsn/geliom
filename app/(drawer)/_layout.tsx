@@ -72,9 +72,6 @@ export default function DrawerLayout() {
                 headerShown: true,
                 headerStyle: {
                     backgroundColor: colors.background,
-                    shadowColor: 'transparent',
-                    elevation: 0, // Android gölgesini kaldır
-                    borderBottomWidth: 0, // iOS çizgisini kaldır
                 },
                 headerTintColor: colors.text,
                 headerTitleStyle: {
@@ -83,7 +80,6 @@ export default function DrawerLayout() {
                 headerTitleAlign: 'center', // Başlığı ortala
                 drawerStyle: {
                     backgroundColor: colors.background,
-                    width: '80%',
                 },
                 drawerActiveTintColor: colors.primary,
                 drawerInactiveTintColor: colors.secondaryText,

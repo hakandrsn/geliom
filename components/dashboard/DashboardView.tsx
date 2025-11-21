@@ -1,5 +1,6 @@
 import { useGroupMembers } from '@/api/groups';
 import { useGroupUserMoods, useUserGroupMood } from '@/api/moods';
+import { useGroupNicknames } from '@/api/nicknames';
 import { useGroupUserStatuses, useUserStatus } from '@/api/statuses';
 import MemberCard from '@/components/dashboard/MemberCard';
 import MoodSelector from '@/components/dashboard/MoodSelector';
@@ -23,11 +24,21 @@ export default function DashboardView({ group }: DashboardViewProps) {
   const { data: members, isLoading: membersLoading } = useGroupMembers(group.id);
   const { data: groupStatuses } = useGroupUserStatuses(group.id);
   const { data: groupMoods } = useGroupUserMoods(group.id);
+  const { data: nicknames = [] } = useGroupNicknames(group.id);
   
   // Benim şu anki statusum (StatusSelector için)
   const { data: myStatus } = useUserStatus(user?.id || '', group.id);
   // Benim şu anki mood'um (MoodSelector için)
   const { data: myMood } = useUserGroupMood(user?.id || '', group.id);
+  
+  // Her member için nickname'i bul (setter: current user, target: member user)
+  const getNicknameForMember = (targetUserId: string): string | undefined => {
+    if (!user?.id) return undefined;
+    const nickname = nicknames.find(
+      n => n.setter_user_id === user.id && n.target_user_id === targetUserId
+    );
+    return nickname?.nickname;
+  };
 
   if (membersLoading) {
     return (
@@ -69,6 +80,7 @@ export default function DashboardView({ group }: DashboardViewProps) {
         const memberStatus = groupStatuses?.find(s => s.user_id === item.user_id);
         const memberMood = groupMoods?.find(m => m.user_id === item.user_id);
         const isMe = item.user_id === user?.id;
+        const nickname = getNicknameForMember(item.user_id);
 
         return (
           <MemberCard 
@@ -76,6 +88,7 @@ export default function DashboardView({ group }: DashboardViewProps) {
             status={memberStatus}
             mood={memberMood}
             isMe={isMe}
+            nickname={nickname}
           />
         );
       }}

@@ -117,7 +117,6 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({
   const containerStyle: ViewStyle = {
     ...styles.container,
     backgroundColor: backgroundColor || colors.background,
-    paddingTop: fullScreen ? 0 : (headerShow && header ? 0 : insets.top),
     paddingBottom: fullScreen ? 0 : insets.bottom,
     paddingLeft: fullScreen ? 0 : insets.left,
     paddingRight: fullScreen ? 0 : insets.right,

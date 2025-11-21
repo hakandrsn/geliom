@@ -17,7 +17,7 @@ export const statusKeys = {
   list: (filters: string) => [...statusKeys.lists(), { filters }] as const,
   details: () => [...statusKeys.all, 'detail'] as const,
   detail: (id: number) => [...statusKeys.details(), id] as const,
-  custom: (ownerId: string) => [...statusKeys.all, 'custom', ownerId] as const,
+  custom: (groupId: string, ownerId?: string) => [...statusKeys.all, 'custom', groupId, ownerId || 'all'] as const,
   default: () => [...statusKeys.all, 'default'] as const,
 };
 
@@ -51,6 +51,7 @@ export const useDefaultStatuses = () => {
         .from('statuses')
         .select('*')
         .eq('is_custom', false)
+        .is('group_id', null) // Default status'ler group_id = NULL olmalı
         .order('text');
       
       if (error) throw error;
@@ -59,21 +60,26 @@ export const useDefaultStatuses = () => {
   });
 };
 
-export const useCustomStatuses = (ownerId: string) => {
+export const useCustomStatuses = (groupId: string, ownerId?: string) => {
   return useQuery({
-    queryKey: statusKeys.custom(ownerId),
+    queryKey: statusKeys.custom(groupId, ownerId),
     queryFn: async (): Promise<Status[]> => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('statuses')
         .select('*')
         .eq('is_custom', true)
-        .eq('owner_id', ownerId)
-        .order('text');
+        .eq('group_id', groupId);
+      
+      if (ownerId) {
+        query = query.eq('owner_id', ownerId);
+      }
+      
+      const { data, error } = await query.order('text');
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!ownerId,
+    enabled: !!groupId,
   });
 };
 
@@ -186,8 +192,12 @@ export const useCreateStatus = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: statusKeys.all });
+      // Custom status oluşturulduysa, o grubun custom status'lerini de invalidate et
+      if (data.group_id) {
+        queryClient.invalidateQueries({ queryKey: statusKeys.custom(data.group_id) });
+      }
     },
   });
 };
