@@ -50,6 +50,7 @@ export default function JoinGroupScreen() {
       await createJoinRequest.mutateAsync({
         group_id: group.id,
         requester_id: user.id,
+        invite_code: inviteCode, // Pass the invite code
       });
 
       Alert.alert(
@@ -74,7 +75,7 @@ export default function JoinGroupScreen() {
     const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
     setInviteCode(cleaned);
     setCodeError(null);
-    
+
     // Eğer kod 8 karakter ise otomatik arama yap
     if (cleaned.length === 8) {
       refetchGroup();
@@ -163,7 +164,7 @@ export default function JoinGroupScreen() {
           )}
 
           <GeliomButton
-            state={isSubmitting ? 'loading' : group ? 'active' : 'disabled'}
+            state={isSubmitting ? 'loading' : group ? 'active' : 'passive'}
             layout="full-width"
             size="large"
             icon="send"

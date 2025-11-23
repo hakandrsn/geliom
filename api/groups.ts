@@ -534,80 +534,30 @@ export const useCreateJoinRequest = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (request: CreateGroupJoinRequest): Promise<GroupJoinRequest> => {
-      // Önce kullanıcının zaten üye olup olmadığını kontrol et
-      const { data: existingMember } = await supabase
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', request.group_id)
-        .eq('user_id', request.requester_id)
-        .single();
-
-      if (existingMember) {
-        throw new Error('Zaten bu grubun üyesisiniz');
-      }
-
-      // Bekleyen bir istek var mı kontrol et
-      const { data: existingPendingRequest } = await supabase
-        .from('group_join_requests')
-        .select('id')
-        .eq('group_id', request.group_id)
-        .eq('requester_id', request.requester_id)
-        .eq('status', 'pending')
-        .single();
-
-      if (existingPendingRequest) {
-        throw new Error('Bu grup için zaten bekleyen bir isteğiniz var');
-      }
-
-      // Approved veya rejected olan ama group_members'ta olmayan kayıtları temizle
-      // Bu, kullanıcı onaylandıktan sonra gruptan atıldığında tekrar istek atabilmesi için
-      const { data: existingCompletedRequest } = await supabase
-        .from('group_join_requests')
-        .select('id, status')
-        .eq('group_id', request.group_id)
-        .eq('requester_id', request.requester_id)
-        .in('status', ['approved', 'rejected'])
-        .single();
-
-      if (existingCompletedRequest) {
-        // Kullanıcı gerçekten üye mi kontrol et
-        const { data: isMember } = await supabase
-          .from('group_members')
-          .select('user_id')
-          .eq('group_id', request.group_id)
-          .eq('user_id', request.requester_id)
-          .single();
-
-        // Eğer üye değilse, eski kaydı sil (kullanıcı onaylandıktan sonra atılmış olabilir)
-        if (!isMember) {
-          console.log('Eski join request kaydı temizleniyor (kullanıcı üye değil):', existingCompletedRequest.id);
-          const { error: deleteError } = await supabase
-            .from('group_join_requests')
-            .delete()
-            .eq('id', existingCompletedRequest.id);
-
-          if (deleteError) {
-            console.error('Eski join request kaydı silme hatası (non-blocking):', deleteError);
-            // Hata olsa bile devam et, yeni istek oluştur
-          }
-        } else {
-          // Kullanıcı zaten üye, hata fırlat (yukarıdaki kontrol zaten bunu yakalayacak ama ekstra güvenlik)
-          throw new Error('Zaten bu grubun üyesisiniz');
-        }
-      }
-
-      const { data, error } = await supabase
-        .from('group_join_requests')
-        .insert({
-          ...request,
-          status: 'pending',
-        })
-        .select()
-        .single();
+    mutationFn: async (request: CreateGroupJoinRequest & { invite_code: string }): Promise<GroupJoinRequest> => {
+      // RPC fonksiyonunu çağır
+      const { data, error } = await supabase.rpc('create_join_request', {
+        p_group_id: request.group_id,
+        p_requester_id: request.requester_id,
+        p_invite_code: request.invite_code,
+      });
 
       if (error) throw error;
-      return data;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Bilinmeyen bir hata oluştu');
+      }
+
+      // Başarılı işlem sonucunda dönen veriyi formatla
+      // RPC'den dönen data.data içinde id, group_id, requester_id, status var
+      // Ancak tam GroupJoinRequest objesi için created_at vb. eksik olabilir
+      // Bu yüzden basitçe dönen veriyi kullanıyoruz veya tekrar fetch edebiliriz
+      // Performans için dönen veriyi kullanıp eksikleri client'ta tamamlayabiliriz
+      return {
+        ...data.data,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as GroupJoinRequest;
     },
     onSuccess: async (data) => {
       // İlgili query'leri invalidate et
