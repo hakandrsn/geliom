@@ -3,8 +3,16 @@ import { useTheme } from '@/contexts/ThemeContext';
 import type { GroupMemberWithUser, UserGroupMoodWithMood, UserStatusWithStatus } from '@/types/database';
 import { getAvatarSource } from '@/utils/avatar';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming
+} from 'react-native-reanimated';
 
 interface MemberCardProps {
   member: GroupMemberWithUser;
@@ -12,14 +20,55 @@ interface MemberCardProps {
   mood?: UserGroupMoodWithMood;
   isMe?: boolean;
   nickname?: string;
+  variant?: 'default' | 'large'; // 'large' is now the "Minimalist Status Header"
 }
 
-export default function MemberCard({ member, status, mood, isMe, nickname }: MemberCardProps) {
+export default function MemberCard({
+  member,
+  status,
+  mood,
+  isMe,
+  nickname,
+  variant = 'default'
+}: MemberCardProps) {
   const { colors } = useTheme();
   const user = member.user;
 
+  // Animation Values
+  const moodScale = useSharedValue(1);
+  const statusOpacity = useSharedValue(0);
+
+  // Status değiştiğinde glow efekti
+  useEffect(() => {
+    if (status?.status?.text) {
+      statusOpacity.value = withSequence(
+        withTiming(1, { duration: 300 }),
+        withRepeat(withTiming(0.5, { duration: 800 }), 2, true),
+        withTiming(0, { duration: 300 })
+      );
+    }
+  }, [status?.status?.id]); // ID değiştiğinde tetikle
+
+  // Mood değiştiğinde scale efekti
+  useEffect(() => {
+    if (mood?.mood?.emoji) {
+      moodScale.value = withSequence(
+        withSpring(1.5),
+        withSpring(1)
+      );
+    }
+  }, [mood?.mood?.id]);
+
+  const animatedMoodStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: moodScale.value }],
+  }));
+
+  const animatedStatusGlowStyle = useAnimatedStyle(() => ({
+    opacity: statusOpacity.value,
+  }));
+
   if (!user) return null;
-  
+
   // Görüntülenecek isim: nickname varsa onu, yoksa display_name veya custom_user_id
   const displayName = nickname || user.display_name || user.custom_user_id;
   const realName = nickname ? (user.display_name || user.custom_user_id) : undefined;
@@ -28,73 +77,134 @@ export default function MemberCard({ member, status, mood, isMe, nickname }: Mem
   const statusColor = status?.status?.is_custom ? colors.primary : (status?.status?.notifies ? colors.warning : colors.secondaryText);
   const statusText = status?.status?.text;
 
+  const isLarge = variant === 'large';
+
   return (
     <View style={[
-      styles.container, 
-      { 
-        backgroundColor: isMe ? colors.tertiary + '20' : colors.cardBackground,
-        borderColor: isMe ? colors.primary : colors.stroke 
+      styles.container,
+      isLarge && styles.largeContainer,
+      {
+        backgroundColor: isLarge
+          ? 'transparent' // Minimalist: No background
+          : (isMe ? colors.tertiary + '20' : colors.cardBackground),
+        borderColor: isLarge ? 'transparent' : (isMe ? colors.primary : colors.stroke),
+        borderWidth: isLarge ? 0 : 1,
       }
     ]}>
-      {/* Avatar Bölümü */}
-      <View style={[styles.avatarContainer, { backgroundColor: colors.tertiary }]}>
-        <Image
-          source={getAvatarSource(user.avatar)}
-          style={styles.avatarImage}
-          resizeMode="cover"
+      {/* Glow Effect Background (for status change) - Only for default cards or subtle for large */}
+      {!isLarge && (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: statusColor, borderRadius: 16 },
+            animatedStatusGlowStyle
+          ]}
         />
-        
-        {/* Mood Emojisi (Avatarın köşesinde) */}
-        {mood?.mood?.emoji && (
-          <View style={styles.moodBadge}>
-            <Typography variant="h6">{mood.mood.emoji}</Typography>
-          </View>
-        )}
-      </View>
+      )}
 
-      {/* İsim ve Durum */}
-      <View style={styles.infoContainer}>
-        <View style={styles.nameRow}>
-          <View style={{ flex: 1 }}>
-            <Typography 
-              variant="body" 
-              fontWeight="semibold" 
-              color={colors.text}
-              numberOfLines={1}
-            >
-              {displayName} {isMe && '(Sen)'}
-            </Typography>
-            {realName && (
-              <Typography 
-                variant="caption" 
-                color={colors.secondaryText}
-                numberOfLines={1}
-                style={{ marginTop: 2 }}
-              >
-                {realName}
-              </Typography>
-            )}
-          </View>
+      {/* İçerik Container */}
+      <View style={[styles.contentWrapper, isLarge && styles.largeContentWrapper]}>
+        {/* Avatar Bölümü */}
+        <View style={[
+          styles.avatarContainer,
+          isLarge && styles.largeAvatarContainer,
+          { backgroundColor: colors.tertiary }
+        ]}>
+          <Image
+            source={getAvatarSource(user.avatar)}
+            style={[styles.avatarImage, isLarge && styles.largeAvatarImage]}
+            resizeMode="cover"
+          />
+
+          {/* Mood Emojisi (Avatarın köşesinde) */}
+          {mood?.mood?.emoji && (
+            <Animated.View style={[
+              styles.moodBadge,
+              isLarge && styles.largeMoodBadge,
+              animatedMoodStyle
+            ]}>
+              <Typography variant={isLarge ? "h5" : "h6"}>{mood.mood.emoji}</Typography>
+            </Animated.View>
+          )}
         </View>
 
-        {/* Durum Göstergesi */}
-        {statusText ? (
-          <View style={styles.statusRow}>
-            <Ionicons name="radio-button-on" size={12} color={statusColor} />
-            <Typography 
-              variant="caption" 
-              color={statusColor}
-              numberOfLines={1}
-              style={{ marginLeft: 4, flex: 1 }}
-            >
-              {statusText}
-            </Typography>
+        {/* İsim ve Durum */}
+        <View style={[styles.infoContainer, isLarge && styles.largeInfoContainer]}>
+          <View style={[styles.nameRow, isLarge && styles.largeNameRow]}>
+            <View style={{ flex: 1 }}>
+              {/* Minimalist Header: Name is smaller, Status is HUGE */}
+              {isLarge ? (
+                <>
+                  <Typography
+                    variant="caption"
+                    color={colors.secondaryText}
+                    numberOfLines={1}
+                    style={{ marginBottom: 4 }}
+                  >
+                    Merhaba, {displayName} 👋
+                  </Typography>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Typography
+                      variant="h5"
+                      color={statusText ? colors.text : colors.secondaryText}
+                      numberOfLines={1}
+                      style={{ fontWeight: '700' }}
+                    >
+                      {statusText || 'Durum ayarla...'}
+                    </Typography>
+                    {statusText && (
+                      <Animated.View style={[{ marginLeft: 8 }, animatedStatusGlowStyle]}>
+                        <Ionicons name="radio-button-on" size={16} color={statusColor} />
+                      </Animated.View>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Typography
+                    variant="body"
+                    fontWeight="semibold"
+                    color={colors.text}
+                    numberOfLines={1}
+                  >
+                    {displayName} {isMe && '(Sen)'}
+                  </Typography>
+                  {realName && (
+                    <Typography
+                      variant="caption"
+                      color={colors.secondaryText}
+                      numberOfLines={1}
+                      style={{ marginTop: 2 }}
+                    >
+                      {realName}
+                    </Typography>
+                  )}
+                </>
+              )}
+            </View>
           </View>
-        ) : (
-          <Typography variant="caption" color={colors.secondaryText} style={{ fontStyle: 'italic' }}>
-            Durum yok
-          </Typography>
-        )}
+
+          {/* Durum Göstergesi (Only for default cards) */}
+          {!isLarge && (
+            statusText ? (
+              <View style={styles.statusRow}>
+                <Ionicons name="radio-button-on" size={12} color={statusColor} />
+                <Typography
+                  variant="caption"
+                  color={statusColor}
+                  numberOfLines={1}
+                  style={{ marginLeft: 4, flex: 1 }}
+                >
+                  {statusText}
+                </Typography>
+              </View>
+            ) : (
+              <Typography variant="caption" color={colors.secondaryText} style={{ fontStyle: 'italic' }}>
+                Durum yok
+              </Typography>
+            )
+          )}
+        </View>
       </View>
     </View>
   );
@@ -102,11 +212,8 @@ export default function MemberCard({ member, status, mood, isMe, nickname }: Mem
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    alignItems: 'center',
     marginBottom: 12,
     // Gölge efekti
     shadowColor: "#000",
@@ -114,6 +221,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3.84,
     elevation: 2,
+    overflow: 'hidden', // Glow efekti için
+  },
+  largeContainer: {
+    marginBottom: 16,
+    borderRadius: 0,
+    borderWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+    backgroundColor: 'transparent',
+  },
+  contentWrapper: {
+    flexDirection: 'row',
+    padding: 12,
+    alignItems: 'center',
+    backgroundColor: 'transparent', // Glow'u görmek için
+  },
+  largeContentWrapper: {
+    padding: 0,
+    paddingVertical: 8,
+    gap: 16,
   },
   avatarContainer: {
     width: 50,
@@ -124,10 +251,20 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'visible',
   },
+  largeAvatarContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
   avatarImage: {
     width: 50,
     height: 50,
     borderRadius: 25,
+  },
+  largeAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   moodBadge: {
     position: 'absolute',
@@ -146,9 +283,20 @@ const styles = StyleSheet.create({
     elevation: 2,
     zIndex: 10,
   },
+  largeMoodBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    bottom: -2,
+    right: -2,
+  },
   infoContainer: {
     flex: 1,
     marginLeft: 12,
+    justifyContent: 'center',
+  },
+  largeInfoContainer: {
+    marginLeft: 0,
     justifyContent: 'center',
   },
   nameRow: {
@@ -156,8 +304,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
+  largeNameRow: {
+    marginBottom: 0,
+  },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  largeStatusRow: {
+    // Not used in minimalist
   },
 });

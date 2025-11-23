@@ -2,6 +2,7 @@ import { useGroupMembers } from '@/api/groups';
 import { useGroupUserMoods, useUserGroupMood } from '@/api/moods';
 import { useGroupNicknames } from '@/api/nicknames';
 import { useGroupUserStatuses, useUserStatus } from '@/api/statuses';
+import CurrentUserHeader from '@/components/dashboard/CurrentUserHeader';
 import MemberCard from '@/components/dashboard/MemberCard';
 import MoodSelector from '@/components/dashboard/MoodSelector';
 import StatusSelector from '@/components/dashboard/StatusSelector';
@@ -11,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import type { GroupWithOwner } from '@/types/database';
 import React from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface DashboardViewProps {
   group: GroupWithOwner;
@@ -19,18 +21,19 @@ interface DashboardViewProps {
 export default function DashboardView({ group }: DashboardViewProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Verileri çek (React Query hooks)
-  const { data: members, isLoading: membersLoading } = useGroupMembers(group.id);
+  const { data: allMembers, isLoading: membersLoading } = useGroupMembers(group.id);
   const { data: groupStatuses } = useGroupUserStatuses(group.id);
   const { data: groupMoods } = useGroupUserMoods(group.id);
   const { data: nicknames = [] } = useGroupNicknames(group.id);
-  
+
   // Benim şu anki statusum (StatusSelector için)
   const { data: myStatus } = useUserStatus(user?.id || '', group.id);
   // Benim şu anki mood'um (MoodSelector için)
   const { data: myMood } = useUserGroupMood(user?.id || '', group.id);
-  
+
   // Her member için nickname'i bul (setter: current user, target: member user)
   const getNicknameForMember = (targetUserId: string): string | undefined => {
     if (!user?.id) return undefined;
@@ -48,75 +51,94 @@ export default function DashboardView({ group }: DashboardViewProps) {
     );
   }
 
-  // FlatList'in Header'ı: Durum ve mood seçici
+  // Üyeleri ayır: Ben ve Diğerleri
+  const myMemberInfo = allMembers?.find(m => m.user_id === user?.id);
+  const otherMembers = allMembers?.filter(m => m.user_id !== user?.id) || [];
+
+  // FlatList Header: Stacked Layout Components
   const DashboardHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Status Selector - Benim Durumum */}
-      <StatusSelector 
-        groupId={group.id} 
+      {/* 1. Current User Header */}
+      {myMemberInfo && (
+        <CurrentUserHeader
+          member={myMemberInfo}
+          status={myStatus || undefined}
+          mood={myMood || undefined}
+        />
+      )}
+
+      {/* 2. Status Selector */}
+      <StatusSelector
+        groupId={group.id}
         currentStatusId={myStatus?.status_id}
+        onAddPress={() => console.log('Add Status Pressed')}
       />
 
-      {/* Mood Selector - Benim Mood'um */}
-      <MoodSelector 
-        groupId={group.id} 
+      {/* 3. Mood Selector */}
+      <MoodSelector
+        groupId={group.id}
         currentMoodId={myMood?.mood_id}
+        onAddPress={() => console.log('Add Mood Pressed')}
       />
 
+      {/* 4. Section Title for Other Members */}
       <Typography variant="h5" color={colors.text} style={styles.sectionTitle}>
-        Grup Üyeleri ({members?.length || 0})
+        Diğer Üyeler ({otherMembers.length})
       </Typography>
     </View>
   );
 
   return (
-    <FlatList
-      data={members}
-      keyExtractor={(item) => item.user_id}
-      contentContainerStyle={styles.listContent}
-      ListHeaderComponent={DashboardHeader}
-      renderItem={({ item }) => {
-        // Bu üyenin statusunu ve moodunu bul
-        const memberStatus = groupStatuses?.find(s => s.user_id === item.user_id);
-        const memberMood = groupMoods?.find(m => m.user_id === item.user_id);
-        const isMe = item.user_id === user?.id;
-        const nickname = getNicknameForMember(item.user_id);
+    <View style={[styles.container]}>
+      <FlatList
+        data={otherMembers}
+        keyExtractor={(item) => item.user_id}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
+        ListHeaderComponent={DashboardHeader}
+        renderItem={({ item }) => {
+          const memberStatus = groupStatuses?.find(s => s.user_id === item.user_id);
+          const memberMood = groupMoods?.find(m => m.user_id === item.user_id);
+          const nickname = getNicknameForMember(item.user_id);
 
-        return (
-          <MemberCard 
-            member={item}
-            status={memberStatus}
-            mood={memberMood}
-            isMe={isMe}
-            nickname={nickname}
-          />
-        );
-      }}
-      ListEmptyComponent={
-        <Typography variant="body" color={colors.secondaryText} style={{ textAlign: 'center', marginTop: 20 }}>
-          Bu grupta henüz kimse yok.
-        </Typography>
-      }
-    />
+          return (
+            <MemberCard
+              member={item}
+              status={memberStatus}
+              mood={memberMood}
+              isMe={false}
+              nickname={nickname}
+            />
+          );
+        }}
+        ListEmptyComponent={
+          <Typography variant="body" color={colors.secondaryText} style={{ textAlign: 'center', marginTop: 20 }}>
+            Bu grupta başka kimse yok.
+          </Typography>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   listContent: {
-    paddingTop: 8,
-    paddingBottom: 100,
+    paddingHorizontal: 16,
+    paddingTop: 0, // Header handles its own padding
   },
   headerContainer: {
-    marginBottom: 12,
-    marginTop: 0,
+    marginBottom: 16,
   },
   sectionTitle: {
-    marginVertical: 12,
+    marginBottom: 12,
     marginLeft: 4,
+    marginTop: 8,
   },
 });

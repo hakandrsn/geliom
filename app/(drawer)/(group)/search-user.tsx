@@ -70,6 +70,7 @@ export default function SearchUserScreen() {
       await createJoinRequest.mutateAsync({
         group_id: selectedGroup.id,
         requester_id: foundUser.id,
+        invite_code: selectedGroup.invite_code, // Pass the invite code
       });
 
       Alert.alert(
@@ -149,7 +150,7 @@ export default function SearchUserScreen() {
                 onSubmitEditing={handleSearch}
               />
               <GeliomButton
-                state={isLoadingUser ? 'loading' : customUserId.trim() ? 'active' : 'disabled'}
+                state={isLoadingUser ? 'loading' : customUserId.trim() ? 'active' : 'passive'}
                 size="small"
                 icon="search"
                 onPress={handleSearch}
@@ -218,7 +219,7 @@ export default function SearchUserScreen() {
           )}
 
           <GeliomButton
-            state={isSubmitting ? 'loading' : foundUser && selectedGroup ? 'active' : 'disabled'}
+            state={isSubmitting ? 'loading' : foundUser && selectedGroup ? 'active' : 'passive'}
             layout="full-width"
             size="large"
             icon="send"
