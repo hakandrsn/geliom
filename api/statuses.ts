@@ -36,7 +36,7 @@ export const useStatuses = () => {
         .from('statuses')
         .select('*')
         .order('text');
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -53,7 +53,7 @@ export const useDefaultStatuses = () => {
         .eq('is_custom', false)
         .is('group_id', null) // Default status'ler group_id = NULL olmalı
         .order('text');
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -69,13 +69,13 @@ export const useCustomStatuses = (groupId: string, ownerId?: string) => {
         .select('*')
         .eq('is_custom', true)
         .eq('group_id', groupId);
-      
+
       if (ownerId) {
         query = query.eq('owner_id', ownerId);
       }
-      
+
       const { data, error } = await query.order('text');
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -92,7 +92,7 @@ export const useStatus = (id: number) => {
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -112,16 +112,16 @@ export const useUserStatus = (userId: string, groupId?: string) => {
           status:statuses(*)
         `)
         .eq('user_id', userId);
-      
+
       // group_id filtresi: NULL ise global, değilse spesifik grup
       if (groupId) {
         query = query.eq('group_id', groupId);
       } else {
         query = query.is('group_id', null);
       }
-      
+
       const { data, error } = await query.single();
-      
+
       if (error && error.code !== 'PGRST116') throw error;
       return data || null;
     },
@@ -145,7 +145,7 @@ export const useGroupUserStatuses = (groupId: string) => {
         `)
         .or(`group_id.eq.${groupId},group_id.is.null`)
         .order('updated_at', { ascending: false });
-      
+
       if (error) throw error;
       console.log('✅ Fetched group user statuses:', data?.length || 0, 'statuses');
       return data || [];
@@ -170,7 +170,7 @@ export const useUsersWithStatuses = () => {
           user:users(*)
         `)
         .order('updated_at', { ascending: false });
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -180,7 +180,7 @@ export const useUsersWithStatuses = () => {
 // Status Mutations
 export const useCreateStatus = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (statusData: CreateStatus): Promise<Status> => {
       const { data, error } = await supabase
@@ -188,7 +188,7 @@ export const useCreateStatus = () => {
         .insert(statusData)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -204,7 +204,7 @@ export const useCreateStatus = () => {
 
 export const useUpdateStatus = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: UpdateStatus }): Promise<Status> => {
       const { data, error } = await supabase
@@ -213,7 +213,7 @@ export const useUpdateStatus = () => {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -226,14 +226,25 @@ export const useUpdateStatus = () => {
 
 export const useDeleteStatus = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (id: number): Promise<void> => {
+      // Önce bu status'u kullanan kayıtları temizle (Cascade delete simülasyonu)
+      const { error: cleanupError } = await supabase
+        .from('user_statuses')
+        .delete()
+        .eq('status_id', id);
+
+      if (cleanupError) {
+        console.error('Status cleanup error:', cleanupError);
+        // RLS veya başka bir hata olabilir, ama ana silme işlemini denemeye devam edelim
+      }
+
       const { error } = await supabase
         .from('statuses')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -246,13 +257,13 @@ export const useDeleteStatus = () => {
 // User Status Mutations
 export const useSetUserStatus = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     // Optimistic Update: Kullanıcı butona basar basmaz UI'ı güncelle
     onMutate: async (userStatusData: CreateUserStatus) => {
       // İlgili query'leri cancel et (refetch'i engelle)
       await queryClient.cancelQueries({ queryKey: userStatusKeys.all });
-      
+
       // Mevcut cache'i al
       const previousStatuses: UserStatusWithStatus[] = [];
       if (userStatusData.group_id) {
@@ -263,7 +274,7 @@ export const useSetUserStatus = () => {
           previousStatuses.push(...previousGroupStatuses);
         }
       }
-      
+
       // Optimistic update: Cache'i hemen güncelle
       if (userStatusData.group_id) {
         queryClient.setQueryData<UserStatusWithStatus[]>(
@@ -287,7 +298,7 @@ export const useSetUserStatus = () => {
           }
         );
       }
-      
+
       // Rollback için context döndür
       return { previousStatuses };
     },
@@ -309,17 +320,17 @@ export const useSetUserStatus = () => {
         queryClient.invalidateQueries({ queryKey: userStatusKeys.group(userStatusData.group_id) });
       }
       if (data) {
-        queryClient.invalidateQueries({ 
-          queryKey: userStatusKeys.user(data.user_id, data.group_id) 
+        queryClient.invalidateQueries({
+          queryKey: userStatusKeys.user(data.user_id, data.group_id)
         });
       }
     },
     mutationFn: async (userStatusData: CreateUserStatus): Promise<UserStatus> => {
       // Composite key için upsert: user_id ve group_id
-      const conflictColumns = userStatusData.group_id 
-        ? 'user_id,group_id' 
+      const conflictColumns = userStatusData.group_id
+        ? 'user_id,group_id'
         : 'user_id';
-      
+
       const { data, error } = await supabase
         .from('user_statuses')
         .upsert(userStatusData, {
@@ -327,7 +338,7 @@ export const useSetUserStatus = () => {
         })
         .select()
         .single();
-      
+
       if (error) throw error;
 
       // Eğer grup için status değiştirildiyse ve notifies: true ise, pending notification oluştur/güncelle
@@ -401,22 +412,22 @@ export const useSetUserStatus = () => {
 
 export const useRemoveUserStatus = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ userId, groupId }: { userId: string; groupId?: string }): Promise<void> => {
       let query = supabase
         .from('user_statuses')
         .delete()
         .eq('user_id', userId);
-      
+
       if (groupId) {
         query = query.eq('group_id', groupId);
       } else {
         query = query.is('group_id', null);
       }
-      
+
       const { error } = await query;
-      
+
       if (error) throw error;
     },
     onSuccess: (_, { userId, groupId }) => {
@@ -512,18 +523,18 @@ export const useGroupStatusesRealtime = (groupId: string) => {
         },
         async (payload) => {
           console.log('🔄 Realtime status update received:', payload);
-          
+
           // Client-side filtering: Sadece ilgili grup için işle
           const newRecord = payload.new as any;
           const oldRecord = payload.old as any;
-          
+
           // group_id kontrolü: NULL (global) veya seçili grup
-          const isRelevant = 
-            newRecord?.group_id === groupId || 
+          const isRelevant =
+            newRecord?.group_id === groupId ||
             newRecord?.group_id === null ||
-            oldRecord?.group_id === groupId || 
+            oldRecord?.group_id === groupId ||
             oldRecord?.group_id === null;
-          
+
           if (!isRelevant) {
             console.log('⏭️ Realtime update ignored (farklı grup):', {
               new_group_id: newRecord?.group_id,
@@ -570,9 +581,9 @@ export const useGroupStatusesRealtime = (groupId: string) => {
                     return [...old, updatedStatus];
                   } else {
                     // Mevcut status'u güncelle
-                    return old.map(s => 
-                      s.user_id === updatedStatus.user_id && 
-                      (s.group_id === updatedStatus.group_id || (s.group_id === null && updatedStatus.group_id === null))
+                    return old.map(s =>
+                      s.user_id === updatedStatus.user_id &&
+                        (s.group_id === updatedStatus.group_id || (s.group_id === null && updatedStatus.group_id === null))
                         ? updatedStatus
                         : s
                     );
@@ -586,22 +597,22 @@ export const useGroupStatusesRealtime = (groupId: string) => {
             // Status silindi, cache'den kaldır
             queryClient.setQueryData<UserStatusWithStatus[]>(
               userStatusKeys.group(groupId),
-              (old = []) => 
-                old.filter(s => 
-                  !(s.user_id === oldRecord.user_id && 
+              (old = []) =>
+                old.filter(s =>
+                  !(s.user_id === oldRecord.user_id &&
                     (s.group_id === oldRecord.group_id || (s.group_id === null && oldRecord.group_id === null)))
                 )
             );
           }
 
           // Invalidate et (tam senkronizasyon için)
-          queryClient.invalidateQueries({ 
+          queryClient.invalidateQueries({
             queryKey: userStatusKeys.group(groupId),
-            refetchType: 'active' 
+            refetchType: 'active'
           });
-          queryClient.invalidateQueries({ 
+          queryClient.invalidateQueries({
             queryKey: userStatusKeys.all,
-            refetchType: 'active' 
+            refetchType: 'active'
           });
         }
       )

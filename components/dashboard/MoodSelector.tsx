@@ -1,8 +1,11 @@
 import { useMoods, useSetUserGroupMood } from '@/api/moods';
+import AddStatusMoodModal from '@/components/dashboard/AddStatusMoodModal';
 import { GeliomButton } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import React, { useMemo } from 'react';
+import { useManageStatusMood } from '@/hooks/useManageStatusMood';
+import { BlurView } from 'expo-blur';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
 interface MoodSelectorProps {
@@ -14,6 +17,10 @@ interface MoodSelectorProps {
 export default function MoodSelector({ groupId, currentMoodId, onAddPress }: MoodSelectorProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  // Management Hook
+  const { handleAddMood, checkSubscriptionAndProceed } = useManageStatusMood(groupId);
 
   // Fetch all moods
   const { data: allMoods = [], isLoading } = useMoods(groupId);
@@ -58,7 +65,7 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
             return (
               <GeliomButton
                 state="passive"
-                onPress={onAddPress}
+                onPress={() => checkSubscriptionAndProceed(() => setIsModalVisible(true))}
                 size="small"
                 layout="icon-only"
                 icon="add"
@@ -68,23 +75,44 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
           }
 
           const isSelected = currentMoodId === item.id;
-          const isCustom = item.group_id != null;
-          const activeColor = isCustom ? colors.primary : colors.secondary;
 
           return (
-            <GeliomButton
-              state={isSelected ? 'active' : 'passive'}
-              onPress={() => handleMoodSelect(item.id)}
-              size="small"
-              style={[
-                styles.button,
-                isSelected ? { backgroundColor: activeColor } : { borderColor: activeColor, borderWidth: 1 }
-              ] as any}
-            >
-              {item.emoji} {item.text}
-            </GeliomButton>
+            <View style={[
+              styles.buttonContainer,
+              isSelected && styles.buttonContainerSelected
+            ]}>
+              {/* Blur and Color Background */}
+              <View style={[StyleSheet.absoluteFill, { borderRadius: 12, overflow: 'hidden' }]}>
+                <BlurView intensity={80} tint="systemMaterial" style={StyleSheet.absoluteFill} />
+                <View style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: colors.background, opacity: isSelected ? 0.8 : 0.5 }
+                ]} />
+              </View>
+
+              <GeliomButton
+                state={isSelected ? 'active' : 'passive'}
+                onPress={() => handleMoodSelect(item.id)}
+                size="small"
+                backgroundColor="transparent"
+                textColor={isSelected ? colors.primary : colors.text}
+                style={[
+                  styles.button,
+                  { borderColor: isSelected ? colors.blurBackground : 'transparent' }
+                ] as any}
+              >
+                {item.emoji} {item.text}
+              </GeliomButton>
+            </View>
           );
         }}
+      />
+
+      <AddStatusMoodModal
+        visible={isModalVisible}
+        type="mood"
+        onClose={() => setIsModalVisible(false)}
+        onSave={(text, emoji) => handleAddMood(text, emoji)}
       />
     </View>
   );
@@ -92,14 +120,27 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   listContent: {
-    paddingHorizontal: 4,
-    gap: 8,
+    paddingLeft: 12, // Only left padding as requested
+    paddingRight: 12,
+    gap: 12,
+    paddingBottom: 8,
+  },
+  buttonContainer: {
+    marginBottom: 4,
+    borderRadius: 12,
+  },
+  buttonContainerSelected: {
+    transform: [{ translateY: 1 }],
   },
   button: {
-    marginRight: 8,
     minWidth: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 40,
+    zIndex: 2,
+    marginBottom: 0,
   },
 });

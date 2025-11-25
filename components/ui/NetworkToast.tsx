@@ -51,7 +51,7 @@ export default function NetworkToast({
   const hideToast = () => {
     translateY.value = withTiming(-100, { duration: 300 });
     opacity.value = withTiming(0, { duration: 300 });
-    
+
     setTimeout(() => {
       onHide?.();
     }, 300);
@@ -72,7 +72,7 @@ export default function NetworkToast({
       style={[
         styles.container,
         {
-          backgroundColor: isWeak ? colors.secondarybackground : colors.secondarybackground,
+          backgroundColor: isWeak ? colors.secondaryBackground : colors.secondaryBackground,
         },
         animatedStyle,
       ]}

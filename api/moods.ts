@@ -31,14 +31,14 @@ export const useMoods = (groupId?: string) => {
     queryKey: [...moodKeys.lists(), groupId || 'all'],
     queryFn: async (): Promise<Mood[]> => {
       let query = supabase.from('moods').select('*');
-      
+
       if (groupId) {
         // Grup özel mood'lar + default mood'lar (group_id IS NULL)
         query = query.or(`group_id.eq.${groupId},group_id.is.null`);
       }
-      
+
       const { data, error } = await query.order('text');
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -54,7 +54,7 @@ export const useMood = (id: number) => {
         .select('*')
         .eq('id', id)
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -71,7 +71,7 @@ export const useMoodByText = (text: string) => {
         .select('*')
         .eq('text', text)
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -82,7 +82,7 @@ export const useMoodByText = (text: string) => {
 // Mutations
 export const useCreateMood = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (moodData: CreateMood): Promise<Mood> => {
       const { data, error } = await supabase
@@ -90,7 +90,7 @@ export const useCreateMood = () => {
         .insert(moodData)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -106,7 +106,7 @@ export const useCreateMood = () => {
 
 export const useUpdateMood = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: UpdateMood }): Promise<Mood> => {
       const { data, error } = await supabase
@@ -115,7 +115,7 @@ export const useUpdateMood = () => {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -128,14 +128,24 @@ export const useUpdateMood = () => {
 
 export const useDeleteMood = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (id: number): Promise<void> => {
+      // Önce bu mood'u kullanan kayıtları temizle (Cascade delete simülasyonu)
+      const { error: cleanupError } = await supabase
+        .from('user_group_moods')
+        .delete()
+        .eq('mood_id', id);
+
+      if (cleanupError) {
+        console.error('Mood cleanup error:', cleanupError);
+      }
+
       const { error } = await supabase
         .from('moods')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -156,16 +166,16 @@ export const useUserGroupMood = (userId: string, groupId?: string) => {
           mood:moods(*)
         `)
         .eq('user_id', userId);
-      
+
       // group_id filtresi: NULL ise global, değilse spesifik grup
       if (groupId) {
         query = query.eq('group_id', groupId);
       } else {
         query = query.is('group_id', null);
       }
-      
+
       const { data, error } = await query.single();
-      
+
       if (error && error.code !== 'PGRST116') throw error;
       return data || null;
     },
@@ -189,7 +199,7 @@ export const useGroupUserMoods = (groupId: string) => {
         `)
         .or(`group_id.eq.${groupId},group_id.is.null`)
         .order('updated_at', { ascending: false });
-      
+
       if (error) throw error;
       console.log('✅ Fetched group user moods:', data?.length || 0, 'moods');
       return data || [];
@@ -205,13 +215,13 @@ export const useGroupUserMoods = (groupId: string) => {
 // User Group Mood Mutations
 export const useSetUserGroupMood = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     // Optimistic Update: Kullanıcı butona basar basmaz UI'ı güncelle
     onMutate: async (userGroupMoodData: CreateUserGroupMood) => {
       // İlgili query'leri cancel et (refetch'i engelle)
       await queryClient.cancelQueries({ queryKey: userGroupMoodKeys.all });
-      
+
       // Mevcut cache'i al
       const previousMoods: UserGroupMoodWithMood[] = [];
       if (userGroupMoodData.group_id) {
@@ -222,7 +232,7 @@ export const useSetUserGroupMood = () => {
           previousMoods.push(...previousGroupMoods);
         }
       }
-      
+
       // Optimistic update: Cache'i hemen güncelle
       if (userGroupMoodData.group_id) {
         queryClient.setQueryData<UserGroupMoodWithMood[]>(
@@ -246,7 +256,7 @@ export const useSetUserGroupMood = () => {
           }
         );
       }
-      
+
       // Rollback için context döndür
       return { previousMoods };
     },
@@ -268,17 +278,17 @@ export const useSetUserGroupMood = () => {
         queryClient.invalidateQueries({ queryKey: userGroupMoodKeys.group(userGroupMoodData.group_id) });
       }
       if (data) {
-        queryClient.invalidateQueries({ 
-          queryKey: userGroupMoodKeys.user(data.user_id, data.group_id) 
+        queryClient.invalidateQueries({
+          queryKey: userGroupMoodKeys.user(data.user_id, data.group_id)
         });
       }
     },
     mutationFn: async (userGroupMoodData: CreateUserGroupMood): Promise<UserGroupMood> => {
       // Composite key için upsert: user_id ve group_id
-      const conflictColumns = userGroupMoodData.group_id 
-        ? 'user_id,group_id' 
+      const conflictColumns = userGroupMoodData.group_id
+        ? 'user_id,group_id'
         : 'user_id';
-      
+
       const { data, error } = await supabase
         .from('user_group_moods')
         .upsert(userGroupMoodData, {
@@ -286,7 +296,7 @@ export const useSetUserGroupMood = () => {
         })
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -295,22 +305,22 @@ export const useSetUserGroupMood = () => {
 
 export const useRemoveUserGroupMood = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ userId, groupId }: { userId: string; groupId?: string }): Promise<void> => {
       let query = supabase
         .from('user_group_moods')
         .delete()
         .eq('user_id', userId);
-      
+
       if (groupId) {
         query = query.eq('group_id', groupId);
       } else {
         query = query.is('group_id', null);
       }
-      
+
       const { error } = await query;
-      
+
       if (error) throw error;
     },
     onSuccess: (_, { userId, groupId }) => {
@@ -377,18 +387,18 @@ export const useGroupMoodsRealtime = (groupId: string) => {
         },
         async (payload) => {
           console.log('🔄 Realtime mood update received:', payload);
-          
+
           // Client-side filtering: Sadece ilgili grup için işle
           const newRecord = payload.new as any;
           const oldRecord = payload.old as any;
-          
+
           // group_id kontrolü: NULL (global) veya seçili grup
-          const isRelevant = 
-            newRecord?.group_id === groupId || 
+          const isRelevant =
+            newRecord?.group_id === groupId ||
             newRecord?.group_id === null ||
-            oldRecord?.group_id === groupId || 
+            oldRecord?.group_id === groupId ||
             oldRecord?.group_id === null;
-          
+
           if (!isRelevant) {
             console.log('⏭️ Realtime update ignored (farklı grup):', {
               new_group_id: newRecord?.group_id,
@@ -435,9 +445,9 @@ export const useGroupMoodsRealtime = (groupId: string) => {
                     return [...old, updatedMood];
                   } else {
                     // Mevcut mood'u güncelle
-                    return old.map(m => 
-                      m.user_id === updatedMood.user_id && 
-                      (m.group_id === updatedMood.group_id || (m.group_id === null && updatedMood.group_id === null))
+                    return old.map(m =>
+                      m.user_id === updatedMood.user_id &&
+                        (m.group_id === updatedMood.group_id || (m.group_id === null && updatedMood.group_id === null))
                         ? updatedMood
                         : m
                     );
@@ -451,22 +461,22 @@ export const useGroupMoodsRealtime = (groupId: string) => {
             // Mood silindi, cache'den kaldır
             queryClient.setQueryData<UserGroupMoodWithMood[]>(
               userGroupMoodKeys.group(groupId),
-              (old = []) => 
-                old.filter(m => 
-                  !(m.user_id === oldRecord.user_id && 
+              (old = []) =>
+                old.filter(m =>
+                  !(m.user_id === oldRecord.user_id &&
                     (m.group_id === oldRecord.group_id || (m.group_id === null && oldRecord.group_id === null)))
                 )
             );
           }
 
           // Invalidate et (tam senkronizasyon için)
-          queryClient.invalidateQueries({ 
+          queryClient.invalidateQueries({
             queryKey: userGroupMoodKeys.group(groupId),
-            refetchType: 'active' 
+            refetchType: 'active'
           });
-          queryClient.invalidateQueries({ 
+          queryClient.invalidateQueries({
             queryKey: userGroupMoodKeys.all,
-            refetchType: 'active' 
+            refetchType: 'active'
           });
         }
       )
