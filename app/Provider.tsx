@@ -2,6 +2,7 @@ import { NotificationHandler } from '@/components/NotificationHandler';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { BottomSheetProvider } from '@/contexts/BottomSheetContext';
 import { GroupProvider } from '@/contexts/GroupContext';
+import PayProvider from '@/contexts/PayContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { initializeOneSignal } from '@/services/onesignal';
 import NetInfo from '@react-native-community/netinfo';
@@ -53,14 +54,16 @@ export default function Provider({ children }: { children: React.ReactNode }) {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
-            <AuthProvider>
-              <GroupProvider>
-                <BottomSheetProvider>
-                  <NotificationHandler />
-                  {children}
-                </BottomSheetProvider>
-              </GroupProvider>
-            </AuthProvider>
+            <PayProvider>
+              <AuthProvider>
+                <GroupProvider>
+                  <BottomSheetProvider>
+                    <NotificationHandler />
+                    {children}
+                  </BottomSheetProvider>
+                </GroupProvider>
+              </AuthProvider>
+            </PayProvider>
           </ThemeProvider>
         </QueryClientProvider>
       </GestureHandlerRootView>

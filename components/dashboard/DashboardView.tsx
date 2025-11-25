@@ -60,21 +60,23 @@ export default function DashboardView({ group }: DashboardViewProps) {
     <View style={styles.headerContainer}>
       {/* 1. Current User Header */}
       {myMemberInfo && (
-        <CurrentUserHeader
-          member={myMemberInfo}
-          status={myStatus || undefined}
-          mood={myMood || undefined}
-        />
+        <View style={styles.paddedSection}>
+          <CurrentUserHeader
+            member={myMemberInfo}
+            status={myStatus || undefined}
+            mood={myMood || undefined}
+          />
+        </View>
       )}
 
-      {/* 2. Status Selector */}
+      {/* 2. Status Selector - Edge to Edge */}
       <StatusSelector
         groupId={group.id}
         currentStatusId={myStatus?.status_id}
         onAddPress={() => console.log('Add Status Pressed')}
       />
 
-      {/* 3. Mood Selector */}
+      {/* 3. Mood Selector - Edge to Edge */}
       <MoodSelector
         groupId={group.id}
         currentMoodId={myMood?.mood_id}
@@ -82,9 +84,11 @@ export default function DashboardView({ group }: DashboardViewProps) {
       />
 
       {/* 4. Section Title for Other Members */}
-      <Typography variant="h5" color={colors.text} style={styles.sectionTitle}>
-        Diğer Üyeler ({otherMembers.length})
-      </Typography>
+      <View style={styles.paddedSection}>
+        <Typography variant="h5" color={colors.text} style={styles.sectionTitle}>
+          Diğer Üyeler ({otherMembers.length})
+        </Typography>
+      </View>
     </View>
   );
 
@@ -101,13 +105,15 @@ export default function DashboardView({ group }: DashboardViewProps) {
           const nickname = getNicknameForMember(item.user_id);
 
           return (
-            <MemberCard
-              member={item}
-              status={memberStatus}
-              mood={memberMood}
-              isMe={false}
-              nickname={nickname}
-            />
+            <View style={styles.paddedSection}>
+              <MemberCard
+                member={item}
+                status={memberStatus}
+                mood={memberMood}
+                isMe={false}
+                nickname={nickname}
+              />
+            </View>
           );
         }}
         ListEmptyComponent={
@@ -130,11 +136,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 0, // Header handles its own padding
+    paddingHorizontal: 0, // Removed global padding
+    paddingTop: 0,
   },
   headerContainer: {
     marginBottom: 16,
+  },
+  paddedSection: {
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     marginBottom: 12,

@@ -1,8 +1,11 @@
 import { useCustomStatuses, useDefaultStatuses, useSetUserStatus } from '@/api/statuses';
+import AddStatusMoodModal from '@/components/dashboard/AddStatusMoodModal';
 import { GeliomButton } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import React, { useMemo } from 'react';
+import { useManageStatusMood } from '@/hooks/useManageStatusMood';
+import { BlurView } from 'expo-blur';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
 interface StatusSelectorProps {
@@ -14,6 +17,10 @@ interface StatusSelectorProps {
 export default function StatusSelector({ groupId, currentStatusId, onAddPress }: StatusSelectorProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const [isModalVisible, setIsModalVisible] = useState(false);
+
+  // Management Hook
+  const { handleAddStatus, checkSubscriptionAndProceed } = useManageStatusMood(groupId);
 
   // Fetch default and custom statuses
   const { data: defaultStatuses = [], isLoading: isLoadingDefault } = useDefaultStatuses();
@@ -62,7 +69,7 @@ export default function StatusSelector({ groupId, currentStatusId, onAddPress }:
             return (
               <GeliomButton
                 state="passive"
-                onPress={onAddPress}
+                onPress={() => checkSubscriptionAndProceed(() => setIsModalVisible(true))}
                 size="small"
                 layout="icon-only"
                 icon="add"
@@ -72,25 +79,46 @@ export default function StatusSelector({ groupId, currentStatusId, onAddPress }:
           }
 
           const isSelected = currentStatusId === item.id;
-          const notifies = 'notifies' in item ? item.notifies : false;
-          const statusColor = item.is_custom ? colors.primary : (notifies ? colors.warning : colors.secondaryText);
 
           return (
-            <GeliomButton
-              state={isSelected ? 'active' : 'passive'}
-              onPress={() => handleStatusSelect(item.id)}
-              size="small"
-              layout="icon-left"
-              icon={isSelected ? "radio-button-on" : "radio-button-off"}
-              style={[
-                styles.button,
-                isSelected ? { backgroundColor: statusColor } : { borderColor: statusColor, borderWidth: 1 }
-              ] as any}
-            >
-              {item.text}
-            </GeliomButton>
+            <View style={[
+              styles.buttonContainer,
+              isSelected && styles.buttonContainerSelected
+            ]}>
+              {/* Blur and Color Background */}
+              <View style={[StyleSheet.absoluteFill, { borderRadius: 12, overflow: 'hidden' }]}>
+                <BlurView intensity={80} tint="systemMaterial" style={StyleSheet.absoluteFill} />
+                <View style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: colors.secondaryBackground, opacity: isSelected ? 0.8 : 0.5 }
+                ]} />
+              </View>
+
+              <GeliomButton
+                state={isSelected ? 'active' : 'passive'}
+                onPress={() => handleStatusSelect(item.id)}
+                size="small"
+                layout="icon-left"
+                icon={isSelected ? "radio-button-on" : "radio-button-off"}
+                backgroundColor="transparent"
+                textColor={isSelected ? colors.primary : colors.text}
+                style={[
+                  styles.button,
+                  { borderColor: isSelected ? colors.blurBackground : 'transparent' }
+                ] as any}
+              >
+                {item.text}
+              </GeliomButton>
+            </View>
           );
         }}
+      />
+
+      <AddStatusMoodModal
+        visible={isModalVisible}
+        type="status"
+        onClose={() => setIsModalVisible(false)}
+        onSave={handleAddStatus}
       />
     </View>
   );
@@ -98,14 +126,27 @@ export default function StatusSelector({ groupId, currentStatusId, onAddPress }:
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   listContent: {
-    paddingHorizontal: 4,
-    gap: 8,
+    paddingLeft: 12, // Only left padding as requested
+    paddingRight: 12,
+    gap: 12,
+    paddingBottom: 8,
+  },
+  buttonContainer: {
+    marginBottom: 4,
+    borderRadius: 12,
+  },
+  buttonContainerSelected: {
+    transform: [{ translateY: 1 }],
   },
   button: {
-    marginRight: 8,
     minWidth: 100,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 40,
+    zIndex: 2,
+    marginBottom: 0, // Removed extra margin since edge is gone
   },
 });

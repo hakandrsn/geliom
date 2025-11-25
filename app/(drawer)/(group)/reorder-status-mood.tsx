@@ -1,9 +1,11 @@
 import { useMoods } from '@/api/moods';
 import { useCustomStatuses, useDefaultStatuses } from '@/api/statuses';
+import AddStatusMoodModal from '@/components/dashboard/AddStatusMoodModal';
 import { BaseLayout, GeliomButton, Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useManageStatusMood } from '@/hooks/useManageStatusMood';
 import type { Mood, Status } from '@/types/database';
 import { getMoodOrder, getStatusOrder, saveMoodOrder, saveStatusOrder } from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,17 +21,21 @@ export default function ReorderStatusMoodScreen() {
   const { user } = useAuth();
   const { selectedGroup } = useGroupContext();
   const router = useRouter();
-  
+
   const [activeTab, setActiveTab] = useState<'status' | 'mood'>('status');
   const [statusOrder, setStatusOrder] = useState<number[]>([]);
   const [moodOrder, setMoodOrder] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Status ve mood verilerini çek
   const { data: defaultStatuses = [] } = useDefaultStatuses();
   const { data: customStatuses = [] } = useCustomStatuses(selectedGroup?.id || '', user?.id);
   const { data: allMoods = [] } = useMoods(selectedGroup?.id);
+
+  // Management Hook
+  const { handleAddStatus, handleAddMood, handleDeleteStatus, handleDeleteMood, checkSubscriptionAndProceed } = useManageStatusMood(selectedGroup?.id || '');
 
   // Local storage'dan sıralamayı yükle
   useEffect(() => {
@@ -50,15 +56,15 @@ export default function ReorderStatusMoodScreen() {
   // Status'leri birleştir ve sırala (tüm status'ler - custom + default)
   const sortedStatuses = useMemo(() => {
     const allStatuses = [...customStatuses, ...defaultStatuses];
-    
+
     if (statusOrder.length === 0) {
       // Sıralama yoksa: Custom'lar önce, sonra default'lar
       return allStatuses;
     }
-    
+
     const ordered: Status[] = [];
     const unordered: Status[] = [];
-    
+
     // Sıralamaya göre tüm status'leri ekle (custom + default)
     statusOrder.forEach((statusId) => {
       const status = allStatuses.find(s => s.id === statusId);
@@ -66,14 +72,14 @@ export default function ReorderStatusMoodScreen() {
         ordered.push(status);
       }
     });
-    
+
     // Sıralamada olmayan status'leri sona ekle
     allStatuses.forEach((status) => {
       if (!statusOrder.includes(status.id) && !ordered.find(s => s.id === status.id)) {
         unordered.push(status);
       }
     });
-    
+
     return [...ordered, ...unordered];
   }, [customStatuses, defaultStatuses, statusOrder]);
 
@@ -85,10 +91,10 @@ export default function ReorderStatusMoodScreen() {
       const defaultMoods = allMoods.filter(m => m.group_id == null);
       return [...customMoods, ...defaultMoods];
     }
-    
+
     const ordered: Mood[] = [];
     const unordered: Mood[] = [];
-    
+
     // Sıralamaya göre tüm mood'ları ekle (custom + default)
     moodOrder.forEach((moodId) => {
       const mood = allMoods.find(m => m.id === moodId);
@@ -96,14 +102,14 @@ export default function ReorderStatusMoodScreen() {
         ordered.push(mood);
       }
     });
-    
+
     // Sıralamada olmayan mood'ları sona ekle
     allMoods.forEach((mood) => {
       if (!moodOrder.includes(mood.id) && !ordered.find(m => m.id === mood.id)) {
         unordered.push(mood);
       }
     });
-    
+
     return [...ordered, ...unordered];
   }, [allMoods, moodOrder]);
 
@@ -121,7 +127,7 @@ export default function ReorderStatusMoodScreen() {
 
   const handleSave = async () => {
     if (!user?.id) return;
-    
+
     try {
       await Promise.all([
         saveStatusOrder(user.id, statusOrder),
@@ -134,9 +140,17 @@ export default function ReorderStatusMoodScreen() {
     }
   };
 
+  const onSaveItem = (text: string, emoji: string) => {
+    if (activeTab === 'status') {
+      handleAddStatus(text, emoji);
+    } else {
+      handleAddMood(text, emoji);
+    }
+  };
+
   const renderStatusItem = ({ item, drag, isActive }: RenderItemParams<Status>) => {
     const isCustom = item.is_custom;
-    
+
     return (
       <ScaleDecorator>
         <TouchableOpacity
@@ -160,7 +174,9 @@ export default function ReorderStatusMoodScreen() {
               {item.text}
             </Typography>
             {isCustom && (
-              <Ionicons name="star" size={18} color={colors.primary} style={{ marginLeft: 8 }} />
+              <TouchableOpacity onPress={() => handleDeleteStatus(item.id)} style={styles.deleteButton}>
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+              </TouchableOpacity>
             )}
           </View>
         </TouchableOpacity>
@@ -170,7 +186,7 @@ export default function ReorderStatusMoodScreen() {
 
   const renderMoodItem = ({ item, drag, isActive }: RenderItemParams<Mood>) => {
     const isCustom = item.group_id != null;
-    
+
     return (
       <ScaleDecorator>
         <TouchableOpacity
@@ -194,7 +210,9 @@ export default function ReorderStatusMoodScreen() {
               {item.text}
             </Typography>
             {isCustom && (
-              <Ionicons name="star" size={18} color={colors.primary} style={{ marginLeft: 8 }} />
+              <TouchableOpacity onPress={() => handleDeleteMood(item.id)} style={styles.deleteButton}>
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+              </TouchableOpacity>
             )}
           </View>
         </TouchableOpacity>
@@ -211,7 +229,7 @@ export default function ReorderStatusMoodScreen() {
             icon: <Ionicons name="arrow-back" size={24} color={colors.text} />,
             onPress: () => router.back(),
           },
-          title: <Typography variant="h5" color={colors.text}>Sıralama</Typography>,
+          title: <Typography variant="h5" color={colors.text}>Status & Mood Yönetimi</Typography>,
           backgroundColor: colors.background,
           style: { borderBottomWidth: 0 },
         }}
@@ -231,9 +249,9 @@ export default function ReorderStatusMoodScreen() {
           icon: <Ionicons name="arrow-back" size={24} color={colors.text} />,
           onPress: () => router.back(),
         },
-        title: <Typography variant="h5" color={colors.text}>Sıralama</Typography>,
-        rightIcon: hasChanges ? {
-          icon: (
+        title: <Typography variant="h5" color={colors.text}>Status & Mood Yönetimi</Typography>,
+        rightIcon: {
+          icon: hasChanges ? (
             <GeliomButton
               state="active"
               size="small"
@@ -241,9 +259,13 @@ export default function ReorderStatusMoodScreen() {
             >
               Kaydet
             </GeliomButton>
+          ) : (
+            <TouchableOpacity onPress={() => checkSubscriptionAndProceed(() => setIsModalVisible(true))}>
+              <Ionicons name="add" size={28} color={colors.primary} />
+            </TouchableOpacity>
           ),
-          onPress: handleSave,
-        } : undefined,
+          onPress: hasChanges ? handleSave : () => checkSubscriptionAndProceed(() => setIsModalVisible(true)),
+        },
         backgroundColor: colors.background,
         style: { borderBottomWidth: 0 },
       }}
@@ -286,7 +308,7 @@ export default function ReorderStatusMoodScreen() {
         {/* Info Text */}
         <View style={styles.infoContainer}>
           <Typography variant="caption" color={colors.secondaryText} style={{ textAlign: 'center', paddingHorizontal: 16 }}>
-            Tüm status/mood'ları sürükleyip bırakarak sıralayabilirsiniz. Özel olanların yanında yıldız ikonu görünür.
+            Tüm status/mood'ları sürükleyip bırakarak sıralayabilirsiniz. Özel olanları silebilirsiniz.
           </Typography>
         </View>
 
@@ -325,6 +347,13 @@ export default function ReorderStatusMoodScreen() {
             </View>
           </View>
         )}
+
+        <AddStatusMoodModal
+          visible={isModalVisible}
+          type={activeTab}
+          onClose={() => setIsModalVisible(false)}
+          onSave={onSaveItem}
+        />
       </View>
     </BaseLayout>
   );
@@ -385,6 +414,10 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     marginRight: 12,
+  },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 8,
   },
 });
 

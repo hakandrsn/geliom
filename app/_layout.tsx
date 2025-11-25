@@ -1,7 +1,40 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
+import { adapty } from 'react-native-adapty';
 import Provider from './Provider';
+
+let isAdaptyActivated = false;
+let isSplashShown = false;
+let isAppInitialized = false;
+
+
+
+const activateAdapty = async () => {
+  if (isAdaptyActivated) {
+    console.log('Adapty zaten activate edilmiş, tekrar activate edilmiyor.');
+    return;
+  }
+  const key = process.env.EXPO_PUBLIC_ADAPTY_PUBLIC_SDK_KEY || '';
+  if (!key) {
+    console.warn('Adapty key bulunamadı!');
+    return;
+  }
+
+  try {
+    await adapty.activate(key, { lockMethodsUntilReady: true });
+    isAdaptyActivated = true;
+    console.log('✅ Adapty başarıyla activate edildi.');
+  } catch (error) {
+    console.error('❌ Adapty activation hatası:', error);
+    // Hata durumunda da flag'i true yap ki tekrar denemesin
+    isAdaptyActivated = true;
+  }
+};
+
+if (!isAdaptyActivated) {
+  activateAdapty();
+}
 
 // Ana Layout Component'i - Sadece yapıyı gösterir ve routing yapar
 function RootLayoutContent() {
@@ -17,7 +50,7 @@ function RootLayoutContent() {
     }
 
     console.log('🔵 Layout: Routing kontrolü - session:', !!session, 'segments:', segments);
-    
+
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!session && !inAuthGroup) {

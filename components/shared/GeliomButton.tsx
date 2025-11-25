@@ -24,6 +24,8 @@ export interface GeliomButtonProps {
   onPress?: () => void;
   disabled?: boolean;
   style?: ViewStyle;
+  textColor?: string;
+  backgroundColor?: string;
 }
 
 const GeliomButton: React.FC<GeliomButtonProps> = ({
@@ -35,6 +37,8 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
   onPress,
   disabled = false,
   style,
+  textColor,
+  backgroundColor,
 }) => {
   const { colors } = useTheme();
 
@@ -83,35 +87,35 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
   const getStateColors = () => {
     // Tema renklerinden güvenli erişim
     const forest = colors.primary;
-    const sage = colors.tertiary; 
+    const sage = colors.tertiary;
     const pine = colors.secondary;
 
     switch (state) {
       case 'active':
         return {
-          backgroundColor: forest,
-          textColor: '#FFFFFF',
+          backgroundColor: backgroundColor || forest,
+          textColor: textColor || '#FFFFFF',
           shadowColor: forest,
           borderColor: 'transparent',
         };
       case 'passive':
         return {
-          backgroundColor: sage + '40', // %40 opaklık
-          textColor: colors.primary,
+          backgroundColor: backgroundColor || sage + '40', // %40 opaklık
+          textColor: textColor || colors.primary,
           shadowColor: 'transparent',
           borderColor: 'transparent',
         };
       case 'loading':
         return {
-          backgroundColor: pine,
-          textColor: '#FFFFFF',
+          backgroundColor: backgroundColor || pine,
+          textColor: textColor || '#FFFFFF',
           shadowColor: pine,
           borderColor: 'transparent',
         };
       default:
         return {
-          backgroundColor: forest,
-          textColor: '#FFFFFF',
+          backgroundColor: backgroundColor || forest,
+          textColor: textColor || '#FFFFFF',
           shadowColor: forest,
           borderColor: 'transparent',
         };
@@ -141,8 +145,8 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
       case 'icon-right':
         return { ...baseStyle, flexDirection: 'row-reverse' };
       case 'icon-only':
-        return { 
-          ...baseStyle, 
+        return {
+          ...baseStyle,
           paddingHorizontal: 0,
           width: currentConfig.minHeight, // Kare form
           justifyContent: 'center',
@@ -159,10 +163,10 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
   const renderIcon = () => {
     if (!icon) return null;
     return (
-      <Ionicons 
-        name={icon} 
-        size={currentConfig.iconSize} 
-        color={stateColors.textColor} 
+      <Ionicons
+        name={icon}
+        size={currentConfig.iconSize}
+        color={stateColors.textColor}
       />
     );
   };
@@ -170,9 +174,9 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
   const renderText = () => {
     if (layout === 'icon-only') return null;
     if (state === 'loading') return null;
-    
+
     return (
-      <Text style={[styles.text, { 
+      <Text style={[styles.text, {
         color: stateColors.textColor,
         fontSize: currentConfig.fontSize,
       }]}>

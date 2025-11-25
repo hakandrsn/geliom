@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_PLACEMENT } from '@/constants/adapty';
+import { FIRST_SUBSCRIPTION_PLACEMENT } from '@/constants/adapty';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import { AdaptyPaywall, AdaptyProfile, adapty } from 'react-native-adapty';
@@ -75,7 +75,7 @@ const PayProvider = ({ children }: { children: React.ReactNode }) => {
 
     const showPaywall = async (options: ShowPaywallOptions) => {
         const {
-            placementId = SUBSCRIPTION_PLACEMENT,
+            placementId = FIRST_SUBSCRIPTION_PLACEMENT,
             condition,
             onSuccess,
             onFailure,

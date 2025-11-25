@@ -16,13 +16,16 @@
         "aps-environment": "production",
         "com.apple.developer.networking.wifi-info": true,
         "com.apple.security.application-groups": [
+          "group.com.eoist.geliom.onesignal",
           "group.com.eoist.geliom.onesignal"
         ]
       },
       "infoPlist": {
         "UIBackgroundModes": [
+          "remote-notification",
           "remote-notification"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "NHKQ38KYTV"
     },

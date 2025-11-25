@@ -1,1 +1,1 @@
-export const SUBSCRIPTION_PLACEMENT = "test_subscription";
+export const FIRST_SUBSCRIPTION_PLACEMENT = "first-subscription";
