@@ -25,6 +25,12 @@ export default function Login() {
 
   // Google ile giriş
   const handleGoogleLogin = async () => {
+    // Eğer zaten loading ise, duplicate tıklamayı engelle
+    if (isLoadingGoogle) {
+      console.log('⚠️ Google login zaten başlatılmış, duplicate tıklama engellendi');
+      return;
+    }
+
     try {
       console.log('🔵 Google login başlatılıyor...');
       setIsLoadingGoogle(true);
@@ -45,15 +51,9 @@ export default function Login() {
         return;
       }
 
-      console.log('✅ OAuth flow başarıyla tamamlandı');
-      // Auth state change listener will handle navigation,
-      // so we can set loading to false here or let the listener manage it.
-      // For a better UX, we'll let the listener handle the global auth state.
-      // If auth state doesn't change, loading might get stuck.
-      // Let's stop loading if the process finishes, auth listener will redirect anyway.
-      // Note: If auth is fast, this might be okay.
-      // If we *don't* set loading to false, we rely on the auth listener.
-      // Let's keep the user's original logic: don't set loading to false on success.
+      console.log('✅ OAuth flow başarıyla tamamlandı, routing bekleniyor...');
+      // Loading state'i false yapmıyoruz, _layout routing yapacak
+      // ve kullanıcı otomatik yönlendirilecek
     } catch (error) {
       console.error('❌ Google login exception:', error);
       Alert.alert('Hata', 'Google ile giriş yapılamadı');
@@ -63,6 +63,12 @@ export default function Login() {
 
   // Apple ile giriş
   const handleAppleLogin = async () => {
+    // Eğer zaten loading ise, duplicate tıklamayı engelle
+    if (isLoadingApple) {
+      console.log('⚠️ Apple login zaten başlatılmış, duplicate tıklama engellendi');
+      return;
+    }
+
     try {
       setIsLoadingApple(true);
 
@@ -81,8 +87,8 @@ export default function Login() {
         return;
       }
 
-      // Başarılı - auth state change listener yönlendirecek
-      // We don't set loading to false, similar to Google login
+      console.log('✅ Apple login başarılı, routing bekleniyor...');
+      // Loading state'i false yapmıyoruz, _layout routing yapacak
     } catch (error) {
       Alert.alert('Hata', 'Apple ile giriş yapılamadı');
       console.error('Apple login error:', error);
@@ -122,7 +128,6 @@ export default function Login() {
                   // Use cardBackground for better dark mode compatibility
                   backgroundColor: colors.cardBackground,
                   borderColor: colors.stroke,
-                  shadowColor: colors.shadow,
                 },
               ]}
               onPress={handleGoogleLogin}
@@ -214,11 +219,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     minHeight: 56, // Match Apple button height
     borderWidth: 1,
-    // Shadow for depth
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3, // for Android
   },
   buttonText: {
     flex: 1, // Allows text to be centered

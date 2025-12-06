@@ -19,10 +19,11 @@ WebBrowser.maybeCompleteAuthSession();
 /**
  * OAuth Redirect URL
  * app.json'daki scheme kullanılır: geliom://
+ * NOT: (auth) grubu URL'de görünmez, bu yüzden path sadece 'callback'
  */
 const REDIRECT_URL = AuthSession.makeRedirectUri({
   scheme: 'geliom',
-  path: 'auth/callback',
+  path: 'callback',
 });
 
 /**
@@ -31,9 +32,6 @@ const REDIRECT_URL = AuthSession.makeRedirectUri({
  */
 export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
   try {
-    console.log('🔵 signInWithGoogle başlatılıyor...');
-    console.log('🔵 Redirect URL:', REDIRECT_URL);
-
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -45,11 +43,9 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
       },
     });
 
-    console.log('🔵 OAuth response - data:', data);
-    console.log('🔵 OAuth response - error:', error);
-
     if (error) {
-      console.error('❌ OAuth error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ OAuth hatası:', errorMessage);
       return {
         error: {
           code: 'PROVIDER_ERROR',
@@ -60,7 +56,6 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
     }
 
     if (!data?.url) {
-      console.error('❌ OAuth URL alınamadı');
       return {
         error: {
           code: 'PROVIDER_ERROR',
@@ -69,18 +64,13 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
       };
     }
 
-    console.log('✅ OAuth URL alındı, web browser açılıyor:', data.url);
-
     // Web browser'da OAuth URL'ini aç
     const result = await WebBrowser.openAuthSessionAsync(
       data.url,
       REDIRECT_URL
     );
 
-    console.log('🔵 WebBrowser result:', result);
-
     if (result.type === 'cancel') {
-      console.log('ℹ️ Kullanıcı OAuth işlemini iptal etti');
       return {
         error: {
           code: 'CANCELLED',
@@ -90,21 +80,12 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
     }
 
     if (result.type === 'success' && result.url) {
-      console.log('✅ OAuth callback URL alındı:', result.url);
-
-      // URL'den hash fragment'i çıkar (React Native'de query params yerine hash kullanılır)
+      // URL'den hash fragment'i çıkar
       const hashParams = new URLSearchParams(result.url.split('#')[1] || '');
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
 
-      console.log('🔵 Access token var mı:', !!accessToken);
-      console.log('🔵 Refresh token var mı:', !!refreshToken);
-
       if (accessToken && refreshToken) {
-        console.log('✅ Tokens alındı, session oluşturuluyor...');
-        console.log('🔵 Access token (ilk 20 karakter):', accessToken.substring(0, 20));
-        console.log('🔵 Refresh token (ilk 20 karakter):', refreshToken.substring(0, 20));
-
         try {
           // Session'ı set et
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
@@ -113,9 +94,8 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
           });
 
           if (sessionError) {
-            console.error('❌ Session oluşturma hatası:', sessionError);
-            console.error('❌ Session error code:', sessionError.code);
-            console.error('❌ Session error message:', sessionError.message);
+            const errorMessage = sessionError instanceof Error ? sessionError.message : String(sessionError);
+            console.error('❌ Session hatası:', errorMessage);
             return {
               error: {
                 code: 'PROVIDER_ERROR',
@@ -126,44 +106,30 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
           }
 
           if (!sessionData?.session) {
-            console.error('❌ Session data yok!');
             return {
               error: {
                 code: 'PROVIDER_ERROR',
-                message: 'Session oluşturulamadı - session data yok',
+                message: 'Session oluşturulamadı',
               },
             };
           }
 
-          console.log('✅ Session başarıyla oluşturuldu');
-          console.log('✅ Session user:', sessionData.session.user?.email);
-          console.log('✅ Session expires at:', sessionData.session.expires_at);
-
-          // Session'ın gerçekten set edildiğini doğrula (polling, max 3 saniye)
-          const maxWaitTime = 3000; // 3 saniye
-          const pollInterval = 100; // 100ms
+          // Session doğrulama
+          const maxWaitTime = 3000;
+          const pollInterval = 100;
           const startTime = Date.now();
           let verified = false;
 
           while (Date.now() - startTime < maxWaitTime && !verified) {
-            const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-
+            const { data: { session: verifySession } } = await supabase.auth.getSession();
             if (verifySession && verifySession.user?.id === sessionData.session.user?.id) {
-              console.log('✅ Session doğrulandı, user:', verifySession.user?.email);
               verified = true;
               break;
             }
-
-            if (verifyError) {
-              console.error('❌ Session doğrulama hatası:', verifyError);
-            }
-
-            // Bir sonraki kontrol için bekle
             await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
 
           if (!verified) {
-            console.error('❌ Session doğrulanamadı - timeout');
             return {
               error: {
                 code: 'PROVIDER_ERROR',
@@ -172,10 +138,10 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
             };
           }
 
-          // Auth state change listener otomatik tetiklenecek
           return { error: null };
         } catch (error) {
-          console.error('❌ setSession exception:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('❌ Session hatası:', errorMessage);
           return {
             error: {
               code: 'PROVIDER_ERROR',
@@ -191,62 +157,37 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
         const queryRefreshToken = queryParams.get('refresh_token');
 
         if (queryAccessToken && queryRefreshToken) {
-          console.log('✅ Tokens query params\'tan alındı, session oluşturuluyor...');
-
           const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
             access_token: queryAccessToken,
             refresh_token: queryRefreshToken,
           });
 
-          if (sessionError) {
-            console.error('❌ Session oluşturma hatası:', sessionError);
+          if (sessionError || !sessionData?.session) {
             return {
               error: {
                 code: 'PROVIDER_ERROR',
-                message: sessionError.message,
+                message: 'Session oluşturulamadı',
                 originalError: sessionError,
               },
             };
           }
 
-          if (!sessionData?.session) {
-            console.error('❌ Session data yok!');
-            return {
-              error: {
-                code: 'PROVIDER_ERROR',
-                message: 'Session oluşturulamadı - session data yok',
-              },
-            };
-          }
-
-          console.log('✅ Session başarıyla oluşturuldu');
-          console.log('✅ Session user:', sessionData.session.user?.email);
-
-          // Session'ın gerçekten set edildiğini doğrula (polling, max 3 saniye)
-          const maxWaitTime = 3000; // 3 saniye
-          const pollInterval = 100; // 100ms
+          // Session doğrulama
+          const maxWaitTime = 3000;
+          const pollInterval = 100;
           const startTime = Date.now();
           let verified = false;
 
           while (Date.now() - startTime < maxWaitTime && !verified) {
-            const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-
+            const { data: { session: verifySession } } = await supabase.auth.getSession();
             if (verifySession && verifySession.user?.id === sessionData.session.user?.id) {
-              console.log('✅ Session doğrulandı, user:', verifySession.user?.email);
               verified = true;
               break;
             }
-
-            if (verifyError) {
-              console.error('❌ Session doğrulama hatası:', verifyError);
-            }
-
-            // Bir sonraki kontrol için bekle
             await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
 
           if (!verified) {
-            console.error('❌ Session doğrulanamadı - timeout');
             return {
               error: {
                 code: 'PROVIDER_ERROR',
@@ -257,8 +198,6 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
 
           return { error: null };
         }
-
-        console.error('❌ Tokens bulunamadı. URL:', result.url);
         return {
           error: {
             code: 'PROVIDER_ERROR',
@@ -268,7 +207,6 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
       }
     }
 
-    console.error('❌ Beklenmeyen OAuth sonucu:', result);
     return {
       error: {
         code: 'UNKNOWN_ERROR',
@@ -276,7 +214,8 @@ export async function signInWithGoogle(): Promise<{ error: AuthError | null }> {
       },
     };
   } catch (error) {
-    console.error('❌ signInWithGoogle exception:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ Google login hatası:', errorMessage);
     return {
       error: {
         code: 'UNKNOWN_ERROR',
@@ -350,7 +289,7 @@ Bu hata genellikle şu durumlardan kaynaklanır:
 Lütfen Supabase dashboard'da Apple provider ayarlarını kontrol edin.`;
       }
 
-      console.error('❌ Apple sign in error:', error);
+      console.error('❌ Apple sign in error:', errorMessage);
       console.error('❌ Bundle identifier:', bundleIdentifier);
 
       return {
@@ -391,7 +330,8 @@ Lütfen Supabase dashboard'da Apple provider ayarlarını kontrol edin.`;
       }
 
       if (verifyError) {
-        console.error('❌ Apple sign in: Session doğrulama hatası:', verifyError);
+        const errorMessage = verifyError instanceof Error ? verifyError.message : String(verifyError);
+        console.error('❌ Apple sign in: Session doğrulama hatası:', errorMessage);
       }
 
       // Bir sonraki kontrol için bekle
@@ -475,8 +415,6 @@ export async function createOrUpdateUserProfile(
   normalizedData: NormalizedUserData
 ): Promise<{ data: any | null; error: AuthError | null }> {
   try {
-    console.log('🔵 createOrUpdateUserProfile başlatıldı, user ID:', normalizedData.id);
-
     // Database trigger anında çalıştığı için kullanıcı zaten oluşturulmuş olmalı
     // Sadece profil bilgilerini güncelle
     const updateData: UpdateUser = {
@@ -492,7 +430,6 @@ export async function createOrUpdateUserProfile(
     ) as UpdateUser;
 
     if (Object.keys(filteredUpdateData).length === 0) {
-      console.log('ℹ️ Güncellenecek alan yok, mevcut profili getir...');
       // Güncellenecek alan yoksa mevcut profili getir
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
@@ -501,7 +438,8 @@ export async function createOrUpdateUserProfile(
         .single();
 
       if (fetchError) {
-        console.error('❌ User fetch error:', fetchError);
+        const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        console.error('❌ User fetch error:', errorMessage);
         return {
           data: null,
           error: {
@@ -514,8 +452,6 @@ export async function createOrUpdateUserProfile(
 
       return { data: existingUser, error: null };
     }
-
-    console.log('🔵 Update data:', filteredUpdateData);
 
     const { data, error } = await supabase
       .from('users')
@@ -546,14 +482,15 @@ export async function createOrUpdateUserProfile(
             return {
               data: null,
               error: {
-                code: 'USER_NOT_FOUND',
+                code: 'UNKNOWN_ERROR',
                 message: 'Kullanıcı veritabanında bulunamadı',
                 originalError: retryError,
               },
             };
           }
           
-          console.error('❌ User update retry error:', retryError);
+          const errorMessage = retryError instanceof Error ? retryError.message : String(retryError);
+          console.error('❌ User update retry error:', errorMessage);
           return {
             data: null,
             error: {
@@ -564,11 +501,11 @@ export async function createOrUpdateUserProfile(
           };
         }
 
-        console.log('✅ User profile güncellendi (retry):', retryData?.id);
         return { data: retryData, error: null };
       }
 
-      console.error('❌ User update error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ User update error:', errorMessage);
       return {
         data: null,
         error: {
@@ -579,10 +516,10 @@ export async function createOrUpdateUserProfile(
       };
     }
 
-    console.log('✅ User profile güncellendi:', data?.id);
     return { data, error: null };
   } catch (error) {
-    console.error('❌ createOrUpdateUserProfile exception:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ createOrUpdateUserProfile exception:', errorMessage);
     return {
       data: null,
       error: {

@@ -58,12 +58,10 @@ export const useCurrentUser = () => {
       // Session kontrolü
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        console.log('🔵 useCurrentUser: Session yok');
         return null;
       }
 
       const userId = session.user.id;
-      console.log('🔵 useCurrentUser: User profile fetch ediliyor, user ID:', userId);
       
       const { data, error } = await supabase
         .from('users')
@@ -74,14 +72,13 @@ export const useCurrentUser = () => {
       if (error) {
         // Eğer kullanıcı bulunamadıysa (PGRST116), database trigger henüz çalışmamış olabilir
         if (error.code === 'PGRST116') {
-          console.log('⏳ useCurrentUser: User profile henüz oluşturulmamış, database trigger bekleniyor...');
           return null;
         }
-        console.error('❌ useCurrentUser: Error:', error);
-        throw error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ useCurrentUser: Error:', errorMessage);
+        throw new Error(errorMessage);
       }
       
-      console.log('✅ useCurrentUser: User profile bulundu:', data?.id);
       return data;
     },
     // Session kontrolü queryFn içinde yapılıyor, enabled her zaman true

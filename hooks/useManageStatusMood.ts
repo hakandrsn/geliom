@@ -26,7 +26,8 @@ export function useManageStatusMood(groupId: string) {
         notifies: false,
       });
     } catch (error) {
-      console.error('Status ekleme hatası:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Status ekleme hatası:', errorMessage);
       Alert.alert('Hata', 'Status eklenirken bir hata oluştu.');
     }
   };
@@ -45,7 +46,8 @@ export function useManageStatusMood(groupId: string) {
               group_id: groupId,
             });
           } catch (error) {
-            console.error('Mood ekleme hatası (paywall sonrası):', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error('Mood ekleme hatası (paywall sonrası):', errorMessage);
             Alert.alert('Hata', 'Mood eklenirken bir hata oluştu.');
           }
         }
@@ -60,7 +62,8 @@ export function useManageStatusMood(groupId: string) {
         group_id: groupId,
       });
     } catch (error) {
-      console.error('Mood ekleme hatası:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Mood ekleme hatası:', errorMessage);
       Alert.alert('Hata', 'Mood eklenirken bir hata oluştu.');
     }
   };
@@ -78,7 +81,8 @@ export function useManageStatusMood(groupId: string) {
             try {
               await deleteStatus.mutateAsync(id);
             } catch (error) {
-              console.error('Status silme hatası:', error);
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('Status silme hatası:', errorMessage);
               Alert.alert('Hata', 'Status silinirken bir hata oluştu.');
             }
           }
@@ -100,7 +104,8 @@ export function useManageStatusMood(groupId: string) {
             try {
               await deleteMood.mutateAsync(id);
             } catch (error) {
-              console.error('Mood silme hatası:', error);
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('Mood silme hatası:', errorMessage);
               Alert.alert('Hata', 'Mood silinirken bir hata oluştu.');
             }
           }

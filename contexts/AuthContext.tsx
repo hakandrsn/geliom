@@ -38,26 +38,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Çıkış yapma fonksiyonu
   const signOut = useCallback(async () => {
     try {
-      console.log('🔵 SignOut başlatılıyor...');
       setIsLoading(true);
-      
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error('❌ Sign out error:', error);
-        throw error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Çıkış hatası:', errorMessage);
+        throw new Error(errorMessage);
       }
-      
-      console.log('✅ SignOut başarılı, state temizleniyor...');
-      // onAuthStateChange listener otomatik olarak SIGNED_OUT event'ini tetikleyecek
-      // Orada state temizlenecek, burada sadece log'layalım
     } catch (error) {
-      console.error('❌ Unexpected sign out error:', error);
-      // Hata olsa bile state'i temizle
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Çıkış hatası:', errorMessage);
       setSession(null);
       setUser(null);
       setIsLoading(false);
-      throw error;
+      throw new Error(errorMessage);
     }
   }, []);
 
@@ -73,54 +68,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(currentSession);
         // User profile'ı fetch et
         await refetchUserProfile();
-        
-        // Session varsa OneSignal login yap (app açıldığında kullanıcı zaten login ise)
-        const supabaseUser = currentSession.user;
-        if (supabaseUser?.id) {
-          console.log('🔵 App açıldığında session var, OneSignal login yapılıyor...');
-          loginOneSignal(supabaseUser.id)
-            .then(async () => {
-              console.log('✅ OneSignal login başarılı (initializeAuth), Player ID kaydediliyor...');
-              
-              // Login başarılı olduktan sonra Player ID'yi al ve kaydet
-              // Biraz bekle, SDK'nın internal state'ini güncellemesi için
-              await new Promise(resolve => setTimeout(resolve, 500));
-              
-              const playerId = await getOneSignalPlayerId();
-              if (playerId && supabaseUser.id) {
-                try {
-                  await updateUser.mutateAsync({
-                    id: supabaseUser.id,
-                    updates: { onesignal_player_id: playerId },
-                  });
-                  console.log('✅ OneSignal Player ID kaydedildi (initializeAuth):', playerId);
-                } catch (error: any) {
-                  // Kullanıcı bulunamadıysa (DB'den silinmişse), logout yap
-                  if (error?.code === 'USER_NOT_FOUND' || error?.code === 'PGRST116') {
-                    console.warn('⚠️ Kullanıcı DB\'de bulunamadı, logout yapılıyor...');
-                    await signOut();
-                  } else {
-                    console.error('❌ OneSignal Player ID kaydetme hatası (initializeAuth):', error);
-                    // Player ID kaydetme hatası kritik değil, devam et
-                  }
-                }
-              } else {
-                console.warn('⚠️ OneSignal Player ID alınamadı, kaydedilemedi (initializeAuth). Subscription henüz oluşmamış olabilir.');
-                // Player ID yoksa, subscription oluşunca otomatik olarak kaydedilecek
-              }
-            })
-            .catch((error) => {
-              console.error('❌ OneSignal login hatası (initializeAuth, non-blocking):', error);
-              // OneSignal login hatası kritik değil, uygulama çalışmaya devam eder
-              console.warn('⚠️ OneSignal login başarısız oldu (initializeAuth). Kullanıcı bildirimleri alamayabilir. Hata:', error.message || error);
-            });
-        }
+        // NOT: OneSignal login onAuthStateChange içinde yapılıyor
       } else {
         setSession(null);
         setUser(null);
       }
     } catch (error) {
-      console.error('Auth initialization error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Auth initialization error:', errorMessage);
       setSession(null);
       setUser(null);
     } finally {
@@ -137,12 +92,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      console.log('🔵 Auth state changed:', event, currentSession?.user?.email);
-
       setSession(currentSession);
 
       if (currentSession?.user) {
-        console.log('✅ Auth state: User var, profil güncelleniyor...');
         const supabaseUser = currentSession.user;
         const provider = getProviderFromUser(supabaseUser);
         const normalizedData = normalizeUserData(supabaseUser, provider);
@@ -154,67 +106,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (result.error && errorCode === 'USER_NOT_FOUND') {
             console.warn('⚠️ Kullanıcı DB\'de bulunamadı, logout yapılıyor...');
             signOut().catch((error) => {
-              console.error('❌ Logout hatası:', error);
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Logout hatası:', errorMessage);
             });
           }
         }).catch((error) => {
-          console.error('❌ Profile update error (non-blocking):', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('❌ Profile update error (non-blocking):', errorMessage);
         });
 
-        // OneSignal'e kullanıcıyı login et (external ID olarak Supabase auth ID)
-        // Bu, OneSignal Dashboard'da kullanıcıyı external ID ile bulmamızı sağlar
-        // loginOneSignal içinde zaten Player ID hazır olana kadar bekliyor ve retry mekanizması var
+        // OneSignal'e kullanıcıyı login et (sessizce, arka planda)
         loginOneSignal(supabaseUser.id)
           .then(async () => {
-            console.log('✅ OneSignal login başarılı, Player ID kaydediliyor...');
-            
-            // Login başarılı olduktan sonra Player ID'yi al ve kaydet
-            // Biraz bekle, SDK'nın internal state'ini güncellemesi için
+            // Player ID'yi al ve kaydet
             await new Promise(resolve => setTimeout(resolve, 500));
-            
             const playerId = await getOneSignalPlayerId();
+            
             if (playerId && supabaseUser.id) {
               try {
                 await updateUser.mutateAsync({
                   id: supabaseUser.id,
                   updates: { onesignal_player_id: playerId },
                 });
-                console.log('✅ OneSignal Player ID kaydedildi:', playerId);
               } catch (error: any) {
-                // Kullanıcı bulunamadıysa (DB'den silinmişse), logout yap
+                // Kullanıcı bulunamadıysa logout yap
                 if (error?.code === 'USER_NOT_FOUND' || error?.code === 'PGRST116') {
-                  console.warn('⚠️ Kullanıcı DB\'de bulunamadı, logout yapılıyor...');
                   await signOut();
-                } else {
-                  console.error('❌ OneSignal Player ID kaydetme hatası:', error);
-                  // Player ID kaydetme hatası kritik değil, devam et
                 }
               }
-            } else {
-              console.warn('⚠️ OneSignal Player ID alınamadı, kaydedilemedi. Subscription henüz oluşmamış olabilir.');
-              // Player ID yoksa, subscription oluşunca otomatik olarak kaydedilecek
             }
           })
-          .catch((error) => {
-            console.error('❌ OneSignal login hatası (non-blocking):', error);
-            // OneSignal login hatası kritik değil, uygulama çalışmaya devam eder
-            // Ama kullanıcı bildirimleri alamayabilir
-            console.warn('⚠️ OneSignal login başarısız oldu. Kullanıcı bildirimleri alamayabilir. Hata:', error.message || error);
+          .catch(() => {
+            // Sessizce devam et
           });
 
-        // Session değiştiğinde query'yi invalidate et (useCurrentUser hook'u refetch yapacak)
+        // Session değiştiğinde query'yi invalidate et
         queryClient.invalidateQueries({ queryKey: userKeys.current() });
       } else {
-        // SIGNED_OUT veya TOKEN_REFRESHED (session null) event'i
-        console.log('🔵 Auth state: Session yok, cache temizleniyor...');
         setUser(null);
-        
-        // OneSignal'den logout et
         logoutOneSignal();
-        
-        // User ile ilgili tüm query'leri temizle
         queryClient.removeQueries({ queryKey: userKeys.all });
-        console.log('✅ User query cache temizlendi');
       }
     });
 
@@ -225,12 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Current user profile değiştiğinde state'i güncelle
   useEffect(() => {
-    if (currentUserProfile) {
-      console.log('✅ AuthContext: User profile set edildi:', currentUserProfile.id);
-      setUser(currentUserProfile);
-    } else {
-      setUser(null);
-    }
+    setUser(currentUserProfile || null);
   }, [currentUserProfile]);
 
   // Kullanıcı bulunamadığında (DB'den silinmişse) logout yap
@@ -239,7 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentUserError && errorCode === 'USER_NOT_FOUND' && session) {
       console.warn('⚠️ Kullanıcı DB\'de bulunamadı (useCurrentUser), logout yapılıyor...');
       signOut().catch((error) => {
-        console.error('❌ Logout hatası:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Logout hatası:', errorMessage);
       });
     }
   }, [currentUserError, session, signOut]);
@@ -256,16 +183,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Session var ama profile henüz yok
       // Eğer query hala loading ise → loading true
       // Eğer query tamamlandıysa (isLoading false) → loading false
-      // Ama eğer error varsa ve USER_NOT_FOUND ise → logout yapılacak (yukarıdaki useEffect'te)
+      // Ama eğer error varsa ve USER_NOT_FOUND ise → logout yapılacak
       setIsLoading(currentUserLoading);
-      
-      // Eğer query tamamlandı ama profile hala null ise ve error yoksa
-      // Bu durumda database trigger henüz çalışmamış olabilir, biraz bekle
-      if (!currentUserLoading && !currentUserError && !currentUserProfile) {
-        console.log('⏳ Session var ama profile henüz yok, database trigger bekleniyor...');
-        // Bu durumda loading false yap (çünkü query tamamlandı)
-        // Ama kullanıcı gösterilemez, bu normal (database trigger çalışana kadar)
-      }
     }
   }, [session, currentUserProfile, currentUserLoading, currentUserError]);
 

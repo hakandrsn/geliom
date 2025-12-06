@@ -1,6 +1,6 @@
 import { useTheme } from '@/contexts/ThemeContext';
 import { fonts, typography, TypographyKeys } from '@/theme/typography';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, TextProps, TextStyle } from 'react-native';
 
 // Typography component props
@@ -22,21 +22,24 @@ const Typography: React.FC<TypographyProps> = ({
 }) => {
   const { colors } = useTheme();
   
-  // Seçilen variant'ın stillerini al
-  const variantStyle = typography[variant];
+  // Seçilen variant'ın stillerini al - memoize edildi
+  const variantStyle = useMemo(() => typography[variant], [variant]);
   
-  // Font weight'i belirle (prop > variant default > regular)
-  const finalFontWeight = fontWeight || variantStyle.defaultFontWeight;
+  // Font weight'i belirle (prop > variant default > regular) - memoize edildi
+  const finalFontWeight = useMemo(
+    () => fontWeight || variantStyle.defaultFontWeight,
+    [fontWeight, variantStyle.defaultFontWeight]
+  );
   
-  // Final style'ı oluştur
-  const textStyle: TextStyle = {
+  // Final style'ı oluştur - memoize edildi
+  const textStyle: TextStyle = useMemo(() => ({
     fontSize: variantStyle.fontSize,
     lineHeight: variantStyle.lineHeight,
     fontFamily: fonts[finalFontWeight],
     letterSpacing: variantStyle.letterSpacing,
     color: color || colors.text,
     ...(Array.isArray(style) ? Object.assign({}, ...style) : style),
-  };
+  }), [variantStyle, finalFontWeight, color, colors.text, style]);
 
   return (
     <Text style={textStyle} {...props}>
@@ -45,4 +48,6 @@ const Typography: React.FC<TypographyProps> = ({
   );
 };
 
+// Typography için React.memo kullanmıyoruz çünkü children prop'u sürekli değişiyor
+// ve shallow comparison çalışmıyor
 export default Typography;

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -29,6 +29,46 @@ export interface GeliomButtonProps {
   textStyle?: any;
 }
 
+// Button size config - sabit olduğu için dışarıda tanımlıyoruz
+const BUTTON_SIZE_CONFIG = {
+  small: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    fontSize: 14,
+    iconSize: 16,
+    minHeight: 32,
+    gap: 6,
+  },
+  medium: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 18,
+    fontSize: 16,
+    iconSize: 18,
+    minHeight: 42,
+    gap: 8,
+  },
+  large: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 22,
+    fontSize: 18,
+    iconSize: 20,
+    minHeight: 52,
+    gap: 10,
+  },
+  xl: {
+    paddingHorizontal: 32,
+    paddingVertical: 20,
+    borderRadius: 26,
+    fontSize: 20,
+    iconSize: 24,
+    minHeight: 62,
+    gap: 12,
+  },
+} as const;
+
 const GeliomButton: React.FC<GeliomButtonProps> = ({
   children,
   state = 'active',
@@ -44,50 +84,11 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 }) => {
   const { colors } = useTheme();
 
-  // Organik boyutlandırma
-  const buttonSizeConfig = {
-    small: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 14,
-      fontSize: 14,
-      iconSize: 16,
-      minHeight: 32,
-      gap: 6,
-    },
-    medium: {
-      paddingHorizontal: 18,
-      paddingVertical: 12,
-      borderRadius: 18,
-      fontSize: 16,
-      iconSize: 18,
-      minHeight: 42,
-      gap: 8,
-    },
-    large: {
-      paddingHorizontal: 24,
-      paddingVertical: 16,
-      borderRadius: 22,
-      fontSize: 18,
-      iconSize: 20,
-      minHeight: 52,
-      gap: 10,
-    },
-    xl: {
-      paddingHorizontal: 32,
-      paddingVertical: 20,
-      borderRadius: 26,
-      fontSize: 20,
-      iconSize: 24,
-      minHeight: 62,
-      gap: 12,
-    },
-  };
+  // Current config - sadece size değiştiğinde güncellenir
+  const currentConfig = useMemo(() => BUTTON_SIZE_CONFIG[size], [size]);
 
-  const currentConfig = buttonSizeConfig[size];
-
-  const getStateColors = () => {
-    // Tema renklerinden güvenli erişim
+  // State colors - memoize edildi
+  const stateColors = useMemo(() => {
     const activeColor = colors.primary;
     const passiveColor = colors.tertiary;
     const loadingColor = colors.secondary;
@@ -97,36 +98,31 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
         return {
           backgroundColor: backgroundColor || activeColor,
           textColor: textColor || '#FFFFFF',
-          shadowColor: activeColor,
           borderColor: 'transparent',
         };
       case 'passive':
         return {
-          backgroundColor: backgroundColor || passiveColor + '40', // %40 opaklık
+          backgroundColor: backgroundColor || passiveColor + '40',
           textColor: textColor || colors.primary,
-          shadowColor: 'transparent',
           borderColor: 'transparent',
         };
       case 'loading':
         return {
           backgroundColor: backgroundColor || loadingColor,
           textColor: textColor || '#FFFFFF',
-          shadowColor: loadingColor,
           borderColor: 'transparent',
         };
       default:
         return {
           backgroundColor: backgroundColor || activeColor,
           textColor: textColor || '#FFFFFF',
-          shadowColor: activeColor,
           borderColor: 'transparent',
         };
     }
-  };
+  }, [state, colors, backgroundColor, textColor]);
 
-  const stateColors = getStateColors();
-
-  const getLayoutStyle = (): ViewStyle => {
+  // Button style - memoize edildi
+  const buttonStyle = useMemo((): ViewStyle => {
     const baseStyle: ViewStyle = {
       flexDirection: 'row',
       alignItems: 'center',
@@ -150,7 +146,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
         return {
           ...baseStyle,
           paddingHorizontal: 0,
-          width: currentConfig.minHeight, // Kare form
+          width: currentConfig.minHeight,
           justifyContent: 'center',
         };
       case 'full-width':
@@ -158,11 +154,10 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
       default:
         return baseStyle;
     }
-  };
+  }, [currentConfig, stateColors, disabled, layout]);
 
-  const buttonStyle = getLayoutStyle();
-
-  const renderIcon = () => {
+  // Render functions - memoize edildi
+  const renderIcon = useCallback(() => {
     if (!icon) return null;
     return (
       <Ionicons
@@ -171,30 +166,36 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
         color={stateColors.textColor}
       />
     );
-  };
+  }, [icon, currentConfig.iconSize, stateColors.textColor]);
 
-  const renderText = () => {
+  const textStyleMemo = useMemo(() => [
+    styles.text,
+    {
+      color: stateColors.textColor,
+      fontSize: currentConfig.fontSize,
+    },
+    textStyle
+  ], [stateColors.textColor, currentConfig.fontSize, textStyle]);
+
+  const renderText = useCallback(() => {
     if (layout === 'icon-only') return null;
     if (state === 'loading') return null;
 
     return (
-      <Text style={[styles.text, {
-        color: stateColors.textColor,
-        fontSize: currentConfig.fontSize,
-      }, textStyle]}>
+      <Text style={textStyleMemo}>
         {children}
       </Text>
     );
-  };
+  }, [layout, state, textStyleMemo, children]);
 
-  const renderLoading = () => {
+  const renderLoading = useCallback(() => {
     if (state !== 'loading') return null;
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color={stateColors.textColor} />
       </View>
     );
-  };
+  }, [state, stateColors.textColor]);
 
   // TouchableOpacity yerine BouncyButton kullanıyoruz
   return (
@@ -203,8 +204,6 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
       disabled={disabled || state === 'loading'}
       style={[
         buttonStyle,
-        state === 'active' && styles.shadow, // Sadece active iken gölge
-        { shadowColor: stateColors.shadowColor },
         style,
       ]}
     >
@@ -227,12 +226,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
-  shadow: {
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -240,4 +233,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default GeliomButton;
+// React.memo ile sarmalayıp shallow comparison yapıyoruz
+export default React.memo(GeliomButton);

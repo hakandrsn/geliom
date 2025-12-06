@@ -3,7 +3,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 interface AddStatusMoodModalProps {
   visible: boolean;
@@ -33,13 +33,14 @@ export default function AddStatusMoodModal({ visible, type, onClose, onSave }: A
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
         <View style={styles.backdrop}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
           <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
         </View>
 
@@ -48,9 +49,9 @@ export default function AddStatusMoodModal({ visible, type, onClose, onSave }: A
             <Typography variant="h6" color={colors.text}>
               {type === 'status' ? 'Yeni Durum Ekle' : 'Yeni Mood Ekle'}
             </Typography>
-            <TouchableOpacity onPress={onClose}>
+            <Pressable onPress={onClose}>
               <Ionicons name="close" size={24} color={colors.secondaryText} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <View style={styles.form}>
@@ -61,7 +62,7 @@ export default function AddStatusMoodModal({ visible, type, onClose, onSave }: A
                 </Typography>
                 <View style={styles.emojiList}>
                   {EMOJI_OPTIONS.map((e) => (
-                    <TouchableOpacity
+                    <Pressable
                       key={e}
                       onPress={() => setEmoji(e)}
                       style={[
@@ -70,7 +71,7 @@ export default function AddStatusMoodModal({ visible, type, onClose, onSave }: A
                       ]}
                     >
                       <Typography variant="h5">{e}</Typography>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </View>
               </View>
@@ -131,11 +132,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 24,
     zIndex: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
   },
   header: {
     flexDirection: 'row',

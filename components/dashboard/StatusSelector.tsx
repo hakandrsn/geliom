@@ -4,7 +4,7 @@ import { GeliomButton } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useManageStatusMood } from '@/hooks/useManageStatusMood';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
 interface StatusSelectorProps {
@@ -13,7 +13,7 @@ interface StatusSelectorProps {
   onAddPress?: () => void;
 }
 
-export default function StatusSelector({ groupId, currentStatusId, onAddPress }: StatusSelectorProps) {
+function StatusSelector({ groupId, currentStatusId, onAddPress }: StatusSelectorProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -27,14 +27,15 @@ export default function StatusSelector({ groupId, currentStatusId, onAddPress }:
 
   const setStatusMutation = useSetUserStatus();
 
-  const handleStatusSelect = (statusId: number) => {
+  // Handle status select - memoize edildi
+  const handleStatusSelect = useCallback((statusId: number) => {
     if (!user) return;
     setStatusMutation.mutate({
       user_id: user.id,
       group_id: groupId,
       status_id: statusId,
     });
-  };
+  }, [user, groupId, setStatusMutation]);
 
   const isLoading = isLoadingDefault || isLoadingCustom;
 
@@ -148,3 +149,6 @@ const styles = StyleSheet.create({
     marginBottom: 0, // Removed extra margin since edge is gone
   },
 });
+
+// React.memo ile sarmalayıp shallow comparison yapıyoruz
+export default React.memo(StatusSelector);

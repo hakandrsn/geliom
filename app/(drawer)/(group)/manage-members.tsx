@@ -19,11 +19,13 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  type GestureResponderEvent
 } from 'react-native';
 
 export default function ManageMembersScreen() {
@@ -410,17 +412,22 @@ export default function ManageMembersScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setNicknameModalVisible(false)}
+        statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <Pressable
           style={styles.modalOverlay}
+          onPress={() => setNicknameModalVisible(false)}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.modalScrollContent}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <Typography variant="h6" style={styles.modalTitle}>
+            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                <Typography variant="h6" style={styles.modalTitle}>
               Takma Ad {selectedMember?.user?.display_name ? `(${selectedMember.user.display_name})` : ''}
             </Typography>
             
@@ -460,20 +467,27 @@ export default function ManageMembersScreen() {
               </GeliomButton>
             </View>
           </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+              </ScrollView>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
       
       {/* Transfer Ownership Modal */}
       <Modal
         visible={transferOwnerModalVisible}
         transparent
+        statusBarTranslucent
         animationType="slide"
         onRequestClose={() => setTransferOwnerModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <Typography variant="h6" style={styles.modalTitle}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setTransferOwnerModalVisible(false)}
+        >
+          <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+              <Typography variant="h6" style={styles.modalTitle}>
               Yöneticilik Devri
             </Typography>
             
@@ -502,8 +516,9 @@ export default function ManageMembersScreen() {
                 Devret
               </GeliomButton>
             </View>
-          </View>
-        </View>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Avatar Selector Modal */}

@@ -4,7 +4,7 @@ import { GeliomButton } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useManageStatusMood } from '@/hooks/useManageStatusMood';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
 interface MoodSelectorProps {
@@ -13,7 +13,7 @@ interface MoodSelectorProps {
   onAddPress?: () => void;
 }
 
-export default function MoodSelector({ groupId, currentMoodId, onAddPress }: MoodSelectorProps) {
+function MoodSelector({ groupId, currentMoodId, onAddPress }: MoodSelectorProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -26,14 +26,15 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
 
   const setMoodMutation = useSetUserGroupMood();
 
-  const handleMoodSelect = (moodId: number) => {
+  // Handle mood select - memoize edildi
+  const handleMoodSelect = useCallback((moodId: number) => {
     if (!user) return;
     setMoodMutation.mutate({
       user_id: user.id,
       mood_id: moodId,
       group_id: groupId || undefined,
     });
-  };
+  }, [user, groupId, setMoodMutation]);
 
   // Sort moods: Custom first, then default
   const sortedMoods = useMemo(() => {
@@ -142,3 +143,6 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
 });
+
+// React.memo ile sarmalayıp shallow comparison yapıyoruz
+export default React.memo(MoodSelector);

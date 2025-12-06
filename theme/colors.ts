@@ -41,7 +41,6 @@ export interface ThemeColors {
   // Etkileşim Elemanları
   disabled: string;
   stroke: string;
-  shadow: string;
   passiveButton: string;
 
   // Katmanlar
@@ -90,7 +89,6 @@ export const lightColors: ThemeColors = {
   // Etkileşim
   disabled: '#CBD5E1',       // Slate 300
   stroke: '#E2E8F0',         // Slate 200
-  shadow: 'rgba(79, 70, 229, 0.15)', // İndigo tonlu gölge
   passiveButton: 'rgba(57, 62, 70, 0.3)', // #393E46 @ 80%
   
   // Katmanlar
@@ -139,7 +137,6 @@ export const darkColors: ThemeColors = {
   // Etkileşim
   disabled: '#334155',       // Slate 700
   stroke: '#334155',         // Slate 700
-  shadow: 'rgba(0, 0, 0, 0.5)', // Derin siyah gölge
   passiveButton: '#DBE2EF', // #393E46 @ 80%
   
   // Katmanlar

@@ -71,6 +71,7 @@ export default function SearchUserScreen() {
       setSearchError(null);
 
       await createJoinRequest.mutateAsync({
+        invite_code: '',
         group_id: targetGroupId,
         requester_id: foundUser.id,
       });
@@ -227,7 +228,7 @@ export default function SearchUserScreen() {
           )}
 
           <GeliomButton
-            state={isSubmitting ? 'loading' : foundUser && (selectedGroup || selectedGroupId) ? 'active' : 'disabled'}
+            state={isSubmitting ? 'loading' : foundUser && (selectedGroup || selectedGroupId) ? 'active' : 'passive'}
             layout="full-width"
             size="large"
             icon="send"

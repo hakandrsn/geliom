@@ -58,7 +58,8 @@ export function NotificationHandler() {
       router.push('/(drawer)/home');
       console.log('✅ Ana sayfaya yönlendirildi');
     } catch (error) {
-      console.error('❌ Grup seçme hatası:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Grup seçme hatası:', errorMessage);
     }
   };
 
@@ -77,7 +78,7 @@ export function NotificationHandler() {
         return;
       }
 
-      console.log('✅ Grup bilgisi alındı:', { groupId, groupName });
+      console.log('✅ Grup bilgisi alındı:', groupId);
 
       const currentGroups = groupsRef.current;
 
@@ -96,7 +97,7 @@ export function NotificationHandler() {
         // Retry mekanizması: Grupları refresh et
         if (retryCountRef.current < MAX_RETRY && user?.id) {
           retryCountRef.current += 1;
-          console.log(`🔄 Grupları yenileme denemesi ${retryCountRef.current}/${MAX_RETRY}`);
+          // Grupları yenileme denemesi
           
           // Grupları refresh et
           await queryClient.invalidateQueries({ queryKey: groupKeys.userGroups(user.id) });
@@ -127,12 +128,21 @@ export function NotificationHandler() {
       handleGroupNavigation(group);
     };
 
-    // Event listener'ı ekle
-    OneSignal.Notifications.addEventListener('click', clickHandler);
+    // Event listener'ı güvenli şekilde ekle
+    try {
+      OneSignal.Notifications.addEventListener('click', clickHandler);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ NotificationHandler: Click listener hatası:', errorMessage);
+    }
 
     // Cleanup
     return () => {
-      OneSignal.Notifications.removeEventListener('click', clickHandler);
+      try {
+        OneSignal.Notifications.removeEventListener('click', clickHandler);
+      } catch (error) {
+        // Ignore cleanup errors
+      }
     };
   }, []); // Empty dependency array - handler is stable
 

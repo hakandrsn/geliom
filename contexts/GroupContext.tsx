@@ -11,6 +11,7 @@ interface GroupContextValue {
   setSelectedGroup: (group: GroupWithOwner | null) => Promise<void>;
   isLoading: boolean;
   groups: GroupWithOwner[];
+  refetchGroups: () => Promise<void>;
 }
 
 const GroupContext = createContext<GroupContextValue>({
@@ -18,6 +19,7 @@ const GroupContext = createContext<GroupContextValue>({
   setSelectedGroup: async () => {},
   isLoading: true,
   groups: [],
+  refetchGroups: async () => {},
 });
 
 export function GroupProvider({ children }: { children: React.ReactNode }) {
@@ -25,7 +27,7 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
   const [selectedGroup, setSelectedGroupState] = useState<GroupWithOwner | null>(null);
 
   // Kullanıcının tüm gruplarını fetch et
-  const { data: groups = [], isLoading: groupsLoading, error: groupsError } = useUserGroups(user?.id || '');
+  const { data: groups = [], isLoading: groupsLoading, error: groupsError, refetch } = useUserGroups(user?.id || '');
 
   // AsyncStorage'dan seçili grup ID'sini yükle (sadece bir kez, gruplar yüklendiğinde)
   useEffect(() => {
@@ -50,7 +52,8 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
           await AsyncStorage.setItem(SELECTED_GROUP_STORAGE_KEY, firstGroup.id);
         }
       } catch (error) {
-        console.error('Error loading selected group:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Error loading selected group:', errorMessage);
       }
     };
 
@@ -67,9 +70,20 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.removeItem(SELECTED_GROUP_STORAGE_KEY);
       }
     } catch (error) {
-      console.error('Error saving selected group:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error saving selected group:', errorMessage);
     }
   }, []);
+
+  // Grupları yeniden fetch et
+  const refetchGroups = useCallback(async () => {
+    try {
+      await refetch();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Error refetching groups:', errorMessage);
+    }
+  }, [refetch]);
 
   // Gruplar değiştiğinde, seçili grup hala geçerli mi kontrol et
   useEffect(() => {
@@ -101,8 +115,9 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
       setSelectedGroup,
       isLoading: effectiveLoading,
       groups,
+      refetchGroups,
     };
-  }, [selectedGroup, setSelectedGroup, groupsLoading, groups]);
+  }, [selectedGroup, setSelectedGroup, groupsLoading, groups, refetchGroups]);
 
   return <GroupContext.Provider value={value}>{children}</GroupContext.Provider>;
 }

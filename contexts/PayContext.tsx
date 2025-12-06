@@ -4,6 +4,64 @@ import { Linking } from 'react-native';
 import { AdaptyPaywall, AdaptyProfile, adapty } from 'react-native-adapty';
 import { createPaywallView } from 'react-native-adapty/dist/ui';
 
+// Global singleton flags - Adapty'nin yalnızca bir kez activate edilmesini garanti eder
+let isAdaptyActivating = false;
+let isAdaptyActivated = false;
+let activationPromise: Promise<void> | null = null;
+
+const activateAdapty = async (): Promise<void> => {
+  // Eğer zaten activate edildiyse, hemen dön
+  if (isAdaptyActivated) {
+    return;
+  }
+
+  // Eğer şu anda activate ediliyorsa, mevcut promise'i bekle
+  if (isAdaptyActivating && activationPromise) {
+    return activationPromise;
+  }
+
+  isAdaptyActivating = true;
+
+  activationPromise = (async () => {
+    const key = process.env.EXPO_PUBLIC_ADAPTY_PUBLIC_SDK_KEY || '';
+    if (!key) {
+      console.warn('⚠️ Adapty key bulunamadı!');
+      isAdaptyActivating = false;
+      isAdaptyActivated = true;
+      throw new Error('Adapty key not found');
+    }
+
+    try {
+      console.log('🔵 Adapty activate ediliyor...');
+      
+      // Timeout ile Adapty activation - 10 saniye içinde tamamlanmazsa devam et
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error('Adapty activation timeout')), 10000);
+      });
+      
+      const activationPromise = adapty.activate(key, { lockMethodsUntilReady: false });
+      
+      try {
+        await Promise.race([activationPromise, timeoutPromise]);
+        console.log('✅ Adapty başarıyla activate edildi');
+      } catch (timeoutError) {
+        console.warn('⚠️ Adapty activation timeout, devam ediliyor...');
+        // Timeout olsa bile devam et
+      }
+      
+      isAdaptyActivated = true;
+      isAdaptyActivating = false;
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Adapty activation hatası:', errorMessage);
+      isAdaptyActivating = false;
+      isAdaptyActivated = true; // Hata durumunda da flag'i set et ki tekrar denemesin
+      // Hata olsa bile throw etme, app çalışmaya devam etsin
+    }
+  })();
+
+  return activationPromise;
+};
 
 // Yeni arayüzler ve tipler
 interface ShowPaywallOptions {
@@ -32,25 +90,34 @@ const PayProvider = ({ children }: { children: React.ReactNode }) => {
     const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<Error | null>(null);
-    const [isReady, setIsReady] = useState<boolean>(false);
+    const [isReady, setIsReady] = useState<boolean>(isAdaptyActivated);
 
     // Paywall view'ı için ref'i tutuyoruz, sadece bir tane aktif olabilir.
     const paywallViewRef = useRef<any | null>(null);
 
-    // Adapty'nin başlatılmasını bekle
+    // Adapty'yi initialize et
     useEffect(() => {
-        const initializeAdapty = async () => {
+        let isMounted = true;
+
+        const initialize = async () => {
             try {
-                // Adapty'nin hazır olmasını bekle
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                setIsReady(true);
+                await activateAdapty();
+                if (isMounted) {
+                    setIsReady(true);
+                }
             } catch (err) {
-                console.error('Adapty initialization error:', err);
-                setIsReady(true); // Hata durumunda da devam et
+                if (isMounted) {
+                    setError(err as Error);
+                    setIsReady(true); // Hata durumunda da devam et
+                }
             }
         };
 
-        initializeAdapty();
+        initialize();
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const checkSubscription = async () => {

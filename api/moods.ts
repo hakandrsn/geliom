@@ -138,7 +138,8 @@ export const useDeleteMood = () => {
         .eq('mood_id', id);
 
       if (cleanupError) {
-        console.error('Mood cleanup error:', cleanupError);
+        const errorMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        console.error('Mood cleanup error:', errorMessage);
       }
 
       const { error } = await supabase
@@ -188,7 +189,6 @@ export const useGroupUserMoods = (groupId: string) => {
   return useQuery({
     queryKey: userGroupMoodKeys.group(groupId),
     queryFn: async (): Promise<UserGroupMoodWithMood[]> => {
-      console.log('📥 Fetching group user moods for group:', groupId);
       // Seçili grup için mood'lar + global mood'lar (group_id IS NULL)
       const { data, error } = await supabase
         .from('user_group_moods')
@@ -201,7 +201,6 @@ export const useGroupUserMoods = (groupId: string) => {
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      console.log('✅ Fetched group user moods:', data?.length || 0, 'moods');
       return data || [];
     },
     enabled: !!groupId,
@@ -222,65 +221,117 @@ export const useSetUserGroupMood = () => {
       // İlgili query'leri cancel et (refetch'i engelle)
       await queryClient.cancelQueries({ queryKey: userGroupMoodKeys.all });
 
-      // Mevcut cache'i al
-      const previousMoods: UserGroupMoodWithMood[] = [];
-      if (userGroupMoodData.group_id) {
-        const previousGroupMoods = queryClient.getQueryData<UserGroupMoodWithMood[]>(
-          userGroupMoodKeys.group(userGroupMoodData.group_id)
-        );
-        if (previousGroupMoods) {
-          previousMoods.push(...previousGroupMoods);
-        }
-      }
+      // Mevcut cache'i al (rollback için)
+      const previousGroupMoods = userGroupMoodData.group_id
+        ? queryClient.getQueryData<UserGroupMoodWithMood[]>(userGroupMoodKeys.group(userGroupMoodData.group_id))
+        : undefined;
+      const previousUserMood = userGroupMoodData.group_id
+        ? queryClient.getQueryData<UserGroupMoodWithMood>(userGroupMoodKeys.user(userGroupMoodData.user_id, userGroupMoodData.group_id))
+        : undefined;
 
-      // Optimistic update: Cache'i hemen güncelle
+      // Optimistic update: Mood bilgisini cache'den al ve kullan
       if (userGroupMoodData.group_id) {
+        // Eski mood bilgisini bul (mood detayları için)
+        const existingMood = previousGroupMoods?.find(m => 
+          m.user_id === userGroupMoodData.user_id && m.group_id === userGroupMoodData.group_id
+        );
+
+        // Yeni mood bilgisini al
+        const moodInfo = await supabase
+          .from('moods')
+          .select('*')
+          .eq('id', userGroupMoodData.mood_id)
+          .single();
+
+        const userInfo = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userGroupMoodData.user_id)
+          .single();
+
+        const optimisticData = {
+          ...userGroupMoodData,
+          updated_at: new Date().toISOString(),
+          mood: moodInfo.data || existingMood?.mood || null,
+          user: userInfo.data || existingMood?.user_id || null,
+        } as UserGroupMoodWithMood;
+
+        // 1. Grup query'sini güncelle
         queryClient.setQueryData<UserGroupMoodWithMood[]>(
           userGroupMoodKeys.group(userGroupMoodData.group_id),
           (old = []) => {
-            // Eski mood'u kaldır, yenisini ekle
             const filtered = old.filter(
               m => !(m.user_id === userGroupMoodData.user_id && m.group_id === userGroupMoodData.group_id)
             );
-            // Mood bilgisini almak için geçici bir obje oluştur
-            // Gerçek mood bilgisi mutation tamamlandığında gelecek
-            return [
-              ...filtered,
-              {
-                ...userGroupMoodData,
-                updated_at: new Date().toISOString(),
-                mood: null, // Mood bilgisi henüz yok, mutation sonrası gelecek
-                user: null, // User bilgisi henüz yok
-              } as any,
-            ];
+            return [...filtered, optimisticData];
           }
+        );
+
+        // 2. Kullanıcının kendi query'sini de güncelle
+        queryClient.setQueryData<UserGroupMoodWithMood>(
+          userGroupMoodKeys.user(userGroupMoodData.user_id, userGroupMoodData.group_id),
+          optimisticData
         );
       }
 
       // Rollback için context döndür
-      return { previousMoods };
+      return { previousGroupMoods, previousUserMood };
     },
-    // Hata durumunda rollback
-    onError: (err, userGroupMoodData, context) => {
-      console.error('❌ Mood update hatası, rollback yapılıyor:', err);
-      if (context?.previousMoods && userGroupMoodData.group_id) {
-        queryClient.setQueryData(
+    // Başarılı olduğunda gerçek veriyi cache'e koy
+    onSuccess: async (data, userGroupMoodData) => {
+      if (!userGroupMoodData.group_id) return;
+
+      // Mutation'dan dönen veriyi tam olarak fetch et (mood ve user bilgileriyle)
+      const { data: fullData } = await supabase
+        .from('user_group_moods')
+        .select(`
+          *,
+          mood:moods(*),
+          user:users(*)
+        `)
+        .eq('user_id', data.user_id)
+        .eq('group_id', data.group_id)
+        .single();
+
+      if (fullData) {
+        // 1. Grup query'sini güncelle (diğer kullanıcılar için)
+        queryClient.setQueryData<UserGroupMoodWithMood[]>(
           userGroupMoodKeys.group(userGroupMoodData.group_id),
-          context.previousMoods
+          (old = []) => {
+            const filtered = old.filter(
+              m => !(m.user_id === data.user_id && m.group_id === data.group_id)
+            );
+            return [...filtered, fullData as UserGroupMoodWithMood];
+          }
+        );
+
+        // 2. Kullanıcının kendi query'sini de güncelle (MoodSelector için)
+        queryClient.setQueryData<UserGroupMoodWithMood>(
+          userGroupMoodKeys.user(data.user_id, data.group_id),
+          fullData as UserGroupMoodWithMood
         );
       }
     },
-    // Başarılı veya hatalı olsun, son durumu kontrol et
-    onSettled: (data, error, userGroupMoodData) => {
-      // Query'leri invalidate et (gerçek data ile senkronize et)
-      queryClient.invalidateQueries({ queryKey: userGroupMoodKeys.all });
+    // Hata durumunda rollback
+    onError: (err, userGroupMoodData, context) => {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ Mood update hatası, rollback yapılıyor:', errorMessage);
+      
       if (userGroupMoodData.group_id) {
-        queryClient.invalidateQueries({ queryKey: userGroupMoodKeys.group(userGroupMoodData.group_id) });
-      }
-      if (data) {
-        queryClient.invalidateQueries({
-          queryKey: userGroupMoodKeys.user(data.user_id, data.group_id)
-        });
+        // Grup query'sini eski haline döndür
+        if (context?.previousGroupMoods) {
+          queryClient.setQueryData(
+            userGroupMoodKeys.group(userGroupMoodData.group_id),
+            context.previousGroupMoods
+          );
+        }
+        // Kullanıcının kendi query'sini eski haline döndür
+        if (context?.previousUserMood) {
+          queryClient.setQueryData(
+            userGroupMoodKeys.user(userGroupMoodData.user_id, userGroupMoodData.group_id),
+            context.previousUserMood
+          );
+        }
       }
     },
     mutationFn: async (userGroupMoodData: CreateUserGroupMood): Promise<UserGroupMood> => {
@@ -369,11 +420,9 @@ export const useGroupMoodsRealtime = (groupId: string) => {
 
   React.useEffect(() => {
     if (!groupId) {
-      console.log('⚠️ useGroupMoodsRealtime: groupId yok, subscription kurulmuyor');
       return;
     }
 
-    console.log('🔌 Setting up realtime subscription for moods, group:', groupId);
     const channelName = `group-moods-changes-${groupId}`;
     const channel = supabase
       .channel(channelName)
@@ -386,8 +435,6 @@ export const useGroupMoodsRealtime = (groupId: string) => {
           // Filter kaldırıldı: Client-side filtering yapacağız
         },
         async (payload) => {
-          console.log('🔄 Realtime mood update received:', payload);
-
           // Client-side filtering: Sadece ilgili grup için işle
           const newRecord = payload.new as any;
           const oldRecord = payload.old as any;
@@ -400,19 +447,8 @@ export const useGroupMoodsRealtime = (groupId: string) => {
             oldRecord?.group_id === null;
 
           if (!isRelevant) {
-            console.log('⏭️ Realtime update ignored (farklı grup):', {
-              new_group_id: newRecord?.group_id,
-              old_group_id: oldRecord?.group_id,
-              target_group_id: groupId,
-            });
             return;
           }
-
-          console.log('✅ Realtime mood update (relevant):', payload.eventType, {
-            user_id: newRecord?.user_id || oldRecord?.user_id,
-            group_id: newRecord?.group_id || oldRecord?.group_id,
-            mood_id: newRecord?.mood_id || oldRecord?.mood_id,
-          });
 
           // Direkt cache güncelleme (invalidate'den önce, daha hızlı UI update)
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -455,7 +491,14 @@ export const useGroupMoodsRealtime = (groupId: string) => {
                 }
               );
             } catch (error) {
-              console.error('❌ Cache update hatası (fallback to invalidate):', error);
+              // Android'de Error objesi ile ilgili reflection sorununu önlemek için
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Cache update hatası:', errorMessage);
+              // Hata durumunda invalidate et
+              queryClient.invalidateQueries({
+                queryKey: userGroupMoodKeys.group(groupId),
+                refetchType: 'active'
+              });
             }
           } else if (payload.eventType === 'DELETE') {
             // Mood silindi, cache'den kaldır
@@ -468,33 +511,19 @@ export const useGroupMoodsRealtime = (groupId: string) => {
                 )
             );
           }
-
-          // Invalidate et (tam senkronizasyon için)
-          queryClient.invalidateQueries({
-            queryKey: userGroupMoodKeys.group(groupId),
-            refetchType: 'active'
-          });
-          queryClient.invalidateQueries({
-            queryKey: userGroupMoodKeys.all,
-            refetchType: 'active'
-          });
+          // Cache direkt güncellendiği için invalidate'e gerek yok
         }
       )
       .subscribe((status, err) => {
-        console.log('📡 Realtime subscription status (moods):', status, err);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime subscription başarıyla kuruldu:', channelName);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Realtime subscription hatası:', err);
+        // Sadece hata durumlarında log
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Mood realtime hatası:', err);
         } else if (status === 'TIMED_OUT') {
-          console.error('⏱️ Realtime subscription timeout:', channelName);
-        } else if (status === 'CLOSED') {
-          console.warn('⚠️ Realtime subscription kapandı:', channelName);
+          console.error('⏱️ Mood realtime timeout');
         }
       });
 
     return () => {
-      console.log('🔌 Unsubscribing from mood changes for group:', groupId);
       supabase.removeChannel(channel);
     };
   }, [groupId, queryClient]);

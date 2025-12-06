@@ -3,12 +3,24 @@ import { Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBottomSheet } from '@/contexts/BottomSheetContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { getAvatarSource } from '@/utils/avatar';
 import { openPrivacyPolicy, openTermsOfUse } from '@/utils/linking';
 import { Ionicons } from '@expo/vector-icons';
 import { DrawerContentComponentProps, DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+    Alert,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Switch,
+    TextInput,
+    TouchableOpacity,
+    View,
+    type GestureResponderEvent
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
@@ -72,7 +84,8 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                 },
                 onError: (error) => {
                     Alert.alert('Hata', 'İsim güncellenirken bir hata oluştu');
-                    console.error('Display name update error:', error);
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    console.error('Display name update error:', errorMessage);
                 },
             }
         );
@@ -90,11 +103,11 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                     }
                 ]}
             >
-                <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                    <Typography variant="h4" color={colors.white}>
-                        {user?.display_name?.charAt(0).toUpperCase() || 'G'}
-                    </Typography>
-                </View>
+                <Image
+                    source={getAvatarSource(user?.avatar)}
+                    style={styles.avatar}
+                    contentFit="cover"
+                />
                 <View style={styles.profileInfo}>
                     <View style={styles.nameContainer}>
                         <Typography variant="h5" color={colors.text} style={styles.profileName}>
@@ -104,9 +117,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                             <Ionicons name="pencil" size={16} color={colors.secondaryText} />
                         </TouchableOpacity>
                     </View>
-                    <Typography variant="caption" color={colors.secondaryText}>
-                        {user?.email || 'user@geliom.app'}
-                    </Typography>
                 </View>
             </View>
 
@@ -209,13 +219,16 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                 transparent
                 animationType="fade"
                 onRequestClose={() => setEditNameModalVisible(false)}
+                statusBarTranslucent
             >
-                <TouchableOpacity
+                <Pressable
                     style={styles.modalOverlay}
-                    activeOpacity={1}
                     onPress={() => setEditNameModalVisible(false)}
                 >
-                    <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                    <Pressable 
+                        style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}
+                        onPress={(e: GestureResponderEvent) => e.stopPropagation()}
+                    >
                         <Typography variant="h4" color={colors.text} style={styles.modalTitle}>
                             İsminizi Düzenleyin
                         </Typography>
@@ -235,16 +248,16 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                         />
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity
+                            <Pressable
                                 style={[styles.modalButton, { backgroundColor: colors.stroke }]}
                                 onPress={() => setEditNameModalVisible(false)}
                             >
                                 <Typography variant="body" color={colors.text}>
                                     İptal
                                 </Typography>
-                            </TouchableOpacity>
+                            </Pressable>
                             
-                            <TouchableOpacity
+                            <Pressable
                                 style={[styles.modalButton, { backgroundColor: colors.primary }]}
                                 onPress={handleSaveDisplayName}
                                 disabled={updateUserMutation.isPending}
@@ -252,10 +265,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
                                 <Typography variant="body" color={colors.white}>
                                     {updateUserMutation.isPending ? 'Kaydediliyor...' : 'Kaydet'}
                                 </Typography>
-                            </TouchableOpacity>
+                            </Pressable>
                         </View>
-                    </View>
-                </TouchableOpacity>
+                    </Pressable>
+                </Pressable>
             </Modal>
         </View>
     );
