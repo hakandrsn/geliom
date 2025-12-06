@@ -9,7 +9,8 @@ import StatusSelector from '@/components/dashboard/StatusSelector';
 import { Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import type { GroupWithOwner } from '@/types/database';
+import type { GroupMemberWithUser, GroupWithOwner } from '@/types/database';
+import { groupTypeSelector } from '@/utils/group-type-selector';
 import React from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,7 +55,6 @@ export default function DashboardView({ group }: DashboardViewProps) {
   // Üyeleri ayır: Ben ve Diğerleri
   const myMemberInfo = allMembers?.find(m => m.user_id === user?.id);
   const otherMembers = allMembers?.filter(m => m.user_id !== user?.id) || [];
-
   // FlatList Header: Stacked Layout Components
   const DashboardHeader = () => (
     <View style={styles.headerContainer}>
@@ -86,11 +86,41 @@ export default function DashboardView({ group }: DashboardViewProps) {
       {/* 4. Section Title for Other Members */}
       <View style={styles.paddedSection}>
         <Typography variant="h5" color={colors.text} style={styles.sectionTitle}>
-          Diğer Üyeler ({otherMembers.length})
+          {groupTypeSelector(group.type)} ({otherMembers.length})
         </Typography>
       </View>
     </View>
   );
+
+  const statusMap = React.useMemo(() => {
+    const map: Record<string, typeof groupStatuses[0]> = {};
+    groupStatuses?.forEach(s => map[s.user_id] = s);
+    return map;
+  }, [groupStatuses]);
+
+  const moodMap = React.useMemo(() => {
+    const map: Record<string, typeof groupMoods[0]> = {};
+    groupMoods?.forEach(m => map[m.user_id] = m);
+    return map;
+  }, [groupMoods]);
+
+  const renderItem = ({ item }: { item: GroupMemberWithUser }) => {
+    const memberStatus = statusMap[item.user_id]; // O(1) - Anında erişim
+    const memberMood = moodMap[item.user_id];     // O(1) - Anında erişim
+    const nickname = getNicknameForMember(item.user_id);
+
+    return (
+      <View style={styles.paddedSection}>
+        <MemberCard
+          member={item}
+          status={memberStatus}
+          mood={memberMood}
+          isMe={false}
+          nickname={nickname}
+        />
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container]}>
@@ -99,23 +129,7 @@ export default function DashboardView({ group }: DashboardViewProps) {
         keyExtractor={(item) => item.user_id}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
         ListHeaderComponent={DashboardHeader}
-        renderItem={({ item }) => {
-          const memberStatus = groupStatuses?.find(s => s.user_id === item.user_id);
-          const memberMood = groupMoods?.find(m => m.user_id === item.user_id);
-          const nickname = getNicknameForMember(item.user_id);
-
-          return (
-            <View style={styles.paddedSection}>
-              <MemberCard
-                member={item}
-                status={memberStatus}
-                mood={memberMood}
-                isMe={false}
-                nickname={nickname}
-              />
-            </View>
-          );
-        }}
+        renderItem={renderItem}
         ListEmptyComponent={
           <Typography variant="body" color={colors.secondaryText} style={{ textAlign: 'center', marginTop: 20 }}>
             Bu grupta başka kimse yok.
@@ -140,14 +154,14 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   headerContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   paddedSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
   sectionTitle: {
-    marginBottom: 12,
+    marginBottom: 4,
     marginLeft: 4,
-    marginTop: 8,
+    marginTop: 20,
   },
 });

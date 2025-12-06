@@ -19,7 +19,7 @@ export default function GroupHeader({ group, onPress }: GroupHeaderProps) {
     ? group.name.length > 15
       ? group.name.substring(0, 15) + '...'
       : group.name
-    : 'Birlik Oluştur';
+    : 'Grup Oluştur';
 
   return (
     <BouncyButton

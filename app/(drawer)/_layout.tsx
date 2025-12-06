@@ -137,6 +137,18 @@ export default function DrawerLayout() {
                     drawerItemStyle: { display: 'none' },
                 }}
             />
+            <Drawer.Screen
+                name="help-support"
+                options={{
+                    drawerItemStyle: { display: 'none' },
+                }}
+            />
+            <Drawer.Screen
+                name="settings"
+                options={{
+                    drawerItemStyle: { display: 'none' },
+                }}
+            />
         </Drawer>
     );
 }

@@ -90,9 +90,18 @@ const PayProvider = ({ children }: { children: React.ReactNode }) => {
         setError(null);
         try {
             const paywall = await adapty.getPaywall(placementId);
+            console.log('Paywall fetched:', JSON.stringify(paywall, null, 2));
+
+            try {
+                const products = await adapty.getPaywallProducts(paywall);
+                console.log('Paywall products fetched:', JSON.stringify(products, null, 2));
+            } catch (productError) {
+                console.error('Error fetching paywall products explicitly:', productError);
+            }
+
             const view = await createPaywallView(paywall);
             paywallViewRef.current = view;
-
+            console.log('Paywall view created:', view);
             // 3. Olay dinleyicilerini (event handlers) ayarla
             view.registerEventHandlers({
                 onPurchaseCompleted: (purchase: any) => {

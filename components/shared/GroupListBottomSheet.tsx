@@ -25,13 +25,19 @@ function GroupListBottomSheetComponent() {
   const handleCreateGroup = useCallback(() => {
     setActionModalVisible(false);
     closeBottomSheet();
-    router.push('/(drawer)/(group)/create-group');
+    // Bottom sheet tamamen kapandıktan sonra navigate et
+    setTimeout(() => {
+      router.push('/(drawer)/(group)/create-group');
+    }, 300);
   }, [closeBottomSheet, router]);
 
   const handleJoinGroup = useCallback(() => {
     setActionModalVisible(false);
     closeBottomSheet();
-    router.push('/(drawer)/(group)/join-group');
+    // Bottom sheet tamamen kapandıktan sonra navigate et
+    setTimeout(() => {
+      router.push('/(drawer)/(group)/join-group');
+    }, 300);
   }, [closeBottomSheet, router]);
 
   // Gruplar yüklenirken gösterilecek içerik
@@ -40,7 +46,7 @@ function GroupListBottomSheetComponent() {
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Typography variant="caption" color={colors.secondaryText} style={{ marginTop: 12 }}>
-          Birlikler yükleniyor...
+          Gruplar yükleniyor...
         </Typography>
       </View>
     );
@@ -50,7 +56,7 @@ function GroupListBottomSheetComponent() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Typography variant="h3" color={colors.text} style={styles.headerTitle}>
-          Birliklerim
+          Gruplarım
         </Typography>
         <TouchableOpacity
           onPress={() => setActionModalVisible(true)}
@@ -65,7 +71,7 @@ function GroupListBottomSheetComponent() {
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={48} color={colors.secondaryText} />
             <Typography variant="body" color={colors.secondaryText} style={styles.emptyText}>
-              Henüz bir birliğe üye değilsin.
+              Henüz bir grupta değilsin.
             </Typography>
           </View>
         ) : (

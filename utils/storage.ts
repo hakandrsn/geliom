@@ -3,6 +3,37 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Storage Keys
 const STATUS_ORDER_KEY = (userId: string) => `status_order_${userId}`;
 const MOOD_ORDER_KEY = (userId: string) => `mood_order_${userId}`;
+export const SELECTED_GROUP_STORAGE_KEY = '@geliom:selected_group_id';
+
+/**
+ * Seçili grup ID'sini AsyncStorage'dan alır
+ * @returns Seçili grup ID'si veya null
+ */
+export const getSelectedGroupId = async (): Promise<string | null> => {
+  try {
+    const groupId = await AsyncStorage.getItem(SELECTED_GROUP_STORAGE_KEY);
+    return groupId;
+  } catch (error) {
+    console.error('Selected group ID okuma hatası:', error);
+    return null;
+  }
+};
+
+/**
+ * Seçili grup ID'sini AsyncStorage'a kaydeder
+ * @param groupId Grup ID'si (null ise kaldırır)
+ */
+export const setSelectedGroupId = async (groupId: string | null): Promise<void> => {
+  try {
+    if (groupId) {
+      await AsyncStorage.setItem(SELECTED_GROUP_STORAGE_KEY, groupId);
+    } else {
+      await AsyncStorage.removeItem(SELECTED_GROUP_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('Selected group ID kaydetme hatası:', error);
+  }
+};
 
 /**
  * Kullanıcının status sıralamasını local storage'dan alır

@@ -26,6 +26,7 @@ export interface GeliomButtonProps {
   style?: ViewStyle;
   textColor?: string;
   backgroundColor?: string;
+  textStyle?: any;
 }
 
 const GeliomButton: React.FC<GeliomButtonProps> = ({
@@ -39,11 +40,12 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
   style,
   textColor,
   backgroundColor,
+  textStyle,
 }) => {
   const { colors } = useTheme();
 
-  // Adaçayı tarzı organik boyutlandırma
-  const sageStyleConfig = {
+  // Organik boyutlandırma
+  const buttonSizeConfig = {
     small: {
       paddingHorizontal: 14,
       paddingVertical: 8,
@@ -82,41 +84,41 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     },
   };
 
-  const currentConfig = sageStyleConfig[size];
+  const currentConfig = buttonSizeConfig[size];
 
   const getStateColors = () => {
     // Tema renklerinden güvenli erişim
-    const forest = colors.primary;
-    const sage = colors.tertiary;
-    const pine = colors.secondary;
+    const activeColor = colors.primary;
+    const passiveColor = colors.tertiary;
+    const loadingColor = colors.secondary;
 
     switch (state) {
       case 'active':
         return {
-          backgroundColor: backgroundColor || forest,
+          backgroundColor: backgroundColor || activeColor,
           textColor: textColor || '#FFFFFF',
-          shadowColor: forest,
+          shadowColor: activeColor,
           borderColor: 'transparent',
         };
       case 'passive':
         return {
-          backgroundColor: backgroundColor || sage + '40', // %40 opaklık
+          backgroundColor: backgroundColor || passiveColor + '40', // %40 opaklık
           textColor: textColor || colors.primary,
           shadowColor: 'transparent',
           borderColor: 'transparent',
         };
       case 'loading':
         return {
-          backgroundColor: backgroundColor || pine,
+          backgroundColor: backgroundColor || loadingColor,
           textColor: textColor || '#FFFFFF',
-          shadowColor: pine,
+          shadowColor: loadingColor,
           borderColor: 'transparent',
         };
       default:
         return {
-          backgroundColor: backgroundColor || forest,
+          backgroundColor: backgroundColor || activeColor,
           textColor: textColor || '#FFFFFF',
-          shadowColor: forest,
+          shadowColor: activeColor,
           borderColor: 'transparent',
         };
     }
@@ -179,7 +181,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
       <Text style={[styles.text, {
         color: stateColors.textColor,
         fontSize: currentConfig.fontSize,
-      }]}>
+      }, textStyle]}>
         {children}
       </Text>
     );

@@ -154,6 +154,7 @@ export const useUserGroups = (userId: string) => {
       return groups;
     },
     enabled: !!userId,
+    staleTime: 5 * 60 * 1000, // 5 dakika - cache'teki veri 5 dk boyunca fresh sayılır, tekrar fetch etmez
     structuralSharing: false, // Her zaman yeni array referansı - context güncellemeleri için gerekli
   });
 };

@@ -9,9 +9,9 @@ export interface ThemeColors {
   tertiary: string;
 
   // Component Durumları (GeliomButton vb. için)
-  forest: string; // Active State
-  sage: string;   // Passive State
-  pine: string;   // Loading State
+  activeState: string; // Active State
+  passiveState: string;   // Passive State
+  loadingState: string;   // Loading State
   
   // Gradyanlar
   linearGradient: string[];
@@ -42,6 +42,7 @@ export interface ThemeColors {
   disabled: string;
   stroke: string;
   shadow: string;
+  passiveButton: string;
 
   // Katmanlar
   overlay: string;
@@ -57,10 +58,10 @@ export const lightColors: ThemeColors = {
   secondary: '#E11D48',      // Rose 600
   tertiary: '#8B5CF6',       // Violet 500
   
-  // Component Durumları (Doğa isimleri fonksiyona eşlendi)
-  forest: '#4338CA',         // Indigo 700 (Aktif/Güçlü)
-  sage: 'rgba(99, 102, 241, 0.15)', // Indigo 500 @ 15% (Pasif/Hafif)
-  pine: '#6366F1',           // Indigo 500 (Yükleniyor/Canlı)
+  // Component Durumları
+  activeState: '#4338CA',         // Indigo 700 (Aktif/Güçlü)
+  passiveState: 'rgba(99, 102, 241, 0.15)', // Indigo 500 @ 15% (Pasif/Hafif)
+  loadingState: '#6366F1',           // Indigo 500 (Yükleniyor/Canlı)
   
   linearGradient: ['#4F46E5', '#7C3AED'], // Indigo'dan Violet'e
   
@@ -90,6 +91,7 @@ export const lightColors: ThemeColors = {
   disabled: '#CBD5E1',       // Slate 300
   stroke: '#E2E8F0',         // Slate 200
   shadow: 'rgba(79, 70, 229, 0.15)', // İndigo tonlu gölge
+  passiveButton: 'rgba(57, 62, 70, 0.3)', // #393E46 @ 80%
   
   // Katmanlar
   overlay: 'rgba(15, 23, 42, 0.6)',     // Koyu Slate Overlay
@@ -106,9 +108,9 @@ export const darkColors: ThemeColors = {
   tertiary: '#A78BFA',       // Violet 400
   
   // Component Durumları
-  forest: '#6366F1',         // Indigo 500 (Aktif)
-  sage: 'rgba(129, 140, 248, 0.2)', // Indigo 400 @ 20% (Pasif)
-  pine: '#4F46E5',           // Indigo 600 (Yükleniyor)
+  activeState: '#6366F1',         // Indigo 500 (Aktif)
+  passiveState: 'rgba(129, 140, 248, 0.2)', // Indigo 400 @ 20% (Pasif)
+  loadingState: '#4F46E5',           // Indigo 600 (Yükleniyor)
   
   linearGradient: ['#6366F1', '#8B5CF6'],
   
@@ -138,6 +140,7 @@ export const darkColors: ThemeColors = {
   disabled: '#334155',       // Slate 700
   stroke: '#334155',         // Slate 700
   shadow: 'rgba(0, 0, 0, 0.5)', // Derin siyah gölge
+  passiveButton: '#DBE2EF', // #393E46 @ 80%
   
   // Katmanlar
   overlay: 'rgba(0, 0, 0, 0.7)',

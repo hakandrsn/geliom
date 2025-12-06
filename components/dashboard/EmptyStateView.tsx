@@ -12,7 +12,7 @@ export default function EmptyStateView() {
   return (
     <View style={styles.container}>
       <View style={[styles.iconCircle, { backgroundColor: colors.tertiary + '30' }]}>
-        <Ionicons name="leaf-outline" size={64} color={colors.primary} />
+        <Ionicons name="people-outline" size={64} color={colors.primary} />
       </View>
       
       <Typography variant="h3" color={colors.text} style={styles.title}>
@@ -21,7 +21,7 @@ export default function EmptyStateView() {
       
       <Typography variant="body" color={colors.secondaryText} style={styles.description}>
         Henüz bir grubun seçili değil veya bir gruba üye değilsin. 
-        Arkadaşlarınla ve ailenle doğanın ritminde buluşmak için bir adım at.
+        Arkadaşlarınla ve ailenle bağlantıda kalmak için bir grup oluştur veya katıl.
       </Typography>
 
       <View style={styles.actions}>

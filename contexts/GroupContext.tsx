@@ -4,7 +4,7 @@ import type { GroupWithOwner } from '@/types/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-const SELECTED_GROUP_STORAGE_KEY = '@geliom:selected_group_id';
+export const SELECTED_GROUP_STORAGE_KEY = '@geliom:selected_group_id';
 
 interface GroupContextValue {
   selectedGroup: GroupWithOwner | null;
@@ -92,10 +92,14 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
   // Context value'yu memoize et - groups array referansı değiştiğinde güncellenir
   // structuralSharing: false sayesinde her zaman yeni array referansı gelir
   const value: GroupContextValue = useMemo(() => {
+    // Eğer gruplar cache'ten gelip dolu ise, loading false olsun
+    // Bu sayede cache'ten hemen veri gösterebiliriz
+    const effectiveLoading = groupsLoading && groups.length === 0;
+    
     return {
       selectedGroup,
       setSelectedGroup,
-      isLoading: groupsLoading,
+      isLoading: effectiveLoading,
       groups,
     };
   }, [selectedGroup, setSelectedGroup, groupsLoading, groups]);

@@ -1,46 +1,30 @@
-import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
-import { useRouter } from "expo-router";
+import { SplashScreen as CustomSplashScreen } from "@/components/shared";
+import { useAppInitialization } from "@/hooks/useAppInitialization";
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
 
 export default function Index() {
-  const { initializeAuth, isLoading, session } = useAuth();
-  const { colors ,toggleTheme} = useTheme();
-  const router = useRouter();
+  // App initialization - tüm kritik verileri yükle (auth + groups)
+  const { isInitialized, isLoading } = useAppInitialization();
 
-  // Auth'u başlat
+  // Native splash screen'i gizle
   useEffect(() => {
-    console.log('🔵 Index: Auth başlatılıyor...');
-    initializeAuth();
-  }, [initializeAuth]);
+    SplashScreen.hideAsync();
+  }, []);
 
-  // Font'lar yüklenene kadar splash screen'i göster
+  // Not: Routing mantığı _layout.tsx'te yapılıyor
+  // Bu sayfa sadece veriler yüklenene kadar splash screen gösterir
+  // isInitialized true ve isLoading false olunca, _layout routing yapacak
+
   useEffect(() => {
-    if (!isLoading) {
-      console.log('🔵 Index: Loading tamamlandı, splash screen gizleniyor');
-      SplashScreen.hideAsync();
+    if (isInitialized && !isLoading) {
+      console.log('✅ Index: App initialization tamamlandı (auth + groups), _layout routing yapacak');
+    } else {
+      console.log('🔵 Index: Loading state - isInitialized:', isInitialized, 'isLoading:', isLoading);
     }
-  }, [isLoading]);
+  }, [isInitialized, isLoading]);
 
-  // Routing _layout.tsx'te yapılıyor, burada sadece loading göster
-  // Eğer session varsa ve loading bitmişse, _layout routing yapacak
-  useEffect(() => {
-    console.log('🔵 Index: State kontrolü - isLoading:', isLoading, 'session:', !!session);
-  }, [isLoading, session]);
-
-  // Loading state
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: colors.background,
-      }}
-    >
-      <ActivityIndicator size="large" color={colors.primary} />
-    </View>
-  );
+  // Veriler yüklenene kadar splash screen göster
+  // index.tsx her zaman splash screen gösterir, routing _layout'ta olur
+  return <CustomSplashScreen />;
 }
