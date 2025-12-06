@@ -15,9 +15,9 @@ export default function GroupStackLayout() {
   const pendingRequestsCount = joinRequests.length;
   const handleJoinRequestsPress = () => {
     if (selectedGroup) {
-        router.push('/(drawer)/(group)/join-requests');
+      router.push('/(drawer)/(group)/join-requests');
     }
-};
+  };
 
 
   return (
@@ -28,39 +28,26 @@ export default function GroupStackLayout() {
     >
       <Stack.Screen
         name="create-group"
-        options={{
-          headerShown: false,
-        }}
+
       />
       <Stack.Screen
         name="join-group"
-        options={{
-          headerShown: false,
-        }}
+
       />
       <Stack.Screen
         name="join-requests"
-        options={{
-          headerShown: false,
-        }}
+
       />
       <Stack.Screen
         name="search-user"
-        options={{
-          headerShown: false,
-        }}
+
       />
       <Stack.Screen
         name="manage-members"
-        options={{
-          headerShown: false,
-        }}
+
       />
       <Stack.Screen
         name="group-management"
-        options={{
-          headerShown: false,
-        }}
       />
     </Stack>
   );
@@ -81,8 +68,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-},
-badge: {
+  },
+  badge: {
     position: 'absolute',
     top: -4,
     right: -4,
@@ -92,9 +79,9 @@ badge: {
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
-},
-badgeText: {
+  },
+  badgeText: {
     fontSize: 10,
     fontWeight: 'bold',
-},
+  },
 });

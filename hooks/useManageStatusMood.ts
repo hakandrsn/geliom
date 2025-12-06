@@ -14,7 +14,6 @@ export function useManageStatusMood(groupId: string) {
   const deleteMood = useDeleteMood();
 
   const { isSubscribed, showPaywall } = usePay();
-
   const handleAddStatus = async (text: string, emoji?: string) => {
     if (!user) return;
     try {

@@ -1,3 +1,4 @@
+import { useGroupEventsRealtime } from "@/api/events";
 import { useGroupMoodsRealtime } from "@/api/moods";
 import { useGroupStatusesRealtime } from "@/api/statuses";
 import { DashboardView, EmptyStateView } from "@/components/dashboard";
@@ -16,6 +17,7 @@ export default function HomeScreen() {
     // selectedGroup değiştiğinde otomatik olarak yeni grubu dinlemeye başlar
     useGroupStatusesRealtime(selectedGroup?.id || '');
     useGroupMoodsRealtime(selectedGroup?.id || '');
+    useGroupEventsRealtime(selectedGroup?.id || '');
 
     // Loading durumu
     if (isLoading) {

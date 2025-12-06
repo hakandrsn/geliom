@@ -1,4 +1,8 @@
+import { groupKeys } from '@/api/groups';
+import { useAuth } from '@/contexts/AuthContext';
 import { useGroupContext } from '@/contexts/GroupContext';
+import { setSelectedGroupId } from '@/utils/storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { OneSignal } from 'react-native-onesignal';
@@ -9,12 +13,18 @@ import { OneSignal } from 'react-native-onesignal';
  * OneSignal bildirimlerini handle eder:
  * - Bildirime tıklandığında ilgili gruba yönlendirir
  * - GroupContext'i kullanarak grubu seçer
+ * - AsyncStorage'ı günceller
+ * - Grup bulunamadığında grupları refresh eder
  */
 export function NotificationHandler() {
   const router = useRouter();
+  const { user } = useAuth();
   const { setSelectedGroup, groups } = useGroupContext();
+  const queryClient = useQueryClient();
   const groupsRef = useRef(groups);
   const pendingGroupIdRef = useRef<string | null>(null);
+  const retryCountRef = useRef<number>(0);
+  const MAX_RETRY = 3;
 
   // Update ref when groups change
   useEffect(() => {
@@ -33,9 +43,16 @@ export function NotificationHandler() {
 
   const handleGroupNavigation = async (group: any) => {
     try {
-      // Grubu seç
+      // Grubu seç (context)
       await setSelectedGroup(group);
       console.log('✅ Grup seçildi:', group.name);
+
+      // AsyncStorage'ı da güncelle
+      await setSelectedGroupId(group.id);
+      console.log('✅ AsyncStorage güncellendi:', group.id);
+
+      // Retry counter'ı sıfırla
+      retryCountRef.current = 0;
 
       // Ana sayfaya yönlendir
       router.push('/(drawer)/home');
@@ -75,9 +92,35 @@ export function NotificationHandler() {
       const group = currentGroups.find(g => g.id === groupId);
       if (!group) {
         console.warn('⚠️ Grup bulunamadı (listede yok):', groupId);
-        // Belki de yeni katıldı ve liste güncellenmedi?
-        // Yine de pending'e atabiliriz, belki liste güncellenir
-        pendingGroupIdRef.current = groupId;
+        
+        // Retry mekanizması: Grupları refresh et
+        if (retryCountRef.current < MAX_RETRY && user?.id) {
+          retryCountRef.current += 1;
+          console.log(`🔄 Grupları yenileme denemesi ${retryCountRef.current}/${MAX_RETRY}`);
+          
+          // Grupları refresh et
+          await queryClient.invalidateQueries({ queryKey: groupKeys.userGroups(user.id) });
+          
+          // Pending'e ekle, bir sonraki güncelleme geldiğinde denenecek
+          pendingGroupIdRef.current = groupId;
+          
+          // Biraz bekle ve tekrar dene
+          setTimeout(() => {
+            const refreshedGroups = groupsRef.current;
+            const foundGroup = refreshedGroups.find(g => g.id === groupId);
+            if (foundGroup) {
+              console.log('✅ Grup refresh sonrası bulundu:', foundGroup.name);
+              handleGroupNavigation(foundGroup);
+              pendingGroupIdRef.current = null;
+            }
+          }, 1000);
+          return;
+        }
+        
+        // Max retry'a ulaşıldıysa veya user yoksa
+        console.error('❌ Grup bulunamadı ve retry limit aşıldı:', groupId);
+        retryCountRef.current = 0;
+        pendingGroupIdRef.current = null;
         return;
       }
 

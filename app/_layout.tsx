@@ -1,4 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppInitialization } from '@/hooks/useAppInitialization';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { adapty } from 'react-native-adapty';
@@ -36,37 +37,36 @@ if (!isAdaptyActivated) {
   activateAdapty();
 }
 
-// Ana Layout Component'i - Sadece yapıyı gösterir ve routing yapar
+// Ana Layout Component'i - Auth state'e göre routing yapar
 function RootLayoutContent() {
-  const { session, isLoading } = useAuth();
+  const { session } = useAuth();
+  const { isInitialized, isLoading } = useAppInitialization();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    // Yükleme tamamlanmadıysa bir şey yapma.
-    if (isLoading) {
-      console.log('🔵 Layout: Loading, routing bekleniyor...');
+    // Initialization tamamlanmadıysa bekle (auth + groups)
+    if (!isInitialized || isLoading) {
+      console.log('🔵 Layout: Initialization devam ediyor, bekliyor...');
       return;
     }
 
-    console.log('🔵 Layout: Routing kontrolü - session:', !!session, 'segments:', segments);
+    console.log('🔵 Layout: Initialization tamamlandı, routing yapılıyor...');
 
     const inAuthGroup = segments[0] === '(auth)';
 
+    // Session yoksa ve login sayfasında değilse, login'e yönlendir
     if (!session && !inAuthGroup) {
-      console.log('🔵 Layout: Session yok, login sayfasına yönlendiriliyor...');
+      console.log('🔵 Layout: Session yok, login\'e yönlendiriliyor');
       router.replace('/(auth)/login');
     }
+    // Session varsa ve login sayfasındaysa, home'a yönlendir
     else if (session && inAuthGroup) {
-      console.log('🔵 Layout: Session var ve auth grubunda, ana sayfaya yönlendiriliyor...');
+      console.log('🔵 Layout: Session var, home\'a yönlendiriliyor');
       router.replace('/(drawer)/home');
     }
-    else if (session && !inAuthGroup) {
-      console.log('🔵 Layout: Session var, zaten doğru sayfada');
-    }
-  }, [session, isLoading, segments, router]);
+  }, [session, isInitialized, isLoading, segments]);
 
-  // Yönlendirme mantığı tamamlandığında, ilgili ekranı göster.
   return <Slot />;
 }
 

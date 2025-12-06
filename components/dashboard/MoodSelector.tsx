@@ -4,7 +4,6 @@ import { GeliomButton } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useManageStatusMood } from '@/hooks/useManageStatusMood';
-import { BlurView } from 'expo-blur';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
 
@@ -81,12 +80,11 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
               styles.buttonContainer,
               isSelected && styles.buttonContainerSelected
             ]}>
-              {/* Blur and Color Background */}
+              {/* Background */}
               <View style={[StyleSheet.absoluteFill, { borderRadius: 12, overflow: 'hidden' }]}>
-                <BlurView intensity={80} tint="systemMaterial" style={StyleSheet.absoluteFill} />
                 <View style={[
                   StyleSheet.absoluteFill,
-                  { backgroundColor: colors.background, opacity: isSelected ? 0.8 : 0.5 }
+                  { backgroundColor: colors.secondaryBackground }
                 ]} />
               </View>
 
@@ -95,10 +93,11 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
                 onPress={() => handleMoodSelect(item.id)}
                 size="small"
                 backgroundColor="transparent"
-                textColor={isSelected ? colors.primary : colors.text}
+                textColor={isSelected ? colors.tertiary : colors.text}
+                textStyle={isSelected ? {  fontWeight: 'bold' } : undefined}
                 style={[
                   styles.button,
-                  { borderColor: isSelected ? colors.blurBackground : 'transparent' }
+                  { borderColor: 'transparent' }
                 ] as any}
               >
                 {item.emoji} {item.text}
@@ -120,7 +119,6 @@ export default function MoodSelector({ groupId, currentMoodId, onAddPress }: Moo
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 24,
   },
   listContent: {
     paddingLeft: 12, // Only left padding as requested
