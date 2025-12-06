@@ -106,7 +106,8 @@ export const useUserGroups = (userId: string) => {
         .eq('user_id', userId);
       
       if (memberError) {
-        console.error('Error fetching user groups:', memberError);
+        const errorMessage = memberError instanceof Error ? memberError.message : String(memberError);
+        console.error('Error fetching user groups:', errorMessage);
         throw memberError;
       }
       
@@ -127,7 +128,8 @@ export const useUserGroups = (userId: string) => {
         .in('group_id', groupIds);
       
       if (countError) {
-        console.error('Error fetching group member counts:', countError);
+        const errorMessage = countError instanceof Error ? countError.message : String(countError);
+        console.error('Error fetching group member counts:', errorMessage);
         throw countError;
       }
 
@@ -333,8 +335,6 @@ export const useLeaveGroup = () => {
       if (joinRequestError) {
         console.error('Join request temizleme hatası (non-blocking):', joinRequestError);
         // Hata olsa bile devam et (non-blocking)
-      } else {
-        console.log('✅ Join request kayıtları temizlendi:', { groupId, userId });
       }
     },
     onSuccess: (_, { groupId, userId }) => {
@@ -599,7 +599,8 @@ export const useCreateJoinRequest = () => {
           );
         }
       } catch (error) {
-        console.error('Bildirim gönderme hatası (non-blocking):', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Bildirim gönderme hatası (non-blocking):', errorMessage);
       }
     },
   });
@@ -678,7 +679,8 @@ export const useApproveJoinRequest = () => {
           );
         }
       } catch (error) {
-        console.error('Bildirim gönderme hatası (non-blocking):', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Bildirim gönderme hatası (non-blocking):', errorMessage);
       }
     },
   });
@@ -730,7 +732,8 @@ export const useRejectJoinRequest = () => {
           );
         }
       } catch (error) {
-        console.error('Bildirim gönderme hatası (non-blocking):', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Bildirim gönderme hatası (non-blocking):', errorMessage);
       }
     },
   });

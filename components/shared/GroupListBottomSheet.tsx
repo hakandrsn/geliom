@@ -1,8 +1,18 @@
 import { getAvatarSource } from '@/utils/avatar';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  type GestureResponderEvent
+} from 'react-native';
 import { useBottomSheet } from '../../contexts/BottomSheetContext';
 import { useGroupContext } from '../../contexts/GroupContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -96,7 +106,7 @@ function GroupListBottomSheetComponent() {
                         <Image
                           source={getAvatarSource(group.owner.avatar)}
                           style={styles.avatarImage}
-                          resizeMode="cover"
+                          contentFit="cover"
                         />
                       </View>
                     ) : (
@@ -145,14 +155,17 @@ function GroupListBottomSheetComponent() {
         transparent
         animationType="fade"
         onRequestClose={() => setActionModalVisible(false)}
+        statusBarTranslucent
       >
-        <TouchableOpacity
+        <Pressable
           style={styles.modalOverlay}
-          activeOpacity={1}
           onPress={() => setActionModalVisible(false)}
         >
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <TouchableOpacity
+          <Pressable 
+            style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}
+            onPress={(e: GestureResponderEvent) => e.stopPropagation()}
+          >
+            <Pressable
               style={[styles.modalOption, { borderBottomColor: colors.stroke }]}
               onPress={handleCreateGroup}
             >
@@ -160,9 +173,9 @@ function GroupListBottomSheetComponent() {
               <Typography variant="h5" color={colors.text} style={{ marginLeft: 12 }}>
                 Yeni Grup Oluştur
               </Typography>
-            </TouchableOpacity>
+            </Pressable>
             
-            <TouchableOpacity
+            <Pressable
               style={styles.modalOption}
               onPress={handleJoinGroup}
             >
@@ -170,9 +183,9 @@ function GroupListBottomSheetComponent() {
               <Typography variant="h5" color={colors.text} style={{ marginLeft: 12 }}>
                 Gruba Katıl
               </Typography>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -277,11 +290,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 20,
     gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   actionButtonText: {
     fontWeight: 'bold',

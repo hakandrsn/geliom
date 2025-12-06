@@ -1,4 +1,4 @@
-import { useGroupJoinRequests, useGroupJoinRequestsRealtime } from '@/api/groups';
+import { useGroupJoinRequestsRealtime } from '@/api/groups';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
@@ -17,13 +17,6 @@ export default function DrawerLayout() {
     const { openBottomSheet } = useBottomSheet();
     const { colors } = useTheme();
     const router = useRouter();
-    const { user } = useAuth();
-
-    const isOwner = selectedGroup?.owner_id === user?.id;
-    
-    // Katılma isteklerini çek (sadece owner için)
-    const { data: joinRequests = [] } = useGroupJoinRequests(selectedGroup?.id || '', 'pending');
-    const pendingRequestsCount = joinRequests.length;
     
     // Realtime subscription
     useGroupJoinRequestsRealtime(selectedGroup?.id || '');

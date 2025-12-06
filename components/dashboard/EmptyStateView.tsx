@@ -1,13 +1,28 @@
 import { GeliomButton, Typography } from '@/components/shared';
+import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 export default function EmptyStateView() {
   const { colors } = useTheme();
   const router = useRouter();
+  const { refetchGroups } = useGroupContext();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refetchGroups();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('Gruplar yenilenirken hata oluştu:', errorMessage);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -29,6 +44,17 @@ export default function EmptyStateView() {
           state="active"
           size="large"
           layout="full-width"
+          icon="refresh"
+          onPress={handleRefresh}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? 'Kontrol Ediliyor...' : 'Gruplarımı Kontrol Et'}
+        </GeliomButton>
+
+        <GeliomButton
+          state="active"
+          size="large"
+          layout="full-width"
           icon="add-circle"
           onPress={() => router.push('/(drawer)/(group)/create-group')}
         >
@@ -40,7 +66,6 @@ export default function EmptyStateView() {
           size="large"
           layout="full-width"
           icon="people"
-          variant="outline"
           onPress={() => router.push('/(drawer)/(group)/join-group')}
         >
           Gruba Katıl

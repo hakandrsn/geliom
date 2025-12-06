@@ -200,13 +200,6 @@ import { GeliomButton } from '@/components/shared';
 ```
 
 ## 🎨 Görsel Özellikler
-
-### Shadow ve Elevation
-- **shadowOffset**: `{ width: 0, height: 4 }`
-- **shadowOpacity**: `0.25`
-- **shadowRadius**: `8`
-- **elevation**: `6` (Android)
-
 ### Typography
 - **fontFamily**: `Comfortaa-SemiBold`
 - **textAlign**: `center`

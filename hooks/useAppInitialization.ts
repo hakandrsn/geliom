@@ -30,8 +30,10 @@ export const useAppInitialization = (): AppInitializationState => {
   } = useUserGroups(user?.id || '');
 
   // Genel loading durumu
-  // Auth loading bitmeli VE (session yoksa hemen tamamlanabilir VEYA session varsa gruplar yüklenmeli)
-  const isLoading = authLoading || (session && user ? isGroupsLoading : false);
+  // 1. Auth loading bitmeli
+  // 2. Session varsa user yüklenmeli (session var ama user yok ise bekle)
+  // 3. Session ve user varsa gruplar yüklenmeli
+  const isLoading = authLoading || (session && !user) || (session && user ? isGroupsLoading : false);
 
   // Genel hata durumu
   const error = groupsError || null;

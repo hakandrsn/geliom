@@ -9,7 +9,20 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  TextInput,
+  TouchableOpacity,
+  View,
+  type GestureResponderEvent
+} from 'react-native';
 
 export default function GroupManagementScreen() {
   const { user } = useAuth();
@@ -336,17 +349,22 @@ export default function GroupManagementScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setGroupNameModalVisible(false)}
+        statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <Pressable
           style={styles.modalOverlay}
+          onPress={() => setGroupNameModalVisible(false)}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.modalScrollContent}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
+            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
               Grup Adını Değiştir
             </Typography>
             
@@ -389,8 +407,10 @@ export default function GroupManagementScreen() {
               </GeliomButton>
             </View>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+              </ScrollView>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
 
       {/* Özel Durum Ekle Modal */}
@@ -399,17 +419,22 @@ export default function GroupManagementScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setStatusModalVisible(false)}
+        statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <Pressable
           style={styles.modalOverlay}
+          onPress={() => setStatusModalVisible(false)}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.modalScrollContent}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
+            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.modalScrollContent}
+              >
+                <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+                <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
               Özel Durum Ekle
             </Typography>
             
@@ -477,8 +502,10 @@ export default function GroupManagementScreen() {
               </GeliomButton>
             </View>
           </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+              </ScrollView>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
 
       {/* Özel Mood Ekle Modal */}
@@ -487,14 +514,19 @@ export default function GroupManagementScreen() {
         transparent
         animationType="slide"
         onRequestClose={() => setMoodModalVisible(false)}
+        statusBarTranslucent
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        <Pressable
           style={styles.modalOverlay}
+          onPress={() => setMoodModalVisible(false)}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.modalScrollContent}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.modalScrollContent}
           >
             <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
             <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
@@ -551,8 +583,10 @@ export default function GroupManagementScreen() {
               </GeliomButton>
             </View>
           </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+              </ScrollView>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
       </Modal>
     </BaseLayout>
   );

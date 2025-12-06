@@ -2,8 +2,8 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getAvailableAvatars, getAvatarSource } from '@/utils/avatar';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { GeliomButton } from './index';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, View, type GestureResponderEvent } from 'react-native';
+import GeliomButton from './GeliomButton';
 import Typography from './Typography';
 
 interface AvatarSelectorProps {
@@ -31,24 +31,23 @@ export default function AvatarSelector({ visible, currentAvatar, onSelect, onClo
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <TouchableOpacity
+      <Pressable
         style={styles.modalOverlay}
-        activeOpacity={1}
         onPress={onClose}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+        <Pressable
+          onPress={(e: GestureResponderEvent) => e.stopPropagation()}
           style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}
         >
           <View style={styles.header}>
             <Typography variant="h5" color={colors.text}>
               Avatar Seç
             </Typography>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           <ScrollView
@@ -58,7 +57,7 @@ export default function AvatarSelector({ visible, currentAvatar, onSelect, onClo
             {avatars.map((avatar) => {
               const isSelected = selectedAvatar === avatar;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={avatar}
                   onPress={() => setSelectedAvatar(avatar)}
                   style={[
@@ -76,7 +75,7 @@ export default function AvatarSelector({ visible, currentAvatar, onSelect, onClo
                       <Ionicons name="checkmark" size={16} color={colors.white} />
                     </View>
                   )}
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </ScrollView>
@@ -95,8 +94,8 @@ export default function AvatarSelector({ visible, currentAvatar, onSelect, onClo
               Kaydet
             </GeliomButton>
           </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

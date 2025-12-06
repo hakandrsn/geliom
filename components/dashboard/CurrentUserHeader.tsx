@@ -16,8 +16,8 @@ interface CurrentUserHeaderProps {
 export default function CurrentUserHeader({ member, status, mood }: CurrentUserHeaderProps) {
   const { colors } = useTheme();
 
-  const user = member.user as any;
-  const displayName = user?.full_name || user?.email?.split('@')[0] || 'Ben';
+  const user = member.user;
+  const displayName = user?.display_name || user?.custom_user_id || 'Ben';
   const avatarSource = getAvatarSource(user?.avatar);
 
   const statusText = status?.status?.text;
@@ -38,6 +38,7 @@ export default function CurrentUserHeader({ member, status, mood }: CurrentUserH
           <Image
             source={avatarSource}
             style={styles.avatar}
+            contentFit="cover"
           />
           <View style={styles.greetingContainer}>
             <Typography variant="caption" color={colors.secondaryText}>
@@ -105,11 +106,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   statusContainer: {
     flexDirection: 'row',

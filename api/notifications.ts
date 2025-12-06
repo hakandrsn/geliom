@@ -35,8 +35,9 @@ export const sendNotification = async (params: SendNotificationParams) => {
       throw rateLimitError;
     }
     
-    console.error('Bildirim gönderme hatası:', error);
-    throw error;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Bildirim gönderme hatası:', errorMessage);
+    throw new Error(errorMessage);
   }
 
       return data;

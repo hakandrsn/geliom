@@ -134,7 +134,6 @@ export const useGroupUserStatuses = (groupId: string) => {
   return useQuery({
     queryKey: userStatusKeys.group(groupId),
     queryFn: async (): Promise<UserStatusWithStatus[]> => {
-      console.log('📥 Fetching group user statuses for group:', groupId);
       // Seçili grup için status'lar + global status'lar (group_id IS NULL)
       const { data, error } = await supabase
         .from('user_statuses')
@@ -147,7 +146,6 @@ export const useGroupUserStatuses = (groupId: string) => {
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      console.log('✅ Fetched group user statuses:', data?.length || 0, 'statuses');
       return data || [];
     },
     enabled: !!groupId,
@@ -236,7 +234,8 @@ export const useDeleteStatus = () => {
         .eq('status_id', id);
 
       if (cleanupError) {
-        console.error('Status cleanup error:', cleanupError);
+        const errorMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        console.error('Status cleanup error:', errorMessage);
         // RLS veya başka bir hata olabilir, ama ana silme işlemini denemeye devam edelim
       }
 
@@ -264,65 +263,117 @@ export const useSetUserStatus = () => {
       // İlgili query'leri cancel et (refetch'i engelle)
       await queryClient.cancelQueries({ queryKey: userStatusKeys.all });
 
-      // Mevcut cache'i al
-      const previousStatuses: UserStatusWithStatus[] = [];
-      if (userStatusData.group_id) {
-        const previousGroupStatuses = queryClient.getQueryData<UserStatusWithStatus[]>(
-          userStatusKeys.group(userStatusData.group_id)
-        );
-        if (previousGroupStatuses) {
-          previousStatuses.push(...previousGroupStatuses);
-        }
-      }
+      // Mevcut cache'i al (rollback için)
+      const previousGroupStatuses = userStatusData.group_id
+        ? queryClient.getQueryData<UserStatusWithStatus[]>(userStatusKeys.group(userStatusData.group_id))
+        : undefined;
+      const previousUserStatus = userStatusData.group_id
+        ? queryClient.getQueryData<UserStatusWithStatus>(userStatusKeys.user(userStatusData.user_id, userStatusData.group_id))
+        : undefined;
 
-      // Optimistic update: Cache'i hemen güncelle
+      // Optimistic update: Status bilgisini cache'den al ve kullan
       if (userStatusData.group_id) {
+        // Eski status bilgisini bul (status detayları için)
+        const existingStatus = previousGroupStatuses?.find(s => 
+          s.user_id === userStatusData.user_id && s.group_id === userStatusData.group_id
+        );
+
+        // Yeni status bilgisini al
+        const statusInfo = await supabase
+          .from('statuses')
+          .select('*')
+          .eq('id', userStatusData.status_id)
+          .single();
+
+        const userInfo = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userStatusData.user_id)
+          .single();
+
+        const optimisticData = {
+          ...userStatusData,
+          updated_at: new Date().toISOString(),
+          status: statusInfo.data || existingStatus?.status || null,
+          user: userInfo.data || existingStatus?.user || null,
+        } as UserStatusWithStatus;
+
+        // 1. Grup query'sini güncelle
         queryClient.setQueryData<UserStatusWithStatus[]>(
           userStatusKeys.group(userStatusData.group_id),
           (old = []) => {
-            // Eski status'u kaldır, yenisini ekle
             const filtered = old.filter(
               s => !(s.user_id === userStatusData.user_id && s.group_id === userStatusData.group_id)
             );
-            // Status bilgisini almak için geçici bir obje oluştur
-            // Gerçek status bilgisi mutation tamamlandığında gelecek
-            return [
-              ...filtered,
-              {
-                ...userStatusData,
-                updated_at: new Date().toISOString(),
-                status: null, // Status bilgisi henüz yok, mutation sonrası gelecek
-                user: null, // User bilgisi henüz yok
-              } as any,
-            ];
+            return [...filtered, optimisticData];
           }
+        );
+
+        // 2. Kullanıcının kendi query'sini de güncelle
+        queryClient.setQueryData<UserStatusWithStatus>(
+          userStatusKeys.user(userStatusData.user_id, userStatusData.group_id),
+          optimisticData
         );
       }
 
       // Rollback için context döndür
-      return { previousStatuses };
+      return { previousGroupStatuses, previousUserStatus };
     },
-    // Hata durumunda rollback
-    onError: (err, userStatusData, context) => {
-      console.error('❌ Status update hatası, rollback yapılıyor:', err);
-      if (context?.previousStatuses && userStatusData.group_id) {
-        queryClient.setQueryData(
+    // Başarılı olduğunda gerçek veriyi cache'e koy
+    onSuccess: async (data, userStatusData) => {
+      if (!userStatusData.group_id) return;
+
+      // Mutation'dan dönen veriyi tam olarak fetch et (status ve user bilgileriyle)
+      const { data: fullData } = await supabase
+        .from('user_statuses')
+        .select(`
+          *,
+          status:statuses(*),
+          user:users(*)
+        `)
+        .eq('user_id', data.user_id)
+        .eq('group_id', data.group_id)
+        .single();
+
+      if (fullData) {
+        // 1. Grup query'sini güncelle (diğer kullanıcılar için)
+        queryClient.setQueryData<UserStatusWithStatus[]>(
           userStatusKeys.group(userStatusData.group_id),
-          context.previousStatuses
+          (old = []) => {
+            const filtered = old.filter(
+              s => !(s.user_id === data.user_id && s.group_id === data.group_id)
+            );
+            return [...filtered, fullData as UserStatusWithStatus];
+          }
+        );
+
+        // 2. Kullanıcının kendi query'sini de güncelle (StatusSelector için)
+        queryClient.setQueryData<UserStatusWithStatus>(
+          userStatusKeys.user(data.user_id, data.group_id),
+          fullData as UserStatusWithStatus
         );
       }
     },
-    // Başarılı veya hatalı olsun, son durumu kontrol et
-    onSettled: (data, error, userStatusData) => {
-      // Query'leri invalidate et (gerçek data ile senkronize et)
-      queryClient.invalidateQueries({ queryKey: userStatusKeys.all });
+    // Hata durumunda rollback
+    onError: (err, userStatusData, context) => {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('❌ Status update hatası, rollback yapılıyor:', errorMessage);
+      
       if (userStatusData.group_id) {
-        queryClient.invalidateQueries({ queryKey: userStatusKeys.group(userStatusData.group_id) });
-      }
-      if (data) {
-        queryClient.invalidateQueries({
-          queryKey: userStatusKeys.user(data.user_id, data.group_id)
-        });
+        // Grup query'sini eski haline döndür
+        if (context?.previousGroupStatuses) {
+          queryClient.setQueryData(
+            userStatusKeys.group(userStatusData.group_id),
+            context.previousGroupStatuses
+          );
+        }
+        // Kullanıcının kendi query'sini eski haline döndür
+        if (context?.previousUserStatus) {
+          queryClient.setQueryData(
+            userStatusKeys.user(userStatusData.user_id, userStatusData.group_id),
+            context.previousUserStatus
+          );
+        }
       }
     },
     mutationFn: async (userStatusData: CreateUserStatus): Promise<UserStatus> => {
@@ -381,27 +432,16 @@ export const useSetUserStatus = () => {
                 });
 
               if (pendingError) {
-                console.error('Pending notification oluşturma/güncelleme hatası:', pendingError);
+                const errorMessage = pendingError instanceof Error ? pendingError.message : String(pendingError);
+                console.error('Pending notification hatası:', errorMessage);
                 // Hata olsa bile status güncellemesi başarılı sayılır (non-blocking)
-              } else {
-                console.log('✅ Pending notification oluşturuldu/güncellendi:', {
-                  sender_id: data.user_id,
-                  group_id: data.group_id,
-                  status_id: data.status_id,
-                  receiver_count: receiverIds.length,
-                  is_custom: statusData.is_custom,
-                  has_messages: !!(statusData.messages && statusData.messages.length > 0),
-                });
               }
             }
-          } else {
-            console.log('ℹ️ Status notifies false, bildirim gönderilmeyecek:', {
-              status_id: data.status_id,
-              is_custom: statusData?.is_custom,
-            });
           }
         } catch (error) {
-          console.error('Pending notification işlemi hatası (non-blocking):', error);
+          // Android'de Error objesi ile ilgili reflection sorununu önlemek için
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('Pending notification işlemi hatası (non-blocking):', errorMessage);
         }
       }
 
@@ -505,11 +545,9 @@ export const useGroupStatusesRealtime = (groupId: string) => {
 
   React.useEffect(() => {
     if (!groupId) {
-      console.log('⚠️ useGroupStatusesRealtime: groupId yok, subscription kurulmuyor');
       return;
     }
 
-    console.log('🔌 Setting up realtime subscription for group:', groupId);
     const channelName = `group-statuses-changes-${groupId}`;
     const channel = supabase
       .channel(channelName)
@@ -522,8 +560,6 @@ export const useGroupStatusesRealtime = (groupId: string) => {
           // Filter kaldırıldı: Client-side filtering yapacağız
         },
         async (payload) => {
-          console.log('🔄 Realtime status update received:', payload);
-
           // Client-side filtering: Sadece ilgili grup için işle
           const newRecord = payload.new as any;
           const oldRecord = payload.old as any;
@@ -536,21 +572,10 @@ export const useGroupStatusesRealtime = (groupId: string) => {
             oldRecord?.group_id === null;
 
           if (!isRelevant) {
-            console.log('⏭️ Realtime update ignored (farklı grup):', {
-              new_group_id: newRecord?.group_id,
-              old_group_id: oldRecord?.group_id,
-              target_group_id: groupId,
-            });
             return;
           }
 
-          console.log('✅ Realtime status update (relevant):', payload.eventType, {
-            user_id: newRecord?.user_id || oldRecord?.user_id,
-            group_id: newRecord?.group_id || oldRecord?.group_id,
-            status_id: newRecord?.status_id || oldRecord?.status_id,
-          });
-
-          // Direkt cache güncelleme (invalidate'den önce, daha hızlı UI update)
+          // Direkt cache güncelleme (invalidate'e gerek yok, realtime güncel veriyi veriyor)
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             // Status ve user bilgilerini fetch et
             try {
@@ -591,7 +616,14 @@ export const useGroupStatusesRealtime = (groupId: string) => {
                 }
               );
             } catch (error) {
-              console.error('❌ Cache update hatası (fallback to invalidate):', error);
+              // Android'de Error objesi ile ilgili reflection sorununu önlemek için
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ Cache update hatası:', errorMessage);
+              // Hata durumunda invalidate et
+              queryClient.invalidateQueries({
+                queryKey: userStatusKeys.group(groupId),
+                refetchType: 'active'
+              });
             }
           } else if (payload.eventType === 'DELETE') {
             // Status silindi, cache'den kaldır
@@ -604,33 +636,19 @@ export const useGroupStatusesRealtime = (groupId: string) => {
                 )
             );
           }
-
-          // Invalidate et (tam senkronizasyon için)
-          queryClient.invalidateQueries({
-            queryKey: userStatusKeys.group(groupId),
-            refetchType: 'active'
-          });
-          queryClient.invalidateQueries({
-            queryKey: userStatusKeys.all,
-            refetchType: 'active'
-          });
+          // Cache direkt güncellendiği için invalidate'e gerek yok
         }
       )
       .subscribe((status, err) => {
-        console.log('📡 Realtime subscription status (statuses):', status, err);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime subscription başarıyla kuruldu:', channelName);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Realtime subscription hatası:', err);
+        // Sadece hata durumlarında log
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Status realtime hatası:', err);
         } else if (status === 'TIMED_OUT') {
-          console.error('⏱️ Realtime subscription timeout:', channelName);
-        } else if (status === 'CLOSED') {
-          console.warn('⚠️ Realtime subscription kapandı:', channelName);
+          console.error('⏱️ Status realtime timeout');
         }
       });
 
     return () => {
-      console.log('🔌 Unsubscribing from status changes for group:', groupId);
       supabase.removeChannel(channel);
     };
   }, [groupId, queryClient]);

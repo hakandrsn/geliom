@@ -4,11 +4,11 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { ReactNode } from 'react';
 import {
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    ViewStyle,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  ViewStyle,
 } from 'react-native';
 
 // Button variant tipleri
@@ -113,7 +113,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           gradient: [colors.primary, colors.secondary] as const,
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: colors.primary,
           useGradient: true,
           useBlur: false,
         };
@@ -123,7 +122,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: colors.secondary,
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: colors.secondary,
           useGradient: false,
           useBlur: false,
         };
@@ -133,7 +131,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: colors.tertiary,
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: colors.tertiary,
           useGradient: false,
           useBlur: false,
         };
@@ -143,7 +140,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: colors.success,
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: colors.success,
           useGradient: false,
           useBlur: false,
         };
@@ -153,7 +149,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: 'transparent',
           textColor: colors.text,
           borderColor: colors.stroke,
-          shadowColor: colors.shadow,
           useGradient: false,
           useBlur: true,
         };
@@ -163,7 +158,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: 'transparent',
           textColor: colors.primary,
           borderColor: colors.primary,
-          shadowColor: 'transparent',
           useGradient: false,
           useBlur: false,
         };
@@ -173,7 +167,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: colors.primary + '20',
           textColor: colors.primary,
           borderColor: 'transparent',
-          shadowColor: 'transparent',
           useGradient: false,
           useBlur: false,
         };
@@ -183,7 +176,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: colors.error,
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: colors.error,
           useGradient: false,
           useBlur: false,
         };
@@ -193,7 +185,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).forest || '#1B5E20',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).forest || '#1B5E20',
           useGradient: false,
           useBlur: false,
         };
@@ -203,7 +194,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).mint || '#00E676',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).mint || '#00E676',
           useGradient: false,
           useBlur: false,
         };
@@ -213,7 +203,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).lime || '#8BC34A',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).lime || '#8BC34A',
           useGradient: false,
           useBlur: false,
         };
@@ -223,7 +212,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).emerald || '#009688',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).emerald || '#009688',
           useGradient: false,
           useBlur: false,
         };
@@ -233,7 +221,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).sage || '#87A96B',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).sage || '#87A96B',
           useGradient: false,
           useBlur: false,
         };
@@ -243,7 +230,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).olive || '#6B8E23',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).olive || '#6B8E23',
           useGradient: false,
           useBlur: false,
         };
@@ -253,7 +239,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).jade || '#00A86B',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).jade || '#00A86B',
           useGradient: false,
           useBlur: false,
         };
@@ -263,7 +248,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).teal || '#008080',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).teal || '#008080',
           useGradient: false,
           useBlur: false,
         };
@@ -273,7 +257,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).pine || '#01796F',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).pine || '#01796F',
           useGradient: false,
           useBlur: false,
         };
@@ -283,7 +266,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).moss || '#8A9A5B',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).moss || '#8A9A5B',
           useGradient: false,
           useBlur: false,
         };
@@ -292,8 +274,7 @@ const BlurButton: React.FC<BlurButtonProps> = ({
         return {
           backgroundColor: (colors as any).seafoam || '#71BC78',
           textColor: colors.white,
-          borderColor: 'transparent',
-          shadowColor: (colors as any).seafoam || '#71BC78',
+          borderColor: 'transparent',   
           useGradient: false,
           useBlur: false,
         };
@@ -303,7 +284,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: (colors as any).spring || '#00FF7F',
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: (colors as any).spring || '#00FF7F',
           useGradient: false,
           useBlur: false,
         };
@@ -313,7 +293,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
           backgroundColor: colors.primary,
           textColor: colors.white,
           borderColor: 'transparent',
-          shadowColor: colors.primary,
           useGradient: false,
           useBlur: false,
         };
@@ -329,11 +308,6 @@ const BlurButton: React.FC<BlurButtonProps> = ({
     borderColor: variantStyle.borderColor,
     opacity: disabled ? 0.5 : 1,
     width: fullWidth ? '100%' : undefined,
-    shadowColor: variantStyle.shadowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
     overflow: 'hidden',
     ...style,
   };

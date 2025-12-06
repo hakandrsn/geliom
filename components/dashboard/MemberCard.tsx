@@ -3,8 +3,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 import type { GroupMemberWithUser, UserGroupMoodWithMood, UserStatusWithStatus } from '@/types/database';
 import { getAvatarSource } from '@/utils/avatar';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -21,15 +22,17 @@ interface MemberCardProps {
   isMe?: boolean;
   nickname?: string;
   variant?: 'default' | 'large'; // 'large' is now the "Minimalist Status Header"
+  onPress?: () => void;
 }
 
-export default function MemberCard({
+function MemberCard({
   member,
   status,
   mood,
   isMe,
   nickname,
-  variant = 'default'
+  variant = 'default',
+  onPress
 }: MemberCardProps) {
   const { colors } = useTheme();
   const user = member.user;
@@ -67,19 +70,29 @@ export default function MemberCard({
     opacity: statusOpacity.value,
   }));
 
+  // Görüntülenecek isim - memoize edildi
+  const displayName = useMemo(
+    () => nickname || user?.display_name || user?.custom_user_id || '',
+    [nickname, user?.display_name, user?.custom_user_id]
+  );
+  
+  const realName = useMemo(
+    () => nickname ? (user?.display_name || user?.custom_user_id) : undefined,
+    [nickname, user?.display_name, user?.custom_user_id]
+  );
+
+  // Durum rengi ve ikonu - memoize edildi
+  const statusColor = useMemo(
+    () => status?.status?.is_custom ? colors.primary : (status?.status?.notifies ? colors.warning : colors.secondaryText),
+    [status?.status?.is_custom, status?.status?.notifies, colors]
+  );
+  
+  const statusText = useMemo(() => status?.status?.text, [status?.status?.text]);
+  const isLarge = useMemo(() => variant === 'large', [variant]);
+
   if (!user) return null;
 
-  // Görüntülenecek isim: nickname varsa onu, yoksa display_name veya custom_user_id
-  const displayName = nickname || user.display_name || user.custom_user_id;
-  const realName = nickname ? (user.display_name || user.custom_user_id) : undefined;
-
-  // Durum rengi ve ikonu (Varsayılan: gri/bilinmiyor)
-  const statusColor = status?.status?.is_custom ? colors.primary : (status?.status?.notifies ? colors.warning : colors.secondaryText);
-  const statusText = status?.status?.text;
-
-  const isLarge = variant === 'large';
-
-  return (
+  const cardContent = (
     <View style={[
       styles.container,
       isLarge && styles.largeContainer,
@@ -113,7 +126,7 @@ export default function MemberCard({
           <Image
             source={getAvatarSource(user.avatar)}
             style={[styles.avatarImage, isLarge && styles.largeAvatarImage]}
-            resizeMode="cover"
+            contentFit="cover"
           />
 
           {/* Mood Emojisi (Avatarın köşesinde) */}
@@ -208,6 +221,17 @@ export default function MemberCard({
       </View>
     </View>
   );
+
+  // Eğer onPress varsa ve isMe false ise, TouchableOpacity ile sar
+  if (onPress && !isMe && !isLarge) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+        {cardContent}
+      </TouchableOpacity>
+    );
+  }
+
+  return cardContent;
 }
 
 const styles = StyleSheet.create({
@@ -216,19 +240,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
     // Gölge efekti
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3.84,
-    elevation: 2,
     overflow: 'hidden', // Glow efekti için
   },
   largeContainer: {
     marginBottom: 16,
     borderRadius: 0,
     borderWidth: 0,
-    shadowOpacity: 0,
-    elevation: 0,
     backgroundColor: 'transparent',
   },
   contentWrapper: {
@@ -276,11 +293,6 @@ const styles = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
     zIndex: 10,
   },
   largeMoodBadge: {
@@ -315,3 +327,6 @@ const styles = StyleSheet.create({
     // Not used in minimalist
   },
 });
+
+// React.memo ile sarmalayıp shallow comparison yapıyoruz
+export default React.memo(MemberCard);
