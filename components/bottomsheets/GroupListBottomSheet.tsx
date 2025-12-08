@@ -17,7 +17,7 @@ import { useBottomSheet } from '../../contexts/BottomSheetContext';
 import { useGroupContext } from '../../contexts/GroupContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { BouncyButton } from '../anim/AnimatedComponents';
-import Typography from './Typography';
+import { Typography } from '../shared';
 
 function GroupListBottomSheetComponent() {
   // Context'ten gerçek verileri al
@@ -53,7 +53,7 @@ function GroupListBottomSheetComponent() {
   // Gruplar yüklenirken gösterilecek içerik
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { backgroundColor: colors.secondaryBackground, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Typography variant="caption" color={colors.secondaryText} style={{ marginTop: 12 }}>
           Gruplar yükleniyor...
@@ -63,7 +63,7 @@ function GroupListBottomSheetComponent() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.secondaryBackground }]}>
       <View style={styles.header}>
         <Typography variant="h3" color={colors.text} style={styles.headerTitle}>
           Gruplarım

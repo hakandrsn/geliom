@@ -1,11 +1,12 @@
 import { useGroupJoinRequestsRealtime } from '@/api/groups';
+import { GroupListBottomSheet } from '@/components/bottomsheets';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import React, { useCallback } from 'react';
 import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { CustomDrawerContent } from '../../components';
-import { GroupHeader, GroupListBottomSheet } from '../../components/shared';
+import { GroupHeader } from '../../components/shared';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBottomSheet } from '../../contexts/BottomSheetContext';
 import { useGroupContext } from '../../contexts/GroupContext';

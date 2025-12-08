@@ -59,7 +59,7 @@ export default function JoinGroupScreen() {
         [
           {
             text: 'Tamam',
-            onPress: () => router.back(),
+            onPress: () => router.replace('/(drawer)/home'),
           },
         ]
       );

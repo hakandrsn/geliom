@@ -2,8 +2,10 @@ import { useMutedNotificationsList, useToggleMuteUser } from '@/api';
 import { useGroupMembers, useLeaveGroup, useTransferGroupOwnership } from '@/api/groups';
 import { useDeleteNickname, useGroupNicknames, useUpsertNickname } from '@/api/nicknames';
 import { useUpdateUserAvatar } from '@/api/users';
-import { AvatarSelector, BaseLayout, GeliomButton, Typography } from '@/components/shared';
+import { NicknameBottomSheet, TransferOwnershipBottomSheet } from '@/components/bottomsheets';
+import { AvatarSelector, BaseLayout, Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBottomSheet } from '@/contexts/BottomSheetContext';
 import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { GroupMemberWithUser, User } from '@/types/database';
@@ -16,16 +18,9 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
-  View,
-  type GestureResponderEvent
+  View
 } from 'react-native';
 
 export default function ManageMembersScreen() {
@@ -33,11 +28,8 @@ export default function ManageMembersScreen() {
   const { user } = useAuth();
   const { selectedGroup } = useGroupContext();
   const router = useRouter();
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
   
-  const [selectedMember, setSelectedMember] = useState<GroupMemberWithUser | null>(null);
-  const [nicknameModalVisible, setNicknameModalVisible] = useState(false);
-  const [nicknameText, setNicknameText] = useState('');
-  const [transferOwnerModalVisible, setTransferOwnerModalVisible] = useState(false);
   const [avatarSelectorVisible, setAvatarSelectorVisible] = useState(false);
   
   const { data: members = [], isLoading: membersLoading } = useGroupMembers(selectedGroup?.id || '');
@@ -69,45 +61,47 @@ export default function ManageMembersScreen() {
   
   const handleNicknamePress = (member: GroupMemberWithUser) => {
     const currentNickname = getNicknameForUser(member.user_id);
-    setSelectedMember(member);
-    setNicknameText(currentNickname || '');
-    setNicknameModalVisible(true);
-  };
-  
-  const handleSaveNickname = async () => {
-    if (!selectedMember || !user?.id || !selectedGroup?.id) return;
     
-    if (nicknameText.trim()) {
-      try {
-        await upsertNickname.mutateAsync({
-          group_id: selectedGroup.id,
-          setter_user_id: user.id,
-          target_user_id: selectedMember.user_id,
-          nickname: nicknameText.trim(),
-        });
-        setNicknameModalVisible(false);
-        setNicknameText('');
-        setSelectedMember(null);
-      } catch (error) {
-        console.error('Nickname kaydetme hatası:', error);
-        Alert.alert('Hata', 'Nickname kaydedilemedi');
-      }
-    } else {
-      // Boş ise sil
-      try {
-        await deleteNickname.mutateAsync({
-          groupId: selectedGroup.id,
-          setterUserId: user.id,
-          targetUserId: selectedMember.user_id,
-        });
-        setNicknameModalVisible(false);
-        setNicknameText('');
-        setSelectedMember(null);
-      } catch (error) {
-        console.error('Nickname silme hatası:', error);
-        Alert.alert('Hata', 'Nickname silinemedi');
-      }
-    }
+    openBottomSheet(
+      <NicknameBottomSheet
+        member={member}
+        currentNickname={currentNickname}
+        onSave={async (nickname) => {
+          if (!user?.id || !selectedGroup?.id) return;
+          
+          if (nickname.trim()) {
+            await upsertNickname.mutateAsync({
+              group_id: selectedGroup.id,
+              setter_user_id: user.id,
+              target_user_id: member.user_id,
+              nickname: nickname.trim(),
+            });
+          } else {
+            await deleteNickname.mutateAsync({
+              groupId: selectedGroup.id,
+              setterUserId: user.id,
+              targetUserId: member.user_id,
+            });
+          }
+          closeBottomSheet();
+        }}
+        onDelete={
+          currentNickname
+            ? async () => {
+                if (!user?.id || !selectedGroup?.id) return;
+                await deleteNickname.mutateAsync({
+                  groupId: selectedGroup.id,
+                  setterUserId: user.id,
+                  targetUserId: member.user_id,
+                });
+                closeBottomSheet();
+              }
+            : undefined
+        }
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ['45%'] }
+    );
   };
   
   const handleToggleMute = async (member: GroupMemberWithUser) => {
@@ -127,34 +121,31 @@ export default function ManageMembersScreen() {
     }
   };
   
-  const handleTransferOwnership = async (member: GroupMemberWithUser) => {
+  const handleTransferOwnership = (member: GroupMemberWithUser) => {
     if (!selectedGroup?.id || !isOwner) return;
     
-    Alert.alert(
-      'Yöneticilik Devri',
-      `${member.user?.display_name || member.user?.custom_user_id} kullanıcısına yöneticiliği devretmek istediğinize emin misiniz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        {
-          text: 'Devret',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await transferOwnership.mutateAsync({
-                groupId: selectedGroup.id,
-                newOwnerId: member.user_id,
-              });
-              setTransferOwnerModalVisible(false);
-              setSelectedMember(null);
-              Alert.alert('Başarılı', 'Yöneticilik devredildi');
-              router.back();
-            } catch (error) {
-              console.error('Yöneticilik devri hatası:', error);
-              Alert.alert('Hata', 'Yöneticilik devredilemedi');
-            }
-          },
-        },
-      ]
+    openBottomSheet(
+      <TransferOwnershipBottomSheet
+        member={member}
+        groupName={selectedGroup.name}
+        onConfirm={async () => {
+          try {
+            await transferOwnership.mutateAsync({
+              groupId: selectedGroup.id,
+              newOwnerId: member.user_id,
+            });
+            closeBottomSheet();
+            Alert.alert('Başarılı', 'Yöneticilik devredildi');
+            // Artık yönetici olmadığımız için home'a replace ile git
+            router.replace('/(drawer)/home');
+          } catch (error) {
+            console.error('Yöneticilik devri hatası:', error);
+            Alert.alert('Hata', 'Yöneticilik devredilemedi');
+          }
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ['55%'] }
     );
   };
   
@@ -169,7 +160,6 @@ export default function ManageMembersScreen() {
         userId: user.id,
         avatar,
       });
-      // useUpdateUserAvatar hook'u zaten userKeys.all, userKeys.detail ve userKeys.current query'lerini invalidate ediyor
       Alert.alert('Başarılı', 'Avatar güncellendi');
     } catch (error: any) {
       console.error('Avatar güncelleme hatası:', error);
@@ -197,6 +187,7 @@ export default function ManageMembersScreen() {
                   groupId: selectedGroup.id,
                   userId: user.id,
                 });
+                // Gruptan ayrıldığımız için home'a replace ile git
                 router.replace('/(drawer)/home');
               } catch (error) {
                 console.error('Gruptan ayrılma hatası:', error);
@@ -351,10 +342,7 @@ export default function ManageMembersScreen() {
           {/* Yöneticilik Devri (sadece owner, kendisi hariç) */}
           {isOwner && !isCurrentUser && !isMemberOwner && (
             <TouchableOpacity
-              onPress={() => {
-                setSelectedMember(item);
-                setTransferOwnerModalVisible(true);
-              }}
+              onPress={() => handleTransferOwnership(item)}
               style={[styles.actionButton, { backgroundColor: colors.warning + '20' }]}
             >
               <Typography variant="bodySmall" style={{ color: colors.warning }}>
@@ -405,123 +393,8 @@ export default function ManageMembersScreen() {
             </View>
           }
         />
-      
-      {/* Nickname Modal */}
-      <Modal
-        visible={nicknameModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setNicknameModalVisible(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setNicknameModalVisible(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-                <Typography variant="h6" style={styles.modalTitle}>
-              Takma Ad {selectedMember?.user?.display_name ? `(${selectedMember.user.display_name})` : ''}
-            </Typography>
-            
-            <TextInput
-              style={[styles.input, { 
-                backgroundColor: colors.background, 
-                color: colors.text,
-                borderColor: colors.stroke 
-              }]}
-              placeholder="Takma ad girin (boş bırakırsanız silinir)"
-              placeholderTextColor={colors.secondaryText}
-              value={nicknameText}
-              onChangeText={setNicknameText}
-              maxLength={50}
-            />
-            
-            <View style={styles.modalActions}>
-              <GeliomButton
-                state="passive"
-                size="medium"
-                onPress={() => {
-                  setNicknameModalVisible(false);
-                  setNicknameText('');
-                  setSelectedMember(null);
-                }}
-                style={styles.modalButton}
-              >
-                İptal
-              </GeliomButton>
-              <GeliomButton
-                state={upsertNickname.isPending || deleteNickname.isPending ? 'loading' : 'active'}
-                size="medium"
-                onPress={handleSaveNickname}
-                style={styles.modalButton}
-              >
-                Kaydet
-              </GeliomButton>
-            </View>
-          </View>
-              </ScrollView>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-      
-      {/* Transfer Ownership Modal */}
-      <Modal
-        visible={transferOwnerModalVisible}
-        transparent
-        statusBarTranslucent
-        animationType="slide"
-        onRequestClose={() => setTransferOwnerModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setTransferOwnerModalVisible(false)}
-        >
-          <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
-            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-              <Typography variant="h6" style={styles.modalTitle}>
-              Yöneticilik Devri
-            </Typography>
-            
-            <Typography variant="body" style={[styles.modalText, { color: colors.text }]}>
-              {selectedMember?.user?.display_name || selectedMember?.user?.custom_user_id} kullanıcısına yöneticiliği devretmek istediğinize emin misiniz?
-            </Typography>
-            
-            <View style={styles.modalActions}>
-              <GeliomButton
-                state="passive"
-                size="medium"
-                onPress={() => {
-                  setTransferOwnerModalVisible(false);
-                  setSelectedMember(null);
-                }}
-                style={styles.modalButton}
-              >
-                İptal
-              </GeliomButton>
-              <GeliomButton
-                state={transferOwnership.isPending ? 'loading' : 'active'}
-                size="medium"
-                onPress={() => selectedMember && handleTransferOwnership(selectedMember)}
-                style={styles.modalButton}
-              >
-                Devret
-              </GeliomButton>
-            </View>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
-      {/* Avatar Selector Modal */}
+      {/* Avatar Selector Modal - Bu kalsın çünkü AvatarSelector zaten mevcut bir component */}
       <AvatarSelector
         visible={avatarSelectorVisible}
         currentAvatar={user?.avatar}
@@ -613,46 +486,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 32,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '90%',
-    maxWidth: 400,
-    padding: 24,
-    borderRadius: 16,
-  },
-  modalTitle: {
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalText: {
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 24,
-    fontSize: 16,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-  },
 });
-
