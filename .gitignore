@@ -47,3 +47,9 @@ app-example
 # for repomix
 /app/(drawer)/api-test.tsx
 /docs/Green-Color-Palette.md
+
+*.ipa
+*.aab
+*.apk
+
+*repomix*

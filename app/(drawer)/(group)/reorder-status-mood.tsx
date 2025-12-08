@@ -1,8 +1,9 @@
 import { useMoods } from '@/api/moods';
 import { useCustomStatuses, useDefaultStatuses } from '@/api/statuses';
-import AddStatusMoodModal from '@/components/dashboard/AddStatusMoodModal';
+import { StatusMoodBottomSheet } from '@/components/bottomsheets';
 import { BaseLayout, GeliomButton, Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBottomSheet } from '@/contexts/BottomSheetContext';
 import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useManageStatusMood } from '@/hooks/useManageStatusMood';
@@ -21,13 +22,13 @@ export default function ReorderStatusMoodScreen() {
   const { user } = useAuth();
   const { selectedGroup } = useGroupContext();
   const router = useRouter();
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
   const [activeTab, setActiveTab] = useState<'status' | 'mood'>('status');
   const [statusOrder, setStatusOrder] = useState<number[]>([]);
   const [moodOrder, setMoodOrder] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Status ve mood verilerini çek
   const { data: defaultStatuses = [] } = useDefaultStatuses();
@@ -140,12 +141,24 @@ export default function ReorderStatusMoodScreen() {
     }
   };
 
-  const onSaveItem = (text: string, emoji: string) => {
-    if (activeTab === 'status') {
-      handleAddStatus(text, emoji);
-    } else {
-      handleAddMood(text, emoji);
-    }
+  const handleOpenBottomSheet = () => {
+    checkSubscriptionAndProceed(() => {
+      openBottomSheet(
+        <StatusMoodBottomSheet
+          type={activeTab}
+          onSave={async (text, emoji, notifies) => {
+            if (activeTab === 'status') {
+              await handleAddStatus(text, emoji);
+            } else {
+              await handleAddMood(text, emoji);
+            }
+            closeBottomSheet();
+          }}
+          onCancel={closeBottomSheet}
+        />,
+        { snapPoints: activeTab === 'status' ? ['55%'] : ['50%'] }
+      );
+    });
   };
 
   const renderStatusItem = ({ item, drag, isActive }: RenderItemParams<Status>) => {
@@ -260,11 +273,11 @@ export default function ReorderStatusMoodScreen() {
               Kaydet
             </GeliomButton>
           ) : (
-            <TouchableOpacity onPress={() => checkSubscriptionAndProceed(() => setIsModalVisible(true))}>
+            <TouchableOpacity onPress={handleOpenBottomSheet}>
               <Ionicons name="add" size={28} color={colors.primary} />
             </TouchableOpacity>
           ),
-          onPress: hasChanges ? handleSave : () => checkSubscriptionAndProceed(() => setIsModalVisible(true)),
+          onPress: hasChanges ? handleSave : handleOpenBottomSheet,
         },
         backgroundColor: colors.background,
         style: { borderBottomWidth: 0 },
@@ -347,13 +360,6 @@ export default function ReorderStatusMoodScreen() {
             </View>
           </View>
         )}
-
-        <AddStatusMoodModal
-          visible={isModalVisible}
-          type={activeTab}
-          onClose={() => setIsModalVisible(false)}
-          onSave={onSaveItem}
-        />
       </View>
     </BaseLayout>
   );

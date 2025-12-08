@@ -1,8 +1,13 @@
 import { useGroupJoinRequests, useGroupJoinRequestsRealtime, useUpdateGroup } from '@/api/groups';
 import { useCreateMood } from '@/api/moods';
 import { useCreateStatus } from '@/api/statuses';
+import {
+  GroupNameBottomSheet,
+  StatusMoodBottomSheet,
+} from '@/components/bottomsheets';
 import { BaseLayout, GeliomButton, Typography } from '@/components/shared';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBottomSheet } from '@/contexts/BottomSheetContext';
 import { useGroupContext } from '@/contexts/GroupContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,17 +16,10 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
-  TextInput,
   TouchableOpacity,
-  View,
-  type GestureResponderEvent
+  View
 } from 'react-native';
 
 export default function GroupManagementScreen() {
@@ -29,17 +27,9 @@ export default function GroupManagementScreen() {
   const { selectedGroup } = useGroupContext();
   const { colors } = useTheme();
   const router = useRouter();
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
   const [isCopying, setIsCopying] = useState(false);
-  const [groupNameModalVisible, setGroupNameModalVisible] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [statusModalVisible, setStatusModalVisible] = useState(false);
-  const [newStatusText, setNewStatusText] = useState('');
-  const [newStatusEmoji, setNewStatusEmoji] = useState('');
-  const [notifiesStatus, setNotifiesStatus] = useState(false);
-  const [moodModalVisible, setMoodModalVisible] = useState(false);
-  const [newMoodText, setNewMoodText] = useState('');
-  const [newMoodEmoji, setNewMoodEmoji] = useState('');
 
   const updateGroup = useUpdateGroup();
   const createStatus = useCreateStatus();
@@ -95,72 +85,87 @@ export default function GroupManagementScreen() {
     }
   };
 
-  const handleUpdateGroupName = async () => {
-    if (!newGroupName.trim() || !isOwner) return;
+  const handleUpdateGroupName = () => {
+    if (!isOwner) return;
     
-    // Validation: Max 20 karakter
-    if (newGroupName.trim().length > 20) {
-      Alert.alert('Hata', 'Grup adı en fazla 20 karakter olabilir');
-      return;
-    }
-    
-    try {
-      await updateGroup.mutateAsync({
-        id: selectedGroup.id,
-        updates: { name: newGroupName.trim() },
-      });
-      setGroupNameModalVisible(false);
-      setNewGroupName('');
-      Alert.alert('Başarılı', 'Grup adı güncellendi');
-    } catch (error: any) {
-      console.error('Grup adı güncelleme hatası:', error);
-      Alert.alert('Hata', error.message || 'Grup adı güncellenemedi');
-    }
+    openBottomSheet(
+      <GroupNameBottomSheet
+        currentName={selectedGroup.name}
+        onSave={async (name) => {
+          try {
+            await updateGroup.mutateAsync({
+              id: selectedGroup.id,
+              updates: { name: name.trim() },
+            });
+            closeBottomSheet();
+            Alert.alert('Başarılı', 'Grup adı güncellendi');
+          } catch (error: any) {
+            console.error('Grup adı güncelleme hatası:', error);
+            Alert.alert('Hata', error.message || 'Grup adı güncellenemedi');
+          }
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ['35%'] }
+    );
   };
 
-  const handleCreateStatus = async () => {
-    if (!newStatusText.trim() || !isOwner || !user?.id || !selectedGroup?.id) return;
+  const handleCreateStatus = () => {
+    if (!isOwner || !user?.id || !selectedGroup?.id) return;
     
-    try {
-      await createStatus.mutateAsync({
-        text: newStatusText.trim(),
-        notifies: notifiesStatus, // Kullanıcı seçimi
-        is_custom: true,
-        owner_id: user.id,
-        group_id: selectedGroup.id, // Custom status'ler grup bazlı
-        emoji: newStatusEmoji.trim() || undefined, // Emoji opsiyonel
-        messages: undefined, // messages opsiyonel, undefined gönder
-      });
-      setStatusModalVisible(false);
-      setNewStatusText('');
-      setNewStatusEmoji('');
-      setNotifiesStatus(false);
-      Alert.alert('Başarılı', 'Özel durum oluşturuldu');
-    } catch (error: any) {
-      console.error('Status oluşturma hatası:', error);
-      const errorMessage = error?.message || error?.code || 'Durum oluşturulamadı';
-      Alert.alert('Hata', errorMessage);
-    }
+    openBottomSheet(
+      <StatusMoodBottomSheet
+        type="status"
+        onSave={async (text, emoji, notifies) => {
+          try {
+            await createStatus.mutateAsync({
+              text: text.trim(),
+              notifies: notifies || false,
+              is_custom: true,
+              owner_id: user.id,
+              group_id: selectedGroup.id,
+              emoji: emoji || undefined,
+              messages: undefined,
+            });
+            closeBottomSheet();
+            Alert.alert('Başarılı', 'Özel durum oluşturuldu');
+          } catch (error: any) {
+            console.error('Status oluşturma hatası:', error);
+            const errorMessage = error?.message || error?.code || 'Durum oluşturulamadı';
+            Alert.alert('Hata', errorMessage);
+          }
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ['55%'] }
+    );
   };
 
-  const handleCreateMood = async () => {
-    if (!newMoodText.trim() || !isOwner || !user?.id || !selectedGroup?.id) return;
+  const handleCreateMood = () => {
+    if (!isOwner || !user?.id || !selectedGroup?.id) return;
     
-    try {
-      await createMood.mutateAsync({
-        text: newMoodText.trim(),
-        emoji: newMoodEmoji.trim() || undefined,
-        group_id: selectedGroup.id, // Custom mood'lar grup bazlı
-      });
-      setMoodModalVisible(false);
-      setNewMoodText('');
-      setNewMoodEmoji('');
-      Alert.alert('Başarılı', 'Özel mood oluşturuldu');
-    } catch (error: any) {
-      console.error('Mood oluşturma hatası:', error);
-      const errorMessage = error?.message || error?.code || 'Mood oluşturulamadı';
-      Alert.alert('Hata', errorMessage);
-    }
+    openBottomSheet(
+      <StatusMoodBottomSheet
+        type="mood"
+        onSave={async (text, emoji) => {
+          try {
+            await createMood.mutateAsync({
+              text: text.trim(),
+              emoji: emoji || undefined,
+              group_id: selectedGroup.id,
+            });
+            closeBottomSheet();
+            Alert.alert('Başarılı', 'Özel mood oluşturuldu');
+          } catch (error: any) {
+            console.error('Mood oluşturma hatası:', error);
+            const errorMessage = error?.message || error?.code || 'Mood oluşturulamadı';
+            Alert.alert('Hata', errorMessage);
+          }
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ['50%'] }
+    );
   };
 
   return (
@@ -237,10 +242,7 @@ export default function GroupManagementScreen() {
             
             {/* Grup Adı Değiştir */}
             <TouchableOpacity
-              onPress={() => {
-                setNewGroupName(selectedGroup.name);
-                setGroupNameModalVisible(true);
-              }}
+              onPress={handleUpdateGroupName}
               style={[styles.settingItem, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
             >
               <View style={styles.settingItemContent}>
@@ -259,7 +261,7 @@ export default function GroupManagementScreen() {
 
             {/* Özel Durum Ekle */}
             <TouchableOpacity
-              onPress={() => setStatusModalVisible(true)}
+              onPress={handleCreateStatus}
               style={[styles.settingItem, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
             >
               <View style={styles.settingItemContent}>
@@ -278,7 +280,7 @@ export default function GroupManagementScreen() {
 
             {/* Özel Mood Ekle */}
             <TouchableOpacity
-              onPress={() => setMoodModalVisible(true)}
+              onPress={handleCreateMood}
               style={[styles.settingItem, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
             >
               <View style={styles.settingItemContent}>
@@ -342,252 +344,6 @@ export default function GroupManagementScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Grup Adı Değiştir Modal */}
-      <Modal
-        visible={groupNameModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setGroupNameModalVisible(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setGroupNameModalVisible(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-                <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
-              Grup Adını Değiştir
-            </Typography>
-            
-            <TextInput
-              style={[styles.modalInput, { 
-                backgroundColor: colors.background, 
-                color: colors.text,
-                borderColor: colors.stroke 
-              }]}
-              placeholder="Grup adı (max 20 karakter)"
-              placeholderTextColor={colors.secondaryText}
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              maxLength={20}
-            />
-            <Typography variant="caption" color={colors.secondaryText} style={{ marginTop: 4, marginBottom: 8 }}>
-              {newGroupName.length}/20 karakter
-            </Typography>
-            
-            <View style={styles.modalActions}>
-              <GeliomButton
-                state="passive"
-                size="medium"
-                onPress={() => {
-                  setGroupNameModalVisible(false);
-                  setNewGroupName('');
-                }}
-                style={styles.modalButton}
-              >
-                İptal
-              </GeliomButton>
-              <GeliomButton
-                state={updateGroup.isPending ? 'loading' : 'active'}
-                size="medium"
-                onPress={handleUpdateGroupName}
-                style={styles.modalButton}
-                disabled={!newGroupName.trim()}
-              >
-                Kaydet
-              </GeliomButton>
-            </View>
-            </View>
-              </ScrollView>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
-      {/* Özel Durum Ekle Modal */}
-      <Modal
-        visible={statusModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setStatusModalVisible(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setStatusModalVisible(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-                <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
-              Özel Durum Ekle
-            </Typography>
-            
-            <TextInput
-              style={[styles.modalInput, { 
-                backgroundColor: colors.background, 
-                color: colors.text,
-                borderColor: colors.stroke 
-              }]}
-              placeholder="Durum metni (örn: Toplantıdayım)"
-              placeholderTextColor={colors.secondaryText}
-              value={newStatusText}
-              onChangeText={setNewStatusText}
-              maxLength={50}
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { 
-                backgroundColor: colors.background, 
-                color: colors.text,
-                borderColor: colors.stroke 
-              }]}
-              placeholder="Emoji (opsiyonel, örn: 📅)"
-              placeholderTextColor={colors.secondaryText}
-              value={newStatusEmoji}
-              onChangeText={setNewStatusEmoji}
-              maxLength={2}
-            />
-            
-            {/* Notifies Switch */}
-            <View style={[styles.switchContainer, { borderColor: colors.stroke }]}>
-              <Typography variant="body" color={colors.text} style={{ flex: 1 }}>
-                Bildirim gönder
-              </Typography>
-              <Switch
-                value={notifiesStatus}
-                onValueChange={setNotifiesStatus}
-                trackColor={{ false: colors.stroke, true: colors.primary }}
-                thumbColor={colors.white}
-              />
-            </View>
-            
-            <View style={styles.modalActions}>
-              <GeliomButton
-                state="passive"
-                size="medium"
-                onPress={() => {
-                  setStatusModalVisible(false);
-                  setNewStatusText('');
-                  setNewStatusEmoji('');
-                  setNotifiesStatus(false);
-                }}
-                style={styles.modalButton}
-              >
-                İptal
-              </GeliomButton>
-              <GeliomButton
-                state={createStatus.isPending ? 'loading' : 'active'}
-                size="medium"
-                onPress={handleCreateStatus}
-                style={styles.modalButton}
-                disabled={!newStatusText.trim()}
-              >
-                Oluştur
-              </GeliomButton>
-            </View>
-          </View>
-              </ScrollView>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
-
-      {/* Özel Mood Ekle Modal */}
-      <Modal
-        visible={moodModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setMoodModalVisible(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setMoodModalVisible(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <Pressable onPress={(e: GestureResponderEvent) => e.stopPropagation()}>
-              <ScrollView
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.modalScrollContent}
-          >
-            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <Typography variant="h5" color={colors.text} style={styles.modalTitle}>
-              Özel Mood Ekle
-            </Typography>
-            
-            <TextInput
-              style={[styles.modalInput, { 
-                backgroundColor: colors.background, 
-                color: colors.text,
-                borderColor: colors.stroke 
-              }]}
-              placeholder="Mood metni (örn: Heyecanlı)"
-              placeholderTextColor={colors.secondaryText}
-              value={newMoodText}
-              onChangeText={setNewMoodText}
-              maxLength={50}
-            />
-            
-            <TextInput
-              style={[styles.modalInput, { 
-                backgroundColor: colors.background, 
-                color: colors.text,
-                borderColor: colors.stroke 
-              }]}
-              placeholder="Emoji (opsiyonel, örn: 🎉)"
-              placeholderTextColor={colors.secondaryText}
-              value={newMoodEmoji}
-              onChangeText={setNewMoodEmoji}
-              maxLength={2}
-            />
-            
-            <View style={styles.modalActions}>
-              <GeliomButton
-                state="passive"
-                size="medium"
-                onPress={() => {
-                  setMoodModalVisible(false);
-                  setNewMoodText('');
-                  setNewMoodEmoji('');
-                }}
-                style={styles.modalButton}
-              >
-                İptal
-              </GeliomButton>
-              <GeliomButton
-                state={createMood.isPending ? 'loading' : 'active'}
-                size="medium"
-                onPress={handleCreateMood}
-                style={styles.modalButton}
-                disabled={!newMoodText.trim()}
-              >
-                Oluştur
-              </GeliomButton>
-            </View>
-          </View>
-              </ScrollView>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
     </BaseLayout>
   );
 }
@@ -691,52 +447,4 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '90%',
-    maxWidth: 400,
-    padding: 24,
-    borderRadius: 16,
-  },
-  modalTitle: {
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-  },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    marginBottom: 12,
-    borderBottomWidth: 1,
-  },
 });
-

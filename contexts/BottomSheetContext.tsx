@@ -18,6 +18,7 @@ interface BottomSheetContextValue {
     openBottomSheet: (content: ReactNode, options?: BottomSheetOptions) => void;
     closeBottomSheet: () => void;
     snapToIndex: (index: number) => void;
+    updateContent: (content: ReactNode) => void;
     isOpen: boolean;
 }
 
@@ -41,11 +42,27 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
         index: 0,
     });
 
-    // Default snap points - dynamic sizing için CONTENT_HEIGHT kullanılacak
+    // Default snap points
     const snapPoints = useMemo(() => options.snapPoints || ['60%'], [options.snapPoints]);
 
     // Open Bottom Sheet - Direkt content kabul ediyor
     const openBottomSheet = useCallback((newContent: ReactNode, newOptions?: BottomSheetOptions) => {
+        // Eğer zaten açıksa, içeriği güncelle
+        if (isOpen) {
+            setContent(newContent);
+            if (newOptions) {
+                setOptions({
+                    enablePanDownToClose: newOptions?.enablePanDownToClose ?? true,
+                    enableOverlayTap: newOptions?.enableOverlayTap ?? true,
+                    snapPoints: newOptions?.snapPoints || ['60%'],
+                    index: newOptions?.index ?? 0,
+                    handleIndicatorStyle: newOptions?.handleIndicatorStyle,
+                    backgroundStyle: newOptions?.backgroundStyle,
+                });
+            }
+            return;
+        }
+
         setOptions({
             enablePanDownToClose: newOptions?.enablePanDownToClose ?? true,
             enableOverlayTap: newOptions?.enableOverlayTap ?? true,
@@ -58,7 +75,7 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
         setContent(newContent);
         setIsOpen(true);
         bottomSheetRef.current?.snapToIndex(newOptions?.index ?? 0);
-    }, []);
+    }, [isOpen]);
 
     // Close Bottom Sheet
     const closeBottomSheet = useCallback(() => {
@@ -70,6 +87,11 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
 
     const snapToIndex = useCallback((index: number) => {
         bottomSheetRef.current?.snapToIndex(index);
+    }, []);
+
+    // Update content without closing/reopening
+    const updateContent = useCallback((newContent: ReactNode) => {
+        setContent(newContent);
     }, []);
 
     // Render backdrop
@@ -99,9 +121,10 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
             openBottomSheet,
             closeBottomSheet,
             snapToIndex,
+            updateContent,
             isOpen,
         }),
-        [openBottomSheet, closeBottomSheet, isOpen, snapToIndex]
+        [openBottomSheet, closeBottomSheet, isOpen, snapToIndex, updateContent]
     );
 
     return (
@@ -115,16 +138,17 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
                 backdropComponent={renderBackdrop}
                 handleIndicatorStyle={[
                     styles.handleIndicator,
-                    { backgroundColor: colors.secondaryText },
+                    { backgroundColor: colors.activeState },
                     options.handleIndicatorStyle,
                 ]}
                 backgroundStyle={[
-                    { backgroundColor: colors.background },
+                    { backgroundColor: colors.secondaryBackground },
                     options.backgroundStyle,
                 ]}
-                keyboardBehavior="extend"
-                keyboardBlurBehavior="restore"
-                android_keyboardInputMode="adjustResize"
+                keyboardBehavior="interactive"
+                keyboardBlurBehavior="none"
+                android_keyboardInputMode="adjustPan"
+                enableDynamicSizing={false}
                 animateOnMount={false}
                 onChange={(index) => {
                     if (index === -1) {
