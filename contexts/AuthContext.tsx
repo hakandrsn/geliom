@@ -6,208 +6,171 @@ import type { User as DatabaseUser } from '@/types/database';
 import { Session } from '@supabase/supabase-js';
 import { useQueryClient } from '@tanstack/react-query';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+// eslint-disable-next-line import/no-duplicates
+import { useCompleteOnboarding } from '@/api/users';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Auth Context'i oluştur.
-// Bu context, sadece oturum bilgilerini ve kullanıcı profilini tutacak.
-// Geri kalan tüm verileri (gruplar, durumlar vb.) TanStack Query yönetecek.
 const AuthContext = createContext({
-  session: null as Session | null,
-  user: null as DatabaseUser | null,
-  isLoading: true,
-  initializeAuth: async () => {},
-  signOut: async () => {},
+    session: null as Session | null,
+    user: null as DatabaseUser | null,
+    isLoading: true,
+    initializeAuth: async () => {},
+    signOut: async () => {},
 });
 
-// Auth Provider Component'i
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<DatabaseUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+    const [session, setSession] = useState<Session | null>(null);
+    const [user, setUser] = useState<DatabaseUser | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const completeOnboardingMutation = useCompleteOnboarding();
 
-  // Mevcut kullanıcı profilini fetch et
-  const { 
-    data: currentUserProfile, 
-    refetch: refetchUserProfile, 
-    error: currentUserError,
-    isLoading: currentUserLoading,
-    isError: currentUserIsError
-  } = useCurrentUser();
-  const queryClient = useQueryClient();
-  const updateUser = useUpdateUser();
-
-  // Çıkış yapma fonksiyonu
-  const signOut = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ Çıkış hatası:', errorMessage);
-        throw new Error(errorMessage);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('❌ Çıkış hatası:', errorMessage);
-      setSession(null);
-      setUser(null);
-      setIsLoading(false);
-      throw new Error(errorMessage);
-    }
-  }, []);
-
-  // Auth initialization fonksiyonu
-  const initializeAuth = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      
-      // Mevcut session'ı kontrol et
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
-      if (currentSession) {
-        setSession(currentSession);
-        // User profile'ı fetch et
-        await refetchUserProfile();
-        // NOT: OneSignal login onAuthStateChange içinde yapılıyor
-      } else {
-        setSession(null);
-        setUser(null);
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Auth initialization error:', errorMessage);
-      setSession(null);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refetchUserProfile, updateUser, signOut]);
-
-  // Auth state change listener - sadece session state'ini yönetir
-  useEffect(() => {
-    // İlk session kontrolü
-    initializeAuth();
-
-    // Auth state değişikliklerini dinle
+    // useCurrentUser hook'u
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      setSession(currentSession);
+        data: currentUserProfile,
+        refetch: refetchUserProfile,
+        error: currentUserError,
+        // isLoading: currentUserLoading, // <-- Bunu artık kullanmıyoruz, state çakışması yaratıyor
+    } = useCurrentUser();
 
-      if (currentSession?.user) {
-        const supabaseUser = currentSession.user;
-        const provider = getProviderFromUser(supabaseUser);
-        const normalizedData = normalizeUserData(supabaseUser, provider);
+    const queryClient = useQueryClient();
+    const updateUser = useUpdateUser();
 
-        // Profil bilgilerini güncelle (useCurrentUser hook'u profile'ı fetch edecek)
-        createOrUpdateUserProfile(normalizedData).then((result) => {
-          // Kullanıcı bulunamadıysa (DB'den silinmişse), logout yap
-          const errorCode = (result.error as any)?.code;
-          if (result.error && errorCode === 'USER_NOT_FOUND') {
-            console.warn('⚠️ Kullanıcı DB\'de bulunamadı, logout yapılıyor...');
-            signOut().catch((error) => {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              console.error('❌ Logout hatası:', errorMessage);
-            });
-          }
-        }).catch((error) => {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error('❌ Profile update error (non-blocking):', errorMessage);
+    const signOut = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+        } catch (error) {
+            console.error('❌ Çıkış hatası:', error);
+        } finally {
+            setSession(null);
+            setUser(null);
+            setIsLoading(false);
+        }
+    }, []);
+
+    const initializeAuth = useCallback(async () => {
+        try {
+            setIsLoading(true); // Yükleme başladı
+
+            // 1. Session kontrolü
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+            if (currentSession) {
+                setSession(currentSession);
+
+                // 2. Profil yükleme (Timeout ile)
+                // Eğer profil 5sn içinde gelmezse hata fırlat ve catch'e düş
+                const fetchProfilePromise = refetchUserProfile();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+                );
+
+                try {
+                    await Promise.race([fetchProfilePromise, timeoutPromise]);
+                } catch (err) {
+                    console.warn('⚠️ Profil yükleme zaman aşımı, devam ediliyor...');
+                    // Profil yüklenemedi ama session var.
+                    // User null kalacak ama isLoading false olacak.
+                    // Bu sayede app açılacak ve _layout.tsx kullanıcıyı login'e atacak (çünkü session var ama user yoksa auth flow bozuk demektir) veya home'a atacak ve home boş görünecek.
+                }
+
+            } else {
+                setSession(null);
+                setUser(null);
+            }
+        } catch (error) {
+            console.error('Auth initialization error:', error);
+            setSession(null);
+            setUser(null);
+        } finally {
+            setIsLoading(false); // HER DURUMDA yüklemeyi bitir
+        }
+    }, [refetchUserProfile]); // Dependency array temizlendi
+
+    useEffect(() => {
+        initializeAuth();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+            setSession(currentSession);
+
+            if (currentSession?.user) {
+                const supabaseUser = currentSession.user;
+
+                // Onboarding check
+                AsyncStorage.getItem('HAS_SEEN_ONBOARDING').then((val) => {
+                    if (val === 'true') {
+                        supabase.from('users')
+                            .update({ has_completed_onboarding: true })
+                            .eq('id', currentSession.user.id)
+                            .then(({ error }) => {
+                                if (error) console.error("Onboarding sync error:", error);
+                            });
+                    }
+                });
+
+                // Profil güncelleme ve OneSignal işlemleri...
+                const provider = getProviderFromUser(supabaseUser);
+                const normalizedData = normalizeUserData(supabaseUser, provider);
+
+                createOrUpdateUserProfile(normalizedData).catch(console.error);
+
+                loginOneSignal(supabaseUser.id).then(async () => {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    const playerId = await getOneSignalPlayerId();
+                    if (playerId && supabaseUser.id) {
+                        updateUser.mutate({ id: supabaseUser.id, updates: { onesignal_player_id: playerId } });
+                    }
+                }).catch(() => {});
+
+                queryClient.invalidateQueries({ queryKey: userKeys.current() });
+            } else {
+                setUser(null);
+                logoutOneSignal();
+                queryClient.removeQueries({ queryKey: userKeys.all });
+            }
         });
 
-        // OneSignal'e kullanıcıyı login et (sessizce, arka planda)
-        loginOneSignal(supabaseUser.id)
-          .then(async () => {
-            // Player ID'yi al ve kaydet
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const playerId = await getOneSignalPlayerId();
-            
-            if (playerId && supabaseUser.id) {
-              try {
-                await updateUser.mutateAsync({
-                  id: supabaseUser.id,
-                  updates: { onesignal_player_id: playerId },
-                });
-              } catch (error: any) {
-                // Kullanıcı bulunamadıysa logout yap
-                if (error?.code === 'USER_NOT_FOUND' || error?.code === 'PGRST116') {
-                  await signOut();
-                }
-              }
-            }
-          })
-          .catch(() => {
-            // Sessizce devam et
-          });
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [queryClient]); // initializeAuth dependency'den çıkarıldı
 
-        // Session değiştiğinde query'yi invalidate et
-        queryClient.invalidateQueries({ queryKey: userKeys.current() });
-      } else {
-        setUser(null);
-        logoutOneSignal();
-        queryClient.removeQueries({ queryKey: userKeys.all });
-      }
-    });
+    // Profil datası geldiğinde state'i güncelle
+    useEffect(() => {
+        setUser(currentUserProfile || null);
+    }, [currentUserProfile]);
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [queryClient]);
+    // Kullanıcı silinmişse logout yap
+    useEffect(() => {
+        const errorCode = (currentUserError as any)?.code;
+        if (currentUserError && errorCode === 'USER_NOT_FOUND' && session) {
+            signOut();
+        }
+    }, [currentUserError, session, signOut]);
 
-  // Current user profile değiştiğinde state'i güncelle
-  useEffect(() => {
-    setUser(currentUserProfile || null);
-  }, [currentUserProfile]);
+    // DİKKAT: Eski `useEffect` (isLoading state'ini currentUserLoading'e bağlayan) SİLİNDİ.
+    // Bu, initializeAuth'un `setIsLoading(false)` çağrısını eziyordu.
 
-  // Kullanıcı bulunamadığında (DB'den silinmişse) logout yap
-  useEffect(() => {
-    const errorCode = (currentUserError as any)?.code;
-    if (currentUserError && errorCode === 'USER_NOT_FOUND' && session) {
-      console.warn('⚠️ Kullanıcı DB\'de bulunamadı (useCurrentUser), logout yapılıyor...');
-      signOut().catch((error) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ Logout hatası:', errorMessage);
-      });
-    }
-  }, [currentUserError, session, signOut]);
+    const value = React.useMemo(() => ({
+        session,
+        user,
+        isLoading,
+        initializeAuth,
+        signOut
+    }), [session, user, isLoading, initializeAuth, signOut]);
 
-  // Loading state logic
-  useEffect(() => {
-    if (!session) {
-      // Session yoksa loading false
-      setIsLoading(false);
-    } else if (session && currentUserProfile) {
-      // Session var ve profile geldiyse loading false
-      setIsLoading(false);
-    } else if (session && !currentUserProfile) {
-      // Session var ama profile henüz yok
-      // Eğer query hala loading ise → loading true
-      // Eğer query tamamlandıysa (isLoading false) → loading false
-      // Ama eğer error varsa ve USER_NOT_FOUND ise → logout yapılacak
-      setIsLoading(currentUserLoading);
-    }
-  }, [session, currentUserProfile, currentUserLoading, currentUserError]);
-
-  const value = React.useMemo(() => ({
-    session,
-    user,
-    isLoading,
-    initializeAuth,
-    signOut
-  }), [session, user, isLoading, initializeAuth, signOut]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
 }
 
-// Context'i kolayca kullanmak için custom hook.
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
 };

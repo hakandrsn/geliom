@@ -54,56 +54,55 @@ export const useCurrentUser = () => {
 
   return useQuery({
     queryKey: userKeys.current(),
-    queryFn: async (): Promise<User | null> => {
-      // Session kontrolü
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        return null;
-      }
+      queryFn: async (): Promise<User | null> => {
+          // Session kontrolü
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) {
+              return null;
+          }
 
-      const userId = session.user.id;
-      
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        // Eğer kullanıcı bulunamadıysa (PGRST116), database trigger henüz çalışmamış olabilir
-        if (error.code === 'PGRST116') {
-          return null;
-        }
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ useCurrentUser: Error:', errorMessage);
-        throw new Error(errorMessage);
-      }
-      
-      return data;
-    },
+          const userId = session.user.id;
+
+          const { data, error } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', userId)
+              .single();
+
+          if (error) {
+              // Eğer kullanıcı bulunamadıysa (PGRST116), database trigger henüz çalışmamış olabilir
+              if (error.code === 'PGRST116') {
+                  return null;
+              }
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              console.error('❌ useCurrentUser: Error:', errorMessage);
+              throw new Error(errorMessage);
+          }
+
+          return data;
+      },
     // Session kontrolü queryFn içinde yapılıyor, enabled her zaman true
-    enabled: true,
-    retry: (failureCount, error: any) => {
-      // PGRST116 hatası için retry yap (database trigger henüz çalışmamış olabilir)
-      // Ama retry sonrası hala bulunamazsa, kullanıcı DB'den silinmiş olabilir
-      if (error?.code === 'PGRST116' && failureCount < 3) {
-        return true;
-      }
-      // Retry sonrası hala PGRST116 gelirse, kullanıcı DB'den silinmiş olabilir
-      // Özel error code ile throw et, AuthContext logout yapacak
-      if (error?.code === 'PGRST116' && failureCount >= 3) {
-        const userNotFoundError = new Error('User not found in database after retries');
-        (userNotFoundError as any).code = 'USER_NOT_FOUND';
-        (userNotFoundError as any).originalError = error;
-        throw userNotFoundError;
-      }
-      // Diğer hatalar için retry yapma
-      return false;
-    },
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 2000), // Exponential backoff (max 2 saniye)
-    refetchOnWindowFocus: false, // Window focus'ta refetch yapma
-    refetchOnMount: true, // Mount'ta refetch yap
-    staleTime: 0, // Her zaman fresh data iste
+      enabled: true,
+      // ÖNEMLİ: Network durumu ne olursa olsun çalıştır (Simülatör/Offline için kritik)
+      networkMode: 'always',
+      retry: (failureCount, error: any) => {
+          // PGRST116 hatası için retry yap (database trigger henüz çalışmamış olabilir)
+          if (error?.code === 'PGRST116' && failureCount < 3) {
+              return true;
+          }
+          if (error?.code === 'PGRST116' && failureCount >= 3) {
+              const userNotFoundError = new Error('User not found in database after retries');
+              (userNotFoundError as any).code = 'USER_NOT_FOUND';
+              (userNotFoundError as any).originalError = error;
+              throw userNotFoundError;
+          }
+          // Diğer hatalar için daha az retry
+          return failureCount < 2;
+      },
+      retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 2000),
+      refetchOnWindowFocus: false,
+      refetchOnMount: true,
+      staleTime: 0,
   });
 };
 
@@ -254,4 +253,17 @@ export const useUsersRealtime = () => {
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
+};
+
+export const useCompleteOnboarding = () => {
+    return useMutation({
+        mutationFn: async (userId: string): Promise<void> => {
+            const { error } = await supabase
+                .from('users')
+                .update({ has_completed_onboarding: true })
+                .eq('id', userId);
+
+            if (error) throw error;
+        },
+    });
 };
