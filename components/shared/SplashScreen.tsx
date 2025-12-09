@@ -20,7 +20,7 @@ export const SplashScreen: React.FC = () => {
       damping: 10,
       stiffness: 100,
     });
-  }, []);
+  }, [opacity, scale]);
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
