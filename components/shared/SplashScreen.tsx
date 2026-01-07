@@ -12,7 +12,7 @@ import Animated, {
 export const SplashScreen: React.FC = () => {
   const { colors } = useTheme();
   const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.3);
+  const scale = useSharedValue(0.8);
 
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 800 });

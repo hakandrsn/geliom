@@ -7,7 +7,6 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { initializeOneSignal, initializeOneSignalSDK } from '@/services/onesignal';
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -20,7 +19,6 @@ onlineManager.setEventListener((setOnline: (online: boolean) => void) => {
   })
 })
 
-SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 export default function Provider({ children }: { children: React.ReactNode }) {
