@@ -17,13 +17,11 @@
         "aps-environment": "production",
         "com.apple.developer.networking.wifi-info": true,
         "com.apple.security.application-groups": [
-          "group.com.eoist.geliom.onesignal",
           "group.com.eoist.geliom.onesignal"
         ]
       },
       "infoPlist": {
         "UIBackgroundModes": [
-          "remote-notification",
           "remote-notification"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -31,6 +29,7 @@
       "appleTeamId": "NHKQ38KYTV"
     },
     "android": {
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,7 +38,6 @@
       },
       "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
       "package": "com.eoist.geliom"
     },
     "web": {
