@@ -1,52 +1,39 @@
-# Welcome to your Expo app 👋
+📱 Geliom: Real-Time Social Status App
+Geliom, kullanıcıların anlık duygu durumlarını (mood), aktivitelerini ve statülerini arkadaş gruplarıyla gerçek zamanlı (real-time) olarak paylaşmasını sağlayan modern bir mobil uygulamadır.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Bu proje, Geliom API backend servisinin istemci (client) tarafıdır ve React Native (Expo) ekosistemi üzerine inşa edilmiştir.
 
-## Get started
+<p align="center"> <img src="https://via.placeholder.com/300x600?text=Login+Screen" width="200" alt="Login Screen" /> <img src="https://via.placeholder.com/300x600?text=Status+Dashboard" width="200" alt="Dashboard" /> <img src="https://via.placeholder.com/300x600?text=Mood+Selection" width="200" alt="Mood Select" /> </p>
 
-1. Install dependencies
+🚀 Öne Çıkan Özellikler
+Mobil dünyada "hız" ve "akıcılık" her şeydir. Geliom'da şu teknikleri kullandım:
 
-   ```bash
-   npm install
-   ```
+⚡ WebSocket (Socket.io): Status güncellemeleri anlık olarak tüm grup üyelerine iletilir. "Pull-to-refresh" yapmaya gerek yoktur.
 
-2. Start the app
+🧠 Optimistic UI Updates: Kullanıcı bir eylem yaptığında (örn: Mood değiştirdiğinde) sunucudan cevap beklemeden arayüz güncellenir. Bu sayede uygulama "native" hızında hissettirir.
 
-   ```bash
-   npx expo start
-   ```
+🔐 Secure Authentication: Firebase Auth ile alınan JWT tokenlar, cihazın şifreli deposunda (Expo SecureStore) saklanır.
 
-In the output, you'll find options to open the app in a
+🎨 Responsive Design: Farklı ekran boyutlarına uyumlu, modern ve minimal arayüz.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+🛠️ Teknoloji Stack'i
+Framework: React Native (Expo SDK 50+)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Language: TypeScript (Strict Mode)
 
-## Get a fresh project
+Real-Time: Socket.io-client
 
-When you're ready, run:
+State Management: Zustand (Hafif ve hızlı global state yönetimi için)
 
-```bash
-npm run reset-project
-```
+Storage: Expo SecureStore & Async Storage
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Networking: Axios
 
-## Learn more
+Navigation: Expo Router (File-based routing)
 
-To learn more about developing your project with Expo, look at the following resources:
+🏃‍♂️ Kurulum ve Çalıştırma
+Projeyi lokalde çalıştırmak için Backend servisinin ayakta olması gerekir.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# geliom
-# geliom
+👨‍💻 Geliştirici
+Hakan Dursun - Full-Stack Developer LinkedIn | GitHub
