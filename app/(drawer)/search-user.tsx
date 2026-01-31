@@ -2,8 +2,7 @@ import { useCreateJoinRequest } from "@/api/groups";
 import { useUserByCustomId } from "@/api/users";
 import KeyboardAwareView from "@/components/KeyboardAwareView";
 import { GeliomButton, Typography } from "@/components/shared";
-import { useAuth } from "@/contexts/AuthContext";
-import { useGroupContext } from "@/contexts/GroupContext";
+// Removed Contexts
 import { useTheme } from "@/contexts/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack } from "expo-router";
@@ -20,8 +19,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SearchUserScreen() {
-  const { user } = useAuth();
-  const { selectedGroup } = useGroupContext();
+  const { user, groups, currentGroupId } = useAppStore();
+  const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = 56 + insets.top;
@@ -51,7 +50,7 @@ export default function SearchUserScreen() {
   };
 
   const handleSendInvite = async () => {
-    if (!foundUser) {
+    if (!foundUser?.user) {
       setSearchError("Kullanıcı bulunamadı");
       return;
     }
@@ -68,7 +67,7 @@ export default function SearchUserScreen() {
       return;
     }
 
-    if (foundUser.id === user.id) {
+    if (foundUser.user.id === user.id) {
       Alert.alert("Hata", "Kendinize davet gönderemezsiniz");
       return;
     }
@@ -78,15 +77,14 @@ export default function SearchUserScreen() {
       setSearchError(null);
 
       await createJoinRequest.mutateAsync({
-        invite_code: "",
         group_id: targetGroupId,
-        requester_id: foundUser.id,
+        requester_id: foundUser.user.id,
       });
 
       Alert.alert(
         "Davet Gönderildi",
         `${
-          foundUser.display_name || foundUser.custom_user_id
+          foundUser.user?.displayName || foundUser.user?.customId
         } kullanıcısına davet gönderildi.`,
         [
           {
@@ -96,7 +94,7 @@ export default function SearchUserScreen() {
               setSelectedGroupId(null);
             },
           },
-        ]
+        ],
       );
     } catch (error: any) {
       setSearchError(error.message || "Davet gönderilemedi");
@@ -155,8 +153,8 @@ export default function SearchUserScreen() {
                       borderColor: searchError
                         ? colors.error
                         : foundUser
-                        ? colors.success
-                        : colors.stroke,
+                          ? colors.success
+                          : colors.stroke,
                     },
                   ]}
                   placeholder="ABC12345"
@@ -197,7 +195,7 @@ export default function SearchUserScreen() {
                   {searchError}
                 </Typography>
               )}
-              {foundUser && !searchError && (
+              {foundUser?.user && !searchError && (
                 <Typography
                   variant="caption"
                   color={colors.success}
@@ -208,7 +206,7 @@ export default function SearchUserScreen() {
               )}
             </View>
 
-            {foundUser && (
+            {foundUser?.user && (
               <View
                 style={[
                   styles.userCard,
@@ -225,7 +223,7 @@ export default function SearchUserScreen() {
                       { backgroundColor: colors.primary + "20" },
                     ]}
                   >
-                    {foundUser.photo_url ? (
+                    {foundUser.user.photoUrl ? (
                       <Ionicons
                         name="person"
                         size={32}
@@ -245,18 +243,18 @@ export default function SearchUserScreen() {
                       color={colors.text}
                       numberOfLines={1}
                     >
-                      {foundUser.display_name || "İsimsiz Kullanıcı"}
+                      {foundUser.user.displayName || "İsimsiz Kullanıcı"}
                     </Typography>
                     <Typography variant="caption" color={colors.secondaryText}>
-                      @{foundUser.custom_user_id}
+                      @{foundUser.user.customId}
                     </Typography>
-                    {foundUser.email && (
+                    {foundUser.user.email && (
                       <Typography
                         variant="caption"
                         color={colors.secondaryText}
                         style={{ marginTop: 2 }}
                       >
-                        {foundUser.email}
+                        {foundUser.user.email}
                       </Typography>
                     )}
                   </View>
@@ -329,15 +327,15 @@ export default function SearchUserScreen() {
                 isSubmitting
                   ? "loading"
                   : foundUser && (selectedGroup || selectedGroupId)
-                  ? "active"
-                  : "passive"
+                    ? "active"
+                    : "passive"
               }
               layout="full-width"
               size="large"
               icon="send"
               onPress={handleSendInvite}
               disabled={
-                !foundUser ||
+                !foundUser?.user ||
                 (!selectedGroup && !selectedGroupId) ||
                 isSubmitting
               }

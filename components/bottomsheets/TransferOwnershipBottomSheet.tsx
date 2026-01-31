@@ -1,13 +1,13 @@
-import { GeliomButton, Typography } from '@/components/shared';
-import { useTheme } from '@/contexts/ThemeContext';
-import type { GroupMemberWithUser } from '@/types/database';
-import { getAvatarSource } from '@/utils/avatar';
-import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { UIGroupMember as GroupMember } from "@/api";
+import { GeliomButton, Typography } from "@/components/shared";
+import { useTheme } from "@/contexts/ThemeContext";
+import { getAvatarSource } from "@/utils/avatar";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import { Image, StyleSheet, View } from "react-native";
 
 interface TransferOwnershipBottomSheetProps {
-  member: GroupMemberWithUser;
+  member: GroupMember;
   groupName: string;
   onConfirm: () => Promise<void>;
   onCancel: () => void;
@@ -31,13 +31,17 @@ export default function TransferOwnershipBottomSheet({
     }
   };
 
-  const memberUser = member.user;
-  const displayName = memberUser?.display_name || memberUser?.custom_user_id || 'Bilinmeyen';
+  const displayName = member.displayName || member.customId || "Bilinmeyen";
 
   return (
     <View style={styles.container}>
       {/* Warning Icon */}
-      <View style={[styles.iconContainer, { backgroundColor: colors.warning + '20' }]}>
+      <View
+        style={[
+          styles.iconContainer,
+          { backgroundColor: colors.warning + "20" },
+        ]}
+      >
         <Ionicons name="warning" size={48} color={colors.warning} />
       </View>
 
@@ -46,38 +50,64 @@ export default function TransferOwnershipBottomSheet({
       </Typography>
 
       {/* Üye Bilgileri */}
-      <View style={[styles.memberCard, { backgroundColor: colors.background, borderColor: colors.stroke }]}>
+      <View
+        style={[
+          styles.memberCard,
+          { backgroundColor: colors.background, borderColor: colors.stroke },
+        ]}
+      >
         <View style={styles.memberRow}>
           <View style={styles.avatarContainer}>
             <Image
-              source={getAvatarSource(memberUser?.avatar)}
+              source={getAvatarSource(member.photoUrl)}
               style={styles.avatarImage}
               resizeMode="cover"
             />
           </View>
           <View style={styles.memberInfo}>
-            <Typography variant="body" fontWeight="semibold" color={colors.text}>
+            <Typography
+              variant="body"
+              fontWeight="semibold"
+              color={colors.text}
+            >
               {displayName}
             </Typography>
             <Typography variant="caption" color={colors.secondaryText}>
-              {memberUser?.custom_user_id}
+              {member.customId}
             </Typography>
           </View>
         </View>
       </View>
 
       {/* Warning Message */}
-      <View style={[styles.warningBox, { backgroundColor: colors.warning + '10', borderColor: colors.warning }]}>
-        <Typography variant="body" color={colors.text} style={{ textAlign: 'center' }}>
+      <View
+        style={[
+          styles.warningBox,
+          {
+            backgroundColor: colors.warning + "10",
+            borderColor: colors.warning,
+          },
+        ]}
+      >
+        <Typography
+          variant="body"
+          color={colors.text}
+          style={{ textAlign: "center" }}
+        >
           <Typography variant="body" fontWeight="bold" color={colors.text}>
             {displayName}
-          </Typography> kullanıcısına{' '}
+          </Typography>{" "}
+          kullanıcısına{" "}
           <Typography variant="body" fontWeight="bold" color={colors.text}>
             {groupName}
-          </Typography>{' '}
+          </Typography>{" "}
           grubunun yöneticiliğini devretmek istediğinize emin misiniz?
         </Typography>
-        <Typography variant="caption" color={colors.secondaryText} style={{ textAlign: 'center', marginTop: 8 }}>
+        <Typography
+          variant="caption"
+          color={colors.secondaryText}
+          style={{ textAlign: "center", marginTop: 8 }}
+        >
           Bu işlem geri alınamaz. Yönetici yetkilerinizi kaybedeceksiniz.
         </Typography>
       </View>
@@ -94,7 +124,7 @@ export default function TransferOwnershipBottomSheet({
           İptal
         </GeliomButton>
         <GeliomButton
-          state={isTransferring ? 'loading' : 'active'}
+          state={isTransferring ? "loading" : "active"}
           size="medium"
           icon="swap-horizontal"
           onPress={handleConfirm}
@@ -111,35 +141,35 @@ export default function TransferOwnershipBottomSheet({
 const styles = StyleSheet.create({
   container: {
     gap: 16,
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   iconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
-    textAlign: 'center',
+    textAlign: "center",
   },
   memberCard: {
-    width: '100%',
+    width: "100%",
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
   },
   memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   avatarContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   avatarImage: {
     width: 48,
@@ -149,19 +179,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   warningBox: {
-    width: '100%',
+    width: "100%",
     borderRadius: 12,
     borderWidth: 1,
     padding: 16,
   },
   actions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginTop: 8,
-    width: '100%',
+    width: "100%",
   },
   button: {
     flex: 1,
   },
 });
-

@@ -22,6 +22,22 @@
           }
         },
         {
+          "client_id": "53336710716-a97biqt6bms6jiacs73fgfauki8ifafd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.eoist.geliom",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabcdef"
+          }
+        },
+        {
+          "client_id": "53336710716-se5halgv38erb2mg7tdl0vqdv2m462g1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.eoist.geliom",
+            "certificate_hash": "697023f17051f87f1468b6671f257e283e8953da"
+          }
+        },
+        {
           "client_id": "53336710716-ocrnuvqlpq02lvss0hvjgeqc08539sqm.apps.googleusercontent.com",
           "client_type": 3
         }

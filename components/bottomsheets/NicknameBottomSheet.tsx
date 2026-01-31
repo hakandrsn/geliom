@@ -1,13 +1,13 @@
-import { GeliomButton, Typography } from '@/components/shared';
-import { useTheme } from '@/contexts/ThemeContext';
-import type { GroupMemberWithUser } from '@/types/database';
-import { getAvatarSource } from '@/utils/avatar';
-import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import React, { useEffect, useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { UIGroupMember as GroupMember } from "@/api";
+import { GeliomButton, Typography } from "@/components/shared";
+import { useTheme } from "@/contexts/ThemeContext";
+import { getAvatarSource } from "@/utils/avatar";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
+import React, { useEffect, useState } from "react";
+import { Image, StyleSheet, View } from "react-native";
 
 interface NicknameBottomSheetProps {
-  member: GroupMemberWithUser;
+  member: GroupMember;
   currentNickname?: string;
   onSave: (nickname: string) => Promise<void>;
   onDelete?: () => Promise<void>;
@@ -16,7 +16,7 @@ interface NicknameBottomSheetProps {
 
 export default function NicknameBottomSheet({
   member,
-  currentNickname = '',
+  currentNickname = "",
   onSave,
   onDelete,
   onCancel,
@@ -48,8 +48,7 @@ export default function NicknameBottomSheet({
     }
   };
 
-  const memberUser = member.user;
-  const displayName = memberUser?.display_name || memberUser?.custom_user_id || 'Bilinmeyen';
+  const displayName = member.displayName || member.customId || "Bilinmeyen";
 
   return (
     <View style={styles.container}>
@@ -61,7 +60,7 @@ export default function NicknameBottomSheet({
       <View style={styles.memberRow}>
         <View style={styles.avatarContainer}>
           <Image
-            source={getAvatarSource(memberUser?.avatar)}
+            source={getAvatarSource(member.photoUrl)}
             style={styles.avatarImage}
             resizeMode="cover"
           />
@@ -71,7 +70,7 @@ export default function NicknameBottomSheet({
             {displayName}
           </Typography>
           <Typography variant="caption" color={colors.secondaryText}>
-            {memberUser?.custom_user_id}
+            {member.customId}
           </Typography>
         </View>
       </View>
@@ -107,7 +106,7 @@ export default function NicknameBottomSheet({
 
         {currentNickname && onDelete && (
           <GeliomButton
-            state={isSaving ? 'loading' : 'passive'}
+            state={isSaving ? "loading" : "passive"}
             size="medium"
             icon="trash"
             onPress={handleDelete}
@@ -119,7 +118,7 @@ export default function NicknameBottomSheet({
         )}
 
         <GeliomButton
-          state={isSaving ? 'loading' : 'active'}
+          state={isSaving ? "loading" : "active"}
           size="medium"
           onPress={handleSave}
           style={styles.button}
@@ -138,12 +137,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 8,
   },
   memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     marginBottom: 8,
   },
@@ -151,7 +150,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   avatarImage: {
     width: 48,
@@ -165,10 +164,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     fontSize: 16,
-    fontFamily: 'Comfortaa-Regular',
+    fontFamily: "Comfortaa-Regular",
   },
   actions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginTop: 8,
   },
@@ -176,4 +175,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

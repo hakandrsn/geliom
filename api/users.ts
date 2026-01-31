@@ -1,309 +1,395 @@
+import { useAppStore } from "@/store/useAppStore";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateUser, UpdateUser, User } from "../types/database";
-import { supabase } from "./supabase";
+import { apiClient } from "./client";
+import {
+  eventKeys,
+  mutedKeys,
+  nicknameKeys,
+  subscriptionKeys,
+  userKeys,
+} from "./keys";
+import { User } from "./types";
+// Import legacy types if needed or redefine.
+// MutedNotification was in types/database previously.
+// Let's define strictly what we need or import from types if available.
+// api/types.ts has NotificationSetting which covers isMuted.
+// But MutedNotification in database usually involves muter/muted IDs.
+// I will adhere to types/api (api/types.ts) or generic returns.
 
-// Query Keys
-export const userKeys = {
-  all: ["users"] as const,
-  lists: () => [...userKeys.all, "list"] as const,
-  list: (filters: string) => [...userKeys.lists(), { filters }] as const,
-  details: () => [...userKeys.all, "detail"] as const,
-  detail: (id: string) => [...userKeys.details(), id] as const,
-  current: () => [...userKeys.all, "current"] as const,
-};
+interface MutedUserResponse {
+  muter_user_id: string;
+  muted_user_id: string;
+  // created_at etc
+}
+
+// Subscriptions
+interface Subscription {
+  id: string;
+  user_id: string;
+  status: string; // active, past_due, etc.
+  plan_id: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+}
+
+// Nicknames (DB type usually)
+interface Nickname {
+  id: string;
+  group_id: string;
+  setter_user_id: string; // The user who set the nickname
+  target_user_id: string; // The user who has the nickname
+  nickname: string;
+}
 
 // Queries
-export const useUsers = () => {
-  return useQuery({
-    queryKey: userKeys.lists(),
-    queryFn: async (): Promise<User[]> => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .order("display_name");
-
-      if (error) throw error;
-      return data || [];
-    },
-  });
-};
-
-export const useUser = (id: string) => {
-  return useQuery({
-    queryKey: userKeys.detail(id),
-    queryFn: async (): Promise<User | null> => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id,
-  });
-};
-
 export const useCurrentUser = () => {
-  const queryClient = useQueryClient();
+  const setUser = useAppStore((state) => state.setUser);
 
   return useQuery({
     queryKey: userKeys.current(),
     queryFn: async (): Promise<User | null> => {
-      // Session kontrolü
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) {
-        return null;
-      }
-
-      const userId = session.user.id;
-
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userId)
-        .single();
-
-      if (error) {
-        // Eğer kullanıcı bulunamadıysa (PGRST116), database trigger henüz çalışmamış olabilir
-        if (error.code === "PGRST116") {
+      try {
+        const response = await apiClient.get("/users/me");
+        const user = response.data;
+        setUser(user);
+        return user;
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          setUser(null);
           return null;
         }
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error("❌ useCurrentUser: Error:", errorMessage);
-        throw new Error(errorMessage);
+        throw error;
       }
-
-      return data;
     },
-    // Session kontrolü queryFn içinde yapılıyor, enabled her zaman true
-    enabled: true,
-    // ÖNEMLİ: Network durumu ne olursa olsun çalıştır (Simülatör/Offline için kritik)
-    networkMode: "always",
-    retry: (failureCount, error: any) => {
-      // PGRST116 hatası için retry yap (database trigger henüz çalışmamış olabilir)
-      if (error?.code === "PGRST116" && failureCount < 3) {
-        return true;
-      }
-      if (error?.code === "PGRST116" && failureCount >= 3) {
-        const userNotFoundError = new Error(
-          "User not found in database after retries"
-        );
-        (userNotFoundError as any).code = "USER_NOT_FOUND";
-        (userNotFoundError as any).originalError = error;
-        throw userNotFoundError;
-      }
-      // Diğer hatalar için daha az retry
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 2000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    staleTime: 0,
+    retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };
 
-export const useUserByCustomId = (customUserId: string) => {
+export const useUserByCustomId = (customId: string) => {
   return useQuery({
-    queryKey: [...userKeys.details(), "custom", customUserId],
-    queryFn: async (): Promise<User | null> => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("custom_user_id", customUserId)
-        .single();
-
-      if (error && error.code !== "PGRST116") throw error;
-      return data || null;
+    queryKey: userKeys.byCustomId(customId),
+    queryFn: async (): Promise<{ found: boolean; user?: User }> => {
+      const response = await apiClient.get(`/users/by-custom-id/${customId}`);
+      return response.data;
     },
-    enabled: !!customUserId,
+    enabled: !!customId,
+  });
+};
+
+// Subscriptions
+export const useUserSubscription = (userId: string) => {
+  return useQuery({
+    queryKey: subscriptionKeys.user(userId),
+    queryFn: async (): Promise<Subscription | null> => {
+      const response = await apiClient.get(`/users/${userId}/subscription`);
+      return response.data || null;
+    },
+    enabled: !!userId,
+  });
+};
+
+export const useCurrentUserSubscription = () => {
+  return useQuery({
+    queryKey: ["current-user-subscription"], // Could standardize this key
+    queryFn: async (): Promise<Subscription | null> => {
+      try {
+        const response = await apiClient.get("/users/me/subscription");
+        return response.data;
+      } catch (error: any) {
+        if (error.response?.status === 404) return null;
+        throw error;
+      }
+    },
+  });
+};
+
+export const useIsSubscriptionActive = (userId: string) => {
+  return useQuery({
+    queryKey: subscriptionKeys.active(userId),
+    queryFn: async (): Promise<boolean> => {
+      const response = await apiClient.get(
+        `/users/${userId}/subscription/active`,
+      );
+      return !!response.data?.isActive;
+    },
+    enabled: !!userId,
+  });
+};
+
+// Muted Notifications
+export const useMutedNotifications = (userId: string) => {
+  return useQuery({
+    queryKey: mutedKeys.user(userId),
+    queryFn: async (): Promise<MutedUserResponse[]> => {
+      const response = await apiClient.get(`/users/${userId}/muted`);
+      return response.data || [];
+    },
+    enabled: !!userId,
+  });
+};
+
+export const useIsMuted = (muterUserId: string, mutedUserId: string) => {
+  return useQuery({
+    queryKey: mutedKeys.check(muterUserId, mutedUserId),
+    queryFn: async (): Promise<boolean> => {
+      const response = await apiClient.get(
+        `/users/${muterUserId}/muted/check/${mutedUserId}`,
+      );
+      return !!response.data?.isMuted;
+    },
+    enabled: !!(muterUserId && mutedUserId),
+  });
+};
+
+// User Nicknames
+export const useUserNicknames = (userId: string) => {
+  return useQuery({
+    queryKey: nicknameKeys.user(userId),
+    queryFn: async (): Promise<Nickname[]> => {
+      const response = await apiClient.get(`/users/${userId}/nicknames`);
+      return response.data || [];
+    },
+    enabled: !!userId,
+  });
+};
+
+export const useUserSetNicknames = (userId: string) => {
+  return useQuery({
+    queryKey: [...nicknameKeys.user(userId), "set"],
+    queryFn: async (): Promise<Nickname[]> => {
+      const response = await apiClient.get(`/users/${userId}/nicknames/set`);
+      return response.data || [];
+    },
+    enabled: !!userId,
   });
 };
 
 // Mutations
-export const useCreateUser = () => {
+export const useUpdateUser = () => {
   const queryClient = useQueryClient();
+  const setUser = useAppStore((state) => state.setUser);
 
   return useMutation({
-    mutationFn: async (userData: CreateUser): Promise<User> => {
-      const { data, error } = await supabase
-        .from("users")
-        .insert(userData)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async (updates: {
+      displayName?: string;
+      photoUrl?: string;
+    }): Promise<User> => {
+      const response = await apiClient.patch("/users/me", updates);
+      return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.all });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: userKeys.current() });
+      setUser(data);
     },
   });
 };
 
-export const useUpdateUser = () => {
-  const queryClient = useQueryClient();
+// Onboarding is now local only, so useCompleteOnboarding is removed.
 
-  return useMutation({
-    mutationFn: async ({
-      id,
-      updates,
-    }: {
-      id: string;
-      updates: UpdateUser;
-    }): Promise<User> => {
-      const { data, error } = await supabase
-        .from("users")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) {
-        // Kullanıcı bulunamadıysa (DB'den silinmişse), özel error code ile throw et
-        // AuthContext bu hatayı yakalayıp logout yapacak
-        if (error.code === "PGRST116") {
-          const userNotFoundError = new Error("User not found in database");
-          (userNotFoundError as any).code = "USER_NOT_FOUND";
-          (userNotFoundError as any).originalError = error;
-          throw userNotFoundError;
-        }
-        throw error;
-      }
-      return data;
+export const useUpdateUserAvatar = () => {
+  const updateUser = useUpdateUser();
+  return {
+    ...updateUser,
+    mutateAsync: async (avatarUrl: string | null) => {
+      return updateUser.mutateAsync({ photoUrl: avatarUrl || undefined });
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: userKeys.all });
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(data.id) });
-    },
-  });
+  };
 };
 
 export const useDeleteUser = () => {
   const queryClient = useQueryClient();
+  const logout = useAppStore((state) => state.logout);
 
   return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
-      const { error } = await supabase.from("users").delete().eq("id", id);
-
-      if (error) throw error;
+    mutationFn: async (): Promise<void> => {
+      await apiClient.delete("/users/me");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.all });
+      queryClient.clear();
+      logout();
     },
   });
 };
 
-export const useUpdateUserAvatar = () => {
+// Subscription Mutations
+export const useCreateSubscription = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (subscriptionData: any): Promise<Subscription> => {
+      const response = await apiClient.post("/subscriptions", subscriptionData);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: subscriptionKeys.user(data.user_id),
+      });
+    },
+  });
+};
+
+export const useUpdateSubscription = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       userId,
-      avatar,
+      updates,
     }: {
       userId: string;
-      avatar: string | null;
-    }): Promise<User> => {
-      const { data, error } = await supabase
-        .from("users")
-        .update({ avatar })
-        .eq("id", userId)
-        .select()
-        .single();
-
-      if (error) {
-        if (error.code === "PGRST116") {
-          const userNotFoundError = new Error("User not found in database");
-          (userNotFoundError as any).code = "USER_NOT_FOUND";
-          (userNotFoundError as any).originalError = error;
-          throw userNotFoundError;
-        }
-        throw error;
-      }
-      return data;
+      updates: any;
+    }): Promise<Subscription> => {
+      const response = await apiClient.patch(
+        `/users/${userId}/subscription`,
+        updates,
+      );
+      return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: userKeys.all });
-      queryClient.invalidateQueries({ queryKey: userKeys.detail(data.id) });
-      queryClient.invalidateQueries({ queryKey: userKeys.current() });
+      queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: subscriptionKeys.user(data.user_id),
+      });
     },
   });
 };
 
-// Realtime Subscription Hook
-export const useUsersRealtime = () => {
+export const useCancelSubscription = () => {
   const queryClient = useQueryClient();
 
-  return useQuery({
-    queryKey: ["users-realtime"],
-    queryFn: () => {
-      const channel = supabase
-        .channel("users-changes")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "users",
-          },
-          () => {
-            queryClient.invalidateQueries({ queryKey: userKeys.all });
-          }
-        )
-        .subscribe();
-
-      return channel;
+  return useMutation({
+    mutationFn: async (userId: string): Promise<Subscription> => {
+      const response = await apiClient.post(
+        `/users/${userId}/subscription/cancel`,
+      );
+      return response.data;
     },
-    staleTime: Infinity,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: subscriptionKeys.user(data.user_id),
+      });
+    },
   });
 };
 
-export const useCompleteOnboarding = () => {
+export const useDeleteSubscription = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (userId: string): Promise<void> => {
-      const { error } = await supabase
-        .from("users")
-        .update({ has_completed_onboarding: true })
-        .eq("id", userId);
-
-      if (error) throw error;
+      await apiClient.delete(`/users/${userId}/subscription`);
     },
     onSuccess: (_, userId) => {
-      // 1. Invalidate queries so they refetch
-      queryClient.invalidateQueries({ queryKey: userKeys.all });
-
-      // 2. Directly update the cache for the current user to ensure immediate UI reflection
-      // This prevents the race condition where _layout redirects back to onboarding because the refetch hasn't finished
-      queryClient.setQueryData(
-        userKeys.current(),
-        (oldData: User | null | undefined) => {
-          if (!oldData) return oldData;
-          return {
-            ...oldData,
-            has_completed_onboarding: true,
-          };
-        }
-      );
-
-      queryClient.setQueryData(
-        userKeys.detail(userId),
-        (oldData: User | null | undefined) => {
-          if (!oldData) return oldData;
-          return {
-            ...oldData,
-            has_completed_onboarding: true,
-          };
-        }
-      );
+      queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: subscriptionKeys.user(userId),
+      });
     },
+  });
+};
+
+// Mute Mutations
+export const useMuteUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      muterUserId,
+      mutedUserId,
+    }: {
+      muterUserId: string;
+      mutedUserId: string;
+    }): Promise<MutedUserResponse> => {
+      const response = await apiClient.post("/muted", {
+        muterUserId,
+        mutedUserId,
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: mutedKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: mutedKeys.user(data.muter_user_id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: mutedKeys.check(data.muter_user_id, data.muted_user_id),
+      });
+    },
+  });
+};
+
+export const useUnmuteUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      muterUserId,
+      mutedUserId,
+    }: {
+      muterUserId: string;
+      mutedUserId: string;
+    }): Promise<void> => {
+      await apiClient.delete("/muted", { data: { muterUserId, mutedUserId } });
+    },
+    onSuccess: (_, { muterUserId, mutedUserId }) => {
+      queryClient.invalidateQueries({ queryKey: mutedKeys.all });
+      queryClient.invalidateQueries({ queryKey: mutedKeys.user(muterUserId) });
+      queryClient.invalidateQueries({
+        queryKey: mutedKeys.check(muterUserId, mutedUserId),
+      });
+    },
+  });
+};
+
+export const useToggleMuteUser = () => {
+  const muteUser = useMuteUser();
+  const unmuteUser = useUnmuteUser();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      muterUserId,
+      mutedUserId,
+      isCurrentlyMuted,
+    }: {
+      muterUserId: string;
+      mutedUserId: string;
+      isCurrentlyMuted: boolean;
+    }): Promise<void> => {
+      if (isCurrentlyMuted) {
+        await unmuteUser.mutateAsync({ muterUserId, mutedUserId });
+      } else {
+        await muteUser.mutateAsync({ muterUserId, mutedUserId });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: mutedKeys.all });
+    },
+  });
+};
+
+// Events (User Scope)
+export const useUserCreatedEvents = (userId: string) => {
+  return useQuery({
+    queryKey: eventKeys.user(userId),
+    queryFn: async (): Promise<any[]> => {
+      const response = await apiClient.get(`/users/${userId}/events`);
+      return response.data || [];
+    },
+    enabled: !!userId,
+  });
+};
+
+export const useUserGroupsEvents = (userId: string) => {
+  return useQuery({
+    queryKey: [...eventKeys.all, "user-groups", userId],
+    queryFn: async (): Promise<any[]> => {
+      const response = await apiClient.get(`/users/${userId}/groups/events`);
+      return response.data || [];
+    },
+    enabled: !!userId,
   });
 };
