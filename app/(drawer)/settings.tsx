@@ -1,7 +1,8 @@
 import { BaseLayout, Typography } from "@/components/shared";
-import { useAuth } from "@/contexts/AuthContext";
+// Removed Contexts
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotificationSettings } from "@/hooks/useNotificationSettings";
+import { useAppStore } from "@/store/useAppStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -17,7 +18,7 @@ import { ScrollView } from "react-native-gesture-handler";
 
 export default function SettingsScreen() {
   const { colors, toggleTheme, isDark } = useTheme();
-  const { user } = useAuth();
+  const { user } = useAppStore();
   const router = useRouter();
 
   // Notification Hook
@@ -240,7 +241,7 @@ export default function SettingsScreen() {
             ]}
           >
             <Typography variant="caption" color={colors.secondaryText}>
-              Oturum açan: {user?.custom_user_id}
+              Oturum açan: {user?.customId}
             </Typography>
           </View>
         </View>

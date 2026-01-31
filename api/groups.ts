@@ -1,741 +1,714 @@
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import type {
-    CreateGroup,
-    CreateGroupJoinRequest,
-    CreateGroupMember,
-    Group,
-    GroupJoinRequest,
-    GroupJoinRequestWithDetails,
-    GroupMember,
-    GroupMemberWithUser,
-    GroupWithOwner,
-    UpdateGroup
-} from '../types/database';
-import {supabase} from './supabase';
+import { useAppStore } from "@/store/useAppStore";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { apiClient } from "./client";
+import {
+  eventKeys,
+  groupKeys,
+  moodKeys,
+  nicknameKeys,
+  statusKeys,
+} from "./keys";
+import {
+  Group,
+  GroupMember,
+  GroupMood,
+  JoinRequest,
+  UpdateStatusResponse,
+} from "./types";
 
-// Query Keys
-export const groupKeys = {
-    all: ['groups'] as const,
-    lists: () => [...groupKeys.all, 'list'] as const,
-    list: (filters: string) => [...groupKeys.lists(), {filters}] as const,
-    details: () => [...groupKeys.all, 'detail'] as const,
-    detail: (id: string) => [...groupKeys.details(), id] as const,
-    members: (groupId: string) => [...groupKeys.detail(groupId), 'members'] as const,
-    userGroups: (userId: string) => [...groupKeys.all, 'user', userId] as const,
-    joinRequests: (groupId: string) => [...groupKeys.detail(groupId), 'join-requests'] as const,
-    myJoinRequests: (userId: string) => [...groupKeys.all, 'join-requests', 'user', userId] as const,
-};
+import { joinGroupRoom, leaveGroupRoom } from "./socket";
 
-// Group Queries
-export const useGroups = () => {
-    return useQuery({
-        queryKey: groupKeys.lists(),
-        queryFn: async (): Promise<GroupWithOwner[]> => {
-            const {data, error} = await supabase
-                .from('groups')
-                .select(`
-          *,
-          owner:users!groups_owner_id_fkey(*)
-        `)
-                .order('created_at', {ascending: false});
+// ==========================================
+// GROUPS (Core)
+// ==========================================
 
-            if (error) throw error;
-            return data || [];
-        },
-    });
+export const useUserGroups = () => {
+  const setGroups = useAppStore((state) => state.setGroups);
+
+  return useQuery({
+    queryKey: groupKeys.lists(),
+    queryFn: async (): Promise<Group[]> => {
+      const response = await apiClient.get("/users/me/groups");
+      const memberships = response.data;
+      const groups = memberships.map((m: any) => m.group);
+      setGroups(groups);
+      return groups;
+    },
+    staleTime: 2 * 60 * 1000,
+  });
 };
 
 export const useGroup = (id: string) => {
-    return useQuery({
-        queryKey: groupKeys.detail(id),
-        queryFn: async (): Promise<GroupWithOwner | null> => {
-            const {data, error} = await supabase
-                .from('groups')
-                .select(`
-          *,
-          owner:users!groups_owner_id_fkey(*)
-        `)
-                .eq('id', id)
-                .single();
-
-            if (error) throw error;
-            return data;
-        },
-        enabled: !!id,
-    });
+  return useQuery({
+    queryKey: groupKeys.detail(id),
+    queryFn: async (): Promise<Group> => {
+      const response = await apiClient.get(`/groups/${id}`);
+      return response.data;
+    },
+    enabled: !!id,
+  });
 };
 
 export const useGroupByInviteCode = (inviteCode: string) => {
-    return useQuery({
-        queryKey: [...groupKeys.lists(), {inviteCode}],
-        queryFn: async (): Promise<GroupWithOwner | null> => {
-            const {data, error} = await supabase
-                .from('groups')
-                .select(`
-          *,
-          owner:users!groups_owner_id_fkey(*)
-        `)
-                .eq('invite_code', inviteCode)
-                .single();
-
-            if (error) throw error;
-            return data;
-        },
-        enabled: !!inviteCode,
-    });
+  return useQuery({
+    queryKey: groupKeys.invite(inviteCode),
+    queryFn: async (): Promise<Group> => {
+      const response = await apiClient.get(`/groups/invite/${inviteCode}`);
+      return response.data;
+    },
+    enabled: !!inviteCode && inviteCode.length >= 6,
+    retry: false,
+  });
 };
 
-export const useUserGroups = (userId: string) => {
-    return useQuery({
-        queryKey: groupKeys.userGroups(userId),
-        queryFn: async (): Promise<GroupWithOwner[]> => {
-            if (!userId) {
-                return [];
-            }
-
-            // Önce kullanıcının gruplarını al
-            const {data: memberData, error: memberError} = await supabase
-                .from('group_members')
-                .select(`
-          group_id,
-          group:groups(
-            *,
-            owner:users!groups_owner_id_fkey(*)
-          )
-        `)
-                .eq('user_id', userId);
-
-            if (memberError) {
-                const errorMessage = memberError instanceof Error ? memberError.message : String(memberError);
-                console.error('Error fetching user groups:', errorMessage);
-                throw memberError;
-            }
-
-            if (!memberData || memberData.length === 0) {
-                return [];
-            }
-
-            // Her grup için üye sayısını al
-            const groupIds = memberData.map(item => item.group_id).filter(Boolean) as string[];
-
-            if (groupIds.length === 0) {
-                return [];
-            }
-
-            const {data: countData, error: countError} = await supabase
-                .from('group_members')
-                .select('group_id')
-                .in('group_id', groupIds);
-
-            if (countError) {
-                const errorMessage = countError instanceof Error ? countError.message : String(countError);
-                console.error('Error fetching group member counts:', errorMessage);
-                throw countError;
-            }
-
-            // Üye sayılarını hesapla
-            const memberCounts: Record<string, number> = {};
-            countData?.forEach(item => {
-                if (item.group_id) {
-                    memberCounts[item.group_id] = (memberCounts[item.group_id] || 0) + 1;
-                }
-            });
-
-            // Grupları üye sayıları ile birleştir
-            const groups = memberData
-                .map(item => {
-                    const group = item.group;
-                    if (!group) return null;
-                    return {
-                        ...group,
-                        member_count: memberCounts[item.group_id] || 0,
-                    };
-                })
-                .filter(Boolean) as unknown as GroupWithOwner[];
-
-            return groups;
-        },
-        enabled: !!userId,
-        networkMode: 'always',
-        staleTime: 5 * 60 * 1000, // 5 dakika - cache'teki veri 5 dk boyunca fresh sayılır, tekrar fetch etmez
-        structuralSharing: false, // Her zaman yeni array referansı - context güncellemeleri için gerekli
-    });
-};
-
-// Group Member Queries
-export const useGroupMembers = (groupId: string) => {
-    return useQuery({
-        queryKey: groupKeys.members(groupId),
-        queryFn: async (): Promise<GroupMemberWithUser[]> => {
-            const {data, error} = await supabase
-                .from('group_members')
-                .select(`
-          *,
-          user:users(*)
-        `)
-                .eq('group_id', groupId)
-                .order('joined_at');
-
-            if (error) throw error;
-            return data || [];
-        },
-        enabled: !!groupId,
-    });
-};
-
-export const useIsGroupMember = (groupId: string, userId: string) => {
-    return useQuery({
-        queryKey: [...groupKeys.members(groupId), 'check', userId],
-        queryFn: async (): Promise<boolean> => {
-            const {data, error} = await supabase
-                .from('group_members')
-                .select('user_id')
-                .eq('group_id', groupId)
-                .eq('user_id', userId)
-                .single();
-
-            if (error && error.code !== 'PGRST116') throw error;
-            return !!data;
-        },
-        enabled: !!(groupId && userId),
-    });
-};
-
-// Group Mutations
 export const useCreateGroup = () => {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
+  const addGroup = useAppStore((state) => state.addGroup);
 
-    return useMutation({
-        mutationFn: async (groupData: CreateGroup): Promise<Group> => {
-            const {data, error} = await supabase
-                .from('groups')
-                .insert(groupData)
-                .select()
-                .single();
-
-            if (error) throw error;
-            return data;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: groupKeys.all});
-        },
-    });
+  return useMutation({
+    mutationFn: async (data: {
+      name: string;
+      type: string;
+    }): Promise<Group> => {
+      const response = await apiClient.post("/groups", data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+      addGroup(data as any);
+    },
+  });
 };
 
 export const useUpdateGroup = () => {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
-    return useMutation({
-        mutationFn: async ({id, updates}: { id: string; updates: UpdateGroup }): Promise<Group> => {
-            const {data, error} = await supabase
-                .from('groups')
-                .update(updates)
-                .eq('id', id)
-                .select()
-                .single();
-
-            if (error) throw error;
-            return data;
-        },
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: groupKeys.all});
-            queryClient.invalidateQueries({queryKey: groupKeys.detail(data.id)});
-            queryClient.invalidateQueries({queryKey: groupKeys.members(data.id)});
-        },
-    });
+  return useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: { name?: string; description?: string };
+    }): Promise<Group> => {
+      const response = await apiClient.patch(`/groups/${id}`, updates);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: groupKeys.detail(data.id) });
+    },
+  });
 };
 
-// Transfer group ownership (sadece mevcut owner yapabilir)
-export const useTransferGroupOwnership = () => {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: async ({groupId, newOwnerId}: { groupId: string; newOwnerId: string }): Promise<Group> => {
-            const {data, error} = await supabase
-                .from('groups')
-                .update({owner_id: newOwnerId})
-                .eq('id', groupId)
-                .select()
-                .single();
-
-            if (error) throw error;
-            return data;
-        },
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: groupKeys.all});
-            queryClient.invalidateQueries({queryKey: groupKeys.detail(data.id)});
-            queryClient.invalidateQueries({queryKey: groupKeys.members(data.id)});
-        },
-    });
-};
-
-export const useDeleteGroup = () => {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: async (id: string): Promise<void> => {
-            const {error} = await supabase
-                .from('groups')
-                .delete()
-                .eq('id', id);
-
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({queryKey: groupKeys.all});
-        },
-    });
-};
-
-// Group Member Mutations
 export const useJoinGroup = () => {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
-    return useMutation({
-        mutationFn: async (memberData: CreateGroupMember): Promise<GroupMember> => {
-            const {data, error} = await supabase
-                .from('group_members')
-                .insert(memberData)
-                .select()
-                .single();
-
-            if (error) throw error;
-            return data;
-        },
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({queryKey: groupKeys.all});
-            queryClient.invalidateQueries({queryKey: groupKeys.members(data.group_id)});
-            queryClient.invalidateQueries({queryKey: groupKeys.userGroups(data.user_id)});
-        },
-    });
+  return useMutation({
+    mutationFn: async (data: { inviteCode: string }): Promise<Group> => {
+      const response = await apiClient.post("/groups/join", data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+    },
+  });
 };
 
 export const useLeaveGroup = () => {
-    const queryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
-    return useMutation({
-        mutationFn: async ({groupId, userId}: { groupId: string; userId: string }): Promise<void> => {
-            // Önce grup üyeliğini sil
-            const {error: memberError} = await supabase
-                .from('group_members')
-                .delete()
-                .eq('group_id', groupId)
-                .eq('user_id', userId);
-
-            if (memberError) throw memberError;
-
-            // Kullanıcı gruptan atıldığında, group_join_requests'teki approved/rejected kayıtlarını sil
-            // Bu sayede kullanıcı tekrar istek atabilir
-            const {error: joinRequestError} = await supabase
-                .from('group_join_requests')
-                .delete()
-                .eq('group_id', groupId)
-                .eq('requester_id', userId)
-                .in('status', ['approved', 'rejected']);
-
-            if (joinRequestError) {
-                console.error('Join request temizleme hatası (non-blocking):', joinRequestError);
-                // Hata olsa bile devam et (non-blocking)
-            }
-        },
-        onSuccess: (_, {groupId, userId}) => {
-            queryClient.invalidateQueries({queryKey: groupKeys.all});
-            queryClient.invalidateQueries({queryKey: groupKeys.members(groupId)});
-            queryClient.invalidateQueries({queryKey: groupKeys.userGroups(userId)});
-            queryClient.invalidateQueries({queryKey: groupKeys.joinRequests(groupId)});
-            queryClient.invalidateQueries({queryKey: groupKeys.myJoinRequests(userId)});
-        },
-    });
+  return useMutation({
+    mutationFn: async (groupId: string): Promise<void> => {
+      await apiClient.delete(`/groups/${groupId}/leave`);
+    },
+    onSuccess: (_, groupId) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) });
+    },
+  });
 };
 
-// Realtime Subscription Hooks
-export const useGroupsRealtime = () => {
-    const queryClient = useQueryClient();
+export const useTransferGroupOwnership = () => {
+  const queryClient = useQueryClient();
 
-    return useQuery({
-        queryKey: ['groups-realtime'],
-        queryFn: () => {
-            const channel = supabase
-                .channel('groups-changes')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'groups',
-                    },
-                    () => {
-                        queryClient.invalidateQueries({queryKey: groupKeys.all});
-                    }
-                )
-                .subscribe();
-
-            return channel;
-        },
-        staleTime: Infinity,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-    });
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      newOwnerId,
+    }: {
+      groupId: string;
+      newOwnerId: string;
+    }): Promise<void> => {
+      await apiClient.post(`/groups/${groupId}/transfer-ownership`, {
+        newOwnerId,
+      });
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) });
+      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+    },
+  });
 };
 
-export const useGroupMembersRealtime = (groupId: string) => {
-    const queryClient = useQueryClient();
+// ==========================================
+// MEMBERS
+// ==========================================
 
-    return useQuery({
-        queryKey: ['group-members-realtime', groupId],
-        queryFn: () => {
-            const channel = supabase
-                .channel(`group-members-changes-${groupId}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'group_members',
-                        filter: `group_id=eq.${groupId}`,
-                    },
-                    () => {
-                        queryClient.invalidateQueries({queryKey: groupKeys.members(groupId)});
-                    }
-                )
-                .subscribe();
+// Extended GroupMember interface for UI compatibility
+export interface UIGroupMember extends GroupMember {
+  id: string; // Alias for userId
+  displayName?: string;
+  photoUrl?: string; // from contract or joined user
+  customId?: string;
+}
 
-            return channel;
-        },
-        enabled: !!groupId,
-        staleTime: Infinity,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-    });
+export const useGroupMembers = (groupId: string) => {
+  const updateGroupMembers = useAppStore((state) => state.updateGroupMembers);
+
+  return useQuery({
+    queryKey: groupKeys.members(groupId),
+    queryFn: async (): Promise<UIGroupMember[]> => {
+      const response = await apiClient.get(`/groups/${groupId}/members`);
+      const rawMembers: any[] = response.data;
+
+      const members: UIGroupMember[] = rawMembers.map((m: any) => ({
+        ...m,
+        id: m.userId,
+        displayName: m.user?.displayName || m.displayName,
+        photoUrl: m.user?.photoUrl || m.photoUrl,
+        customId: m.user?.customId || m.customId,
+        role: m.role || "MEMBER",
+      }));
+
+      updateGroupMembers(groupId, members);
+      return members;
+    },
+    enabled: !!groupId,
+  });
 };
 
-// Group Join Request Queries
-export const useGroupJoinRequests = (groupId: string, status?: 'pending' | 'approved' | 'rejected') => {
-    return useQuery({
-        queryKey: [...groupKeys.joinRequests(groupId), status],
-        queryFn: async (): Promise<GroupJoinRequestWithDetails[]> => {
-            let query = supabase
-                .from('group_join_requests')
-                .select(`
-          *,
-          group:groups(
-            *,
-            owner:users!groups_owner_id_fkey(*)
-          ),
-          requester:users!group_join_requests_requester_id_fkey(*)
-        `)
-                .eq('group_id', groupId)
-                .order('created_at', {ascending: false});
+export const useRemoveGroupMember = () => {
+  const queryClient = useQueryClient();
 
-            if (status) {
-                query = query.eq('status', status);
-            }
-
-            const {data, error} = await query;
-
-            if (error) throw error;
-            return data || [];
-        },
-        enabled: !!groupId,
-    });
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      userId,
+    }: {
+      groupId: string;
+      userId: string;
+    }): Promise<void> => {
+      await apiClient.delete(`/groups/${groupId}/members/${userId}`);
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+    },
+  });
 };
 
-export const useMyJoinRequests = (userId: string) => {
-    return useQuery({
-        queryKey: groupKeys.myJoinRequests(userId),
-        queryFn: async (): Promise<GroupJoinRequestWithDetails[]> => {
-            const {data, error} = await supabase
-                .from('group_join_requests')
-                .select(`
-          *,
-          group:groups(
-            *,
-            owner:users!groups_owner_id_fkey(*)
-          ),
-          requester:users!group_join_requests_requester_id_fkey(*)
-        `)
-                .eq('requester_id', userId)
-                .order('created_at', {ascending: false});
+export const useInviteUser = () => {
+  const queryClient = useQueryClient();
 
-            if (error) throw error;
-            return data || [];
-        },
-        enabled: !!userId,
-    });
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      userId,
+    }: {
+      groupId: string;
+      userId: string;
+    }): Promise<void> => {
+      await apiClient.post(`/groups/${groupId}/invite`, { userId });
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+    },
+  });
 };
 
-// Realtime Subscription Hooks for Join Requests
-export const useGroupJoinRequestsRealtime = (groupId: string) => {
-    const queryClient = useQueryClient();
+// ==========================================
+// JOIN REQUESTS
+// ==========================================
 
-    return useQuery({
-        queryKey: ['group-join-requests-realtime', groupId],
-        queryFn: () => {
-            const channel = supabase
-                .channel(`group-join-requests-changes-${groupId}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'group_join_requests',
-                        filter: `group_id=eq.${groupId}`,
-                    },
-                    () => {
-                        // Tüm status'ler için query'leri invalidate et
-                        queryClient.invalidateQueries({queryKey: groupKeys.joinRequests(groupId)});
-                        queryClient.invalidateQueries({queryKey: [...groupKeys.joinRequests(groupId), 'pending']});
-                        queryClient.invalidateQueries({queryKey: [...groupKeys.joinRequests(groupId), 'approved']});
-                        queryClient.invalidateQueries({queryKey: [...groupKeys.joinRequests(groupId), 'rejected']});
-                    }
-                )
-                .subscribe();
+export const useGroupJoinRequests = (groupId: string) => {
+  return useQuery({
+    queryKey: groupKeys.requests(groupId),
+    queryFn: async (): Promise<
+      (JoinRequest & {
+        requester: {
+          id: string;
+          displayName?: string;
+          photoUrl?: string;
+          customId?: string;
+        };
+      })[]
+    > => {
+      const response = await apiClient.get(`/groups/${groupId}/requests`);
+      const rawRequests: any[] = response.data;
 
-            return channel;
+      return rawRequests.map((req) => ({
+        ...req,
+        requester: {
+          id: req.user.id,
+          displayName: req.user.displayName || undefined,
+          photoUrl: req.user.photoUrl || undefined,
+          customId: req.user.customId,
         },
-        enabled: !!groupId,
-        staleTime: Infinity,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-    });
+      }));
+    },
+    enabled: !!groupId,
+  });
 };
 
-export const useMyJoinRequestsRealtime = (userId: string) => {
-    const queryClient = useQueryClient();
+export const useSendJoinRequest = () => {
+  const queryClient = useQueryClient();
 
-    return useQuery({
-        queryKey: ['my-join-requests-realtime', userId],
-        queryFn: () => {
-            const channel = supabase
-                .channel(`my-join-requests-changes-${userId}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'group_join_requests',
-                        filter: `requester_id=eq.${userId}`,
-                    },
-                    () => {
-                        queryClient.invalidateQueries({queryKey: groupKeys.myJoinRequests(userId)});
-                    }
-                )
-                .subscribe();
-
-            return channel;
-        },
-        enabled: !!userId,
-        staleTime: Infinity,
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-    });
+  return useMutation({
+    mutationFn: async (groupId: string): Promise<JoinRequest> => {
+      const response = await apiClient.post(`/groups/${groupId}/join-request`);
+      return response.data;
+    },
+    onSuccess: (_, groupId) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.requests(groupId) });
+    },
+  });
 };
+export const useCreateJoinRequest = useSendJoinRequest;
 
-// Group Join Request Mutations
-export const useCreateJoinRequest = () => {
-    const queryClient = useQueryClient();
+export const useRespondToJoinRequest = () => {
+  const queryClient = useQueryClient();
 
-    return useMutation({
-        mutationFn: async (request: CreateGroupJoinRequest & { invite_code: string }): Promise<GroupJoinRequest> => {
-            // RPC fonksiyonunu çağır
-            const {data, error} = await supabase.rpc('create_join_request', {
-                p_group_id: request.group_id,
-                p_requester_id: request.requester_id,
-                p_invite_code: request.invite_code,
-            });
-
-            if (error) throw error;
-
-            if (!data.success) {
-                throw new Error(data.error || 'Bilinmeyen bir hata oluştu');
-            }
-
-            // Başarılı işlem sonucunda dönen veriyi formatla
-            // RPC'den dönen data.data içinde id, group_id, requester_id, status var
-            // Ancak tam GroupJoinRequest objesi için created_at vb. eksik olabilir
-            // Bu yüzden basitçe dönen veriyi kullanıyoruz veya tekrar fetch edebiliriz
-            // Performans için dönen veriyi kullanıp eksikleri client'ta tamamlayabiliriz
-            return {
-                ...data.data,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            } as GroupJoinRequest;
-        },
-        onSuccess: async (data) => {
-            // İlgili query'leri invalidate et
-            queryClient.invalidateQueries({queryKey: groupKeys.joinRequests(data.group_id)});
-            queryClient.invalidateQueries({queryKey: groupKeys.myJoinRequests(data.requester_id)});
-
-            // Bildirim gönder (async, hata olsa bile devam et)
-            try {
-                // Grup bilgilerini ve sahibini al
-                const {data: groupData} = await supabase
-                    .from('groups')
-                    .select(`
-            name,
-            owner_id,
-            owner:users!groups_owner_id_fkey(
-              id,
-              onesignal_player_id
-            )
-          `)
-                    .eq('id', data.group_id)
-                    .single();
-
-                // İstek yapan kullanıcının bilgilerini al
-                const {data: requesterData} = await supabase
-                    .from('users')
-                    .select('display_name, custom_user_id')
-                    .eq('id', data.requester_id)
-                    .single();
-
-                if (groupData?.owner_id && groupData?.name && requesterData) {
-                    const {sendJoinRequestNotification} = await import('./notifications');
-                    await sendJoinRequestNotification(
-                        groupData.owner_id, // Supabase user ID (external_id olarak kullanılacak)
-                        data.group_id,
-                        groupData.name,
-                        requesterData.display_name || requesterData.custom_user_id,
-                        data.requester_id // Rate limiting için
-                    );
-                }
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error('Bildirim gönderme hatası (non-blocking):', errorMessage);
-            }
-        },
-    });
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      requestId,
+      response,
+    }: {
+      groupId: string;
+      requestId: string;
+      response: "APPROVED" | "REJECTED";
+    }): Promise<void> => {
+      await apiClient.post(`/groups/${groupId}/requests/${requestId}/respond`, {
+        response,
+      });
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.requests(groupId) });
+      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+    },
+  });
 };
 
 export const useApproveJoinRequest = () => {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: async ({requestId, groupId}: { requestId: string; groupId: string }): Promise<void> => {
-            // İsteği onayla
-            const {data: request, error: requestError} = await supabase
-                .from('group_join_requests')
-                .select('requester_id')
-                .eq('id', requestId)
-                .single();
-
-            if (requestError) throw requestError;
-            if (!request) throw new Error('İstek bulunamadı');
-
-            // Gruba üye ekle
-            const {error: memberError} = await supabase
-                .from('group_members')
-                .insert({
-                    group_id: groupId,
-                    user_id: request.requester_id,
-                });
-
-            if (memberError) throw memberError;
-
-            // İstek durumunu güncelle
-            const {error: updateError} = await supabase
-                .from('group_join_requests')
-                .update({status: 'approved', updated_at: new Date().toISOString()})
-                .eq('id', requestId);
-
-            if (updateError) throw updateError;
-        },
-        onSuccess: async (_, variables) => {
-            // İstek bilgilerini al (requester_id için)
-            const {data: requestData} = await supabase
-                .from('group_join_requests')
-                .select('requester_id, group_id')
-                .eq('id', variables.requestId)
-                .single();
-
-            // İlgili query'leri invalidate et
-            queryClient.invalidateQueries({queryKey: groupKeys.joinRequests(variables.groupId)});
-            queryClient.invalidateQueries({queryKey: groupKeys.members(variables.groupId)});
-            queryClient.invalidateQueries({queryKey: groupKeys.userGroups(variables.groupId)});
-
-            // Requester'ın grupları listesini invalidate et (önemli: yeni gruba katıldığı için)
-            if (requestData?.requester_id) {
-                queryClient.invalidateQueries({queryKey: groupKeys.userGroups(requestData.requester_id)});
-            }
-
-            // Bildirim gönder (async, hata olsa bile devam et)
-            try {
-                if (!requestData) return;
-
-                // Grup bilgilerini al (owner_id dahil)
-                const {data: groupData} = await supabase
-                    .from('groups')
-                    .select('name, owner_id')
-                    .eq('id', requestData.group_id)
-                    .single();
-
-                if (groupData?.name && groupData?.owner_id && requestData.requester_id) {
-                    const {sendJoinRequestStatusNotification} = await import('./notifications');
-                    await sendJoinRequestStatusNotification(
-                        requestData.requester_id, // Supabase user ID (external_id olarak kullanılacak)
-                        variables.groupId,
-                        groupData.name,
-                        'approved',
-                        groupData.owner_id // Rate limiting için
-                    );
-                }
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error('Bildirim gönderme hatası (non-blocking):', errorMessage);
-            }
-        },
-    });
+  const respond = useRespondToJoinRequest();
+  return {
+    ...respond,
+    mutateAsync: async (variables: { groupId: string; requestId: string }) => {
+      return respond.mutateAsync({ ...variables, response: "APPROVED" });
+    },
+  };
 };
 
 export const useRejectJoinRequest = () => {
-    const queryClient = useQueryClient();
+  const respond = useRespondToJoinRequest();
+  return {
+    ...respond,
+    mutateAsync: async (variables: { groupId: string; requestId: string }) => {
+      return respond.mutateAsync({ ...variables, response: "REJECTED" });
+    },
+  };
+};
 
-    return useMutation({
-        mutationFn: async ({requestId, groupId}: { requestId: string; groupId: string }): Promise<void> => {
-            const {error} = await supabase
-                .from('group_join_requests')
-                .update({status: 'rejected', updated_at: new Date().toISOString()})
-                .eq('id', requestId);
+export const useGroupJoinRequestsRealtime = (groupId: string) => {
+  // Placeholder for future realtime implementation
+  return;
+};
 
-            if (error) throw error;
-        },
-        onSuccess: async (_, variables) => {
-            // İlgili query'leri invalidate et
-            queryClient.invalidateQueries({queryKey: groupKeys.joinRequests(variables.groupId)});
-            queryClient.invalidateQueries({queryKey: groupKeys.myJoinRequests(variables.groupId)});
+export const useGroupEventsRealtime = (groupId: string) => {
+  useEffect(() => {
+    if (!groupId) return;
 
-            // Bildirim gönder (async, hata olsa bile devam et)
-            try {
-                // İstek bilgilerini al
-                const {data: requestData} = await supabase
-                    .from('group_join_requests')
-                    .select('requester_id, group_id')
-                    .eq('id', variables.requestId)
-                    .single();
+    joinGroupRoom(groupId);
 
-                if (!requestData) return;
+    return () => {
+      leaveGroupRoom(groupId);
+    };
+  }, [groupId]);
+};
 
-                // Grup bilgilerini al (owner_id dahil)
-                const {data: groupData} = await supabase
-                    .from('groups')
-                    .select('name, owner_id')
-                    .eq('id', requestData.group_id)
-                    .single();
+// ==========================================
+// STATUS & MOODS
+// ==========================================
 
-                if (groupData?.name && groupData?.owner_id && requestData.requester_id) {
-                    const {sendJoinRequestStatusNotification} = await import('./notifications');
-                    await sendJoinRequestStatusNotification(
-                        requestData.requester_id, // Supabase user ID (external_id olarak kullanılacak)
-                        variables.groupId,
-                        groupData.name,
-                        'rejected',
-                        groupData.owner_id // Rate limiting için
-                    );
-                }
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error('Bildirim gönderme hatası (non-blocking):', errorMessage);
-            }
-        },
-    });
+export interface CreateStatusPayload {
+  groupId: string;
+  text: string;
+  emoji?: string;
+  mood?: string;
+  owner_id?: string;
+  is_custom?: boolean;
+  notifies?: boolean;
+}
+
+export const useSetUserStatus = () => {
+  const queryClient = useQueryClient();
+  const updateGroupStatus = useAppStore((state) => state.updateGroupStatus);
+  const updateGroupMood = useAppStore((state) => state.updateGroupMood);
+
+  return useMutation({
+    mutationFn: async (
+      payload: CreateStatusPayload,
+    ): Promise<UpdateStatusResponse> => {
+      const response = await apiClient.post("/status", payload);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      updateGroupStatus(data.groupId, {
+        userId: data.userId,
+        text: data.text,
+        emoji: data.emoji,
+        updatedAt: data.updatedAt,
+      } as any);
+
+      if (data.mood) {
+        updateGroupMood(data.groupId, {
+          userId: data.userId,
+          mood: data.mood,
+          updatedAt: data.updatedAt,
+        } as any);
+      }
+
+      queryClient.invalidateQueries({
+        queryKey: groupKeys.detail(data.groupId),
+      });
+    },
+  });
+};
+
+// Legacy UseCreateMood adaptation
+export const useCreateMood = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      data,
+    }: {
+      groupId: string;
+      data: { text: string; emoji: string; mood: string };
+    }): Promise<GroupMood> => {
+      // Assuming endpoint is similar or we map it to status or group moods
+      const response = await apiClient.post(`/groups/${groupId}/moods`, data);
+      return response.data;
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({
+        queryKey: [...moodKeys.lists(), groupId],
+      });
+    },
+  });
+};
+
+export const useMoods = (groupId?: string) => {
+  return useQuery({
+    queryKey: [...moodKeys.lists(), groupId || "all"],
+    queryFn: async (): Promise<GroupMood[]> => {
+      try {
+        const response = await apiClient.get("/moods", { params: { groupId } });
+        return response.data;
+      } catch (e) {
+        return [];
+      }
+    },
+  });
+};
+
+export const useCustomStatuses = (groupId?: string, userId?: string) => {
+  return useQuery({
+    queryKey: statusKeys.custom(groupId, userId),
+    queryFn: async (): Promise<any[]> => {
+      return []; // Mock
+    },
+    initialData: [],
+  });
+};
+
+export const useDefaultStatuses = () => {
+  return useQuery({
+    queryKey: statusKeys.default,
+    queryFn: async (): Promise<any[]> => {
+      const texts = [
+        "Müsait",
+        "Meşgul",
+        "Toplantıda",
+        "Okulda",
+        "İşte",
+        "Uykuda",
+        "Spor yapıyor",
+      ];
+      return texts.map((text, index) => ({
+        id: `default-${index}`,
+        text,
+        is_custom: false,
+      }));
+    },
+    staleTime: Infinity,
+  });
+};
+
+export const useDeleteStatus = () => {
+  return useMutation({
+    mutationFn: async () => {},
+  });
+};
+export const useDeleteMood = () => {
+  return useMutation({
+    mutationFn: async () => {},
+  });
+};
+export const useCreateStatus = () => {
+  return useMutation({
+    mutationFn: async () => {},
+  });
+};
+
+// ==========================================
+// NICKNAMES (Group Scoped)
+// ==========================================
+
+export const useGroupNicknames = (groupId: string) => {
+  return useQuery({
+    queryKey: nicknameKeys.group(groupId),
+    queryFn: async (): Promise<any[]> => {
+      const response = await apiClient.get(`/groups/${groupId}/nicknames`);
+      return response.data || [];
+    },
+    enabled: !!groupId,
+  });
+};
+
+export const useNickname = (
+  groupId: string,
+  setterUserId: string,
+  targetUserId: string,
+) => {
+  return useQuery({
+    queryKey: nicknameKeys.specific(groupId, setterUserId, targetUserId),
+    queryFn: async (): Promise<any | null> => {
+      const response = await apiClient.get(`/nicknames/specific`, {
+        params: { groupId, setterUserId, targetUserId },
+      });
+      return response.data || null;
+    },
+    enabled: !!(groupId && setterUserId && targetUserId),
+  });
+};
+
+export const useCreateNickname = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (nicknameData: any): Promise<any> => {
+      const response = await apiClient.post("/nicknames", nicknameData);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: nicknameKeys.group(data.group_id),
+      });
+    },
+  });
+};
+
+export const useUpdateNickname = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      setterUserId,
+      targetUserId,
+      updates,
+    }: {
+      groupId: string;
+      setterUserId: string;
+      targetUserId: string;
+      updates: any;
+    }): Promise<any> => {
+      const response = await apiClient.patch("/nicknames", {
+        groupId,
+        setterUserId,
+        targetUserId,
+        ...updates,
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: nicknameKeys.group(data.group_id),
+      });
+    },
+  });
+};
+
+export const useDeleteNickname = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      setterUserId,
+      targetUserId,
+    }: {
+      groupId: string;
+      setterUserId: string;
+      targetUserId: string;
+    }): Promise<void> => {
+      await apiClient.delete("/nicknames", {
+        data: { groupId, setterUserId, targetUserId },
+      });
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
+      queryClient.invalidateQueries({ queryKey: nicknameKeys.group(groupId) });
+    },
+  });
+};
+
+export const useUpsertNickname = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (nicknameData: any): Promise<any> => {
+      const response = await apiClient.post("/nicknames/upsert", nicknameData);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: nicknameKeys.group(data.group_id),
+      });
+    },
+  });
+};
+
+// ==========================================
+// EVENTS (Group Scoped)
+// ==========================================
+
+export const useGroupEvents = (groupId: string) => {
+  return useQuery({
+    queryKey: eventKeys.group(groupId),
+    queryFn: async (): Promise<any[]> => {
+      const response = await apiClient.get(`/groups/${groupId}/events`);
+      return response.data || [];
+    },
+    enabled: !!groupId,
+  });
+};
+
+export const useUpcomingGroupEvents = (groupId: string) => {
+  return useQuery({
+    queryKey: eventKeys.upcoming(groupId),
+    queryFn: async (): Promise<any[]> => {
+      const response = await apiClient.get(
+        `/groups/${groupId}/events/upcoming`,
+      );
+      return response.data || [];
+    },
+    enabled: !!groupId,
+  });
+};
+
+export const useEvent = (id: string) => {
+  return useQuery({
+    queryKey: eventKeys.detail(id),
+    queryFn: async (): Promise<any | null> => {
+      const response = await apiClient.get(`/events/${id}`);
+      return response.data;
+    },
+    enabled: !!id,
+  });
+};
+
+export const useCreateEvent = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (eventData: any): Promise<any> => {
+      const response = await apiClient.post("/events", eventData);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: eventKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: eventKeys.group(data.group_id),
+      });
+    },
+  });
+};
+
+export const useUpdateEvent = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: any;
+    }): Promise<any> => {
+      const response = await apiClient.patch(`/events/${id}`, updates);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: eventKeys.all });
+      queryClient.invalidateQueries({ queryKey: eventKeys.detail(data.id) });
+      queryClient.invalidateQueries({
+        queryKey: eventKeys.group(data.group_id),
+      });
+    },
+  });
+};
+
+export const useDeleteEvent = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      await apiClient.delete(`/events/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: eventKeys.all });
+    },
+  });
+};
+
+// ==========================================
+// NOTIFICATIONS (Settings)
+// ==========================================
+
+export const useMuteGroup = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      isMuted,
+    }: {
+      groupId: string;
+      isMuted: boolean;
+    }): Promise<void> => {
+      await apiClient.post(`/groups/${groupId}/mute`, { isMuted });
+    },
+    onSuccess: (_, { groupId }) => {
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+    },
+  });
 };

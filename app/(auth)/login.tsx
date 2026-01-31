@@ -1,9 +1,13 @@
-import { signInWithApple, signInWithGoogle } from "@/api/provider-auth";
 import { Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
+import {
+  configureGoogleSignIn,
+  signInWithApple,
+  signInWithGoogle,
+} from "@/services/auth";
 import { Ionicons } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,49 +24,39 @@ export default function Login() {
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [isLoadingApple, setIsLoadingApple] = useState(false);
 
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
+
   // Helper to manage loading state for both
   const isLoading = isLoadingGoogle || isLoadingApple;
 
   // Google ile giriş
   const handleGoogleLogin = async () => {
-    // Eğer zaten loading ise, duplicate tıklamayı engelle
     if (isLoadingGoogle) {
-      console.log(
-        "⚠️ Google login zaten başlatılmış, duplicate tıklama engellendi"
-      );
+      console.log("⚠️ Google login zaten başlatılmış");
       return;
     }
 
     try {
-      console.log("🔵 Google login başlatılıyor...");
+      console.log("🚀 handleGoogleLogin: Butona basıldı");
       setIsLoadingGoogle(true);
 
       const result = await signInWithGoogle();
-      console.log("🔵 Google login sonucu:", result);
+      console.log("✅ handleGoogleLogin: Başarılı", result?.user?.email);
+    } catch (error: any) {
+      console.error("❌ handleGoogleLogin: EXCEPTION", error);
+      console.error("   - Error Message:", error.message);
 
-      if (result.error) {
-        console.error("❌ Google login hatası:", result.error);
-        if (result.error.code === "CANCELLED") {
-          console.log("ℹ️ Kullanıcı girişi iptal etti");
-          setIsLoadingGoogle(false); // Stop loading on cancel
-          return;
-        }
-
+      if (error && error.code === "CANCELLED") {
+        console.log("ℹ️ Kullanıcı iptal etti");
+      } else {
         Alert.alert(
-          "Hata",
-          result.error.message || "Google ile giriş yapılamadı"
+          "Giriş Hatası",
+          `Hata Kodu: ${error.code}\nMesaj: ${error.message}`,
         );
-        setIsLoadingGoogle(false); // Stop loading on error
-        return;
       }
-
-      console.log("✅ OAuth flow başarıyla tamamlandı, routing bekleniyor...");
-      // Loading state'i false yapmıyoruz, _layout routing yapacak
-      // ve kullanıcı otomatik yönlendirilecek
-    } catch (error) {
-      console.error("❌ Google login exception:", error);
-      Alert.alert("Hata", "Google ile giriş yapılamadı");
-      setIsLoadingGoogle(false); // Stop loading on exception
+      setIsLoadingGoogle(false);
     }
   };
 
@@ -71,7 +65,7 @@ export default function Login() {
     // Eğer zaten loading ise, duplicate tıklamayı engelle
     if (isLoadingApple) {
       console.log(
-        "⚠️ Apple login zaten başlatılmış, duplicate tıklama engellendi"
+        "⚠️ Apple login zaten başlatılmış, duplicate tıklama engellendi",
       );
       return;
     }
@@ -79,26 +73,16 @@ export default function Login() {
     try {
       setIsLoadingApple(true);
 
-      const { error } = await signInWithApple();
-
-      if (error) {
-        if (error.code === "CANCELLED") {
-          console.log("ℹ️ Kullanıcı Apple girişi iptal etti");
-          // Important: Set loading to false on cancel
-          setIsLoadingApple(false);
-          return;
-        }
-
-        Alert.alert("Hata", error.message || "Apple ile giriş yapılamadı");
-        setIsLoadingApple(false); // Stop loading on error
-        return;
-      }
-
-      console.log("✅ Apple login başarılı, routing bekleniyor...");
+      const result = await signInWithApple();
+      console.log("✅ Apple login başarılı, user:", result.user.email);
       // Loading state'i false yapmıyoruz, _layout routing yapacak
-    } catch (error) {
-      Alert.alert("Hata", "Apple ile giriş yapılamadı");
+    } catch (error: any) {
       console.error("Apple login error:", error);
+      if (error && error.code === "CANCELLED") {
+        console.log("ℹ️ Kullanıcı Apple girişi iptal etti");
+      } else {
+        Alert.alert("Hata", error.message || "Apple ile giriş yapılamadı");
+      }
       setIsLoadingApple(false); // Stop loading on exception
     }
   };

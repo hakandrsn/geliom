@@ -43,6 +43,9 @@
     },
     "plugins": [
       "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      ["@react-native-google-signin/google-signin"],
       [
         "expo-splash-screen",
         {
@@ -66,7 +69,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.1",
+            "useFrameworks": "static"
           },
           "android": {
             "compileSdkVersion": 35,
