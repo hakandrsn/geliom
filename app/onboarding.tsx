@@ -1,5 +1,6 @@
 import { GeliomButton, Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
+import { initializeOneSignal } from "@/services/onesignal";
 import { useAppStore } from "@/store/useAppStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -20,16 +21,16 @@ const { width } = Dimensions.get("window");
 
 // Fake Data - Başlangıç
 const INITIAL_MEMBERS = [
-  { id: "1", name: "Sen", status: "", mood: "", color: "#4F46E5", isMe: true },
+  { id: "1", name: "Sen", status: "", mood: "", color: "#0474B4", isMe: true },
   {
     id: "2",
     name: "Ayşe",
     status: "",
     mood: "",
-    color: "#E11D48",
+    color: "#8FBF5A",
     isMe: false,
   },
-  { id: "3", name: "Can", status: "", mood: "", color: "#10B981", isMe: false },
+  { id: "3", name: "Can", status: "", mood: "", color: "#3E9BD6", isMe: false },
 ];
 
 export default function OnboardingScreen() {
@@ -98,6 +99,12 @@ export default function OnboardingScreen() {
   // --- Local State: Kaydet ---
   const handleFinish = async () => {
     try {
+      // Push izni burada, bağlamlı olarak istenir (soğuk açılışta değil) —
+      // kullanıcı az önce bildirim değer önerisini gördü
+      await initializeOneSignal().catch((error) => {
+        console.error("OneSignal izin akışı hatası:", error);
+      });
+
       // Update local state and persist
       useAppStore.getState().setHasCompletedOnboarding(true);
       router.replace("/(drawer)/home");

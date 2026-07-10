@@ -1,24 +1,78 @@
+import { appConfig } from "@/config/app.config";
 import { useAppStore } from "@/store/useAppStore";
-import { Platform } from "react-native";
+import { AppState, type NativeEventSubscription } from "react-native";
 import { io, Socket } from "socket.io-client";
-import { StatusUpdatePayload } from "./types";
+import { groupKeys } from "./keys";
+import { queryClient } from "./queryClient";
+import {
+  PremiumUpdatePayload,
+  PresenceUpdatePayload,
+  SessionClosedPayload,
+  SessionState,
+  SessionUpdatePayload,
+  SocketAck,
+  StatusEntry,
+  StatusUpdateInput,
+} from "./types";
+
+/**
+ * Socket.io Session Katmanı (mobile_api_doc.md §4)
+ *
+ * - Grup ekranına girerken `openSession(groupId)` çağrılır; tüm grup verisi
+ *   tek seferde gelir ve store'daki `session`'a yazılır.
+ * - Sonraki değişiklikler `session:update` patch'leriyle canlı akar.
+ * - Status güncelleme REST'ten değil, SADECE `updateStatus()` (socket) ile yapılır.
+ */
 
 let socket: Socket | null = null;
+let tokenProvider: (() => Promise<string>) | null = null;
+/** Açık tutulmak istenen session'ın grubu (reconnect'te yeniden açılır). */
+let activeGroupId: string | null = null;
+/**
+ * Aynı grubun session'ını birden fazla ekran kullanabilir (home + üye listesi gibi).
+ * Ref-count sıfıra inmeden session gerçekten kapatılmaz.
+ */
+let sessionRefCount = 0;
+let appStateSubscription: NativeEventSubscription | null = null;
 
-export const initSocket = (token: string) => {
+const emitSessionOpen = (groupId: string) => {
+  if (!socket?.connected) return;
+  socket.emit(
+    "session:open",
+    { groupId },
+    (res: SocketAck<SessionState>) => {
+      if (!res.ok) {
+        console.warn("session:open başarısız:", res.error);
+        return;
+      }
+      // Kullanıcı ack gelene kadar başka gruba geçmiş olabilir
+      if (activeGroupId !== groupId) return;
+      useAppStore.getState().setSession({
+        group: res.group,
+        version: res.version,
+        onlineUserIds: res.onlineUserIds,
+      });
+    },
+  );
+};
+
+/**
+ * Socket bağlantısını kurar. Firebase ID token ~1 saatte expire olduğu için
+ * token sabit string değil, her (re)connect'te çağrılan bir provider olarak verilir.
+ */
+export const initSocket = (getToken: () => Promise<string>) => {
+  tokenProvider = getToken;
   if (socket) return; // Prevent multiple connections
 
-  // Use the same host as the API
-  const SOCKET_URL =
-    Platform.OS === "android"
-      ? "http://10.0.2.2:3000"
-      : "http://localhost:3000";
-
-  socket = io(SOCKET_URL, {
-    auth: {
-      token,
+  socket = io(appConfig.socketUrl, {
+    auth: (cb) => {
+      tokenProvider?.()
+        .then((token) => cb({ token })) // Bearer prefix YOK
+        .catch((err) => {
+          console.error("Socket token alınamadı:", err);
+          cb({});
+        });
     },
-    // Prioritize polling for emulators, fallback to websocket
     transports: ["polling", "websocket"],
     autoConnect: true,
     reconnection: true,
@@ -29,6 +83,8 @@ export const initSocket = (token: string) => {
 
   socket.on("connect", () => {
     console.log("Socket connected:", socket?.id);
+    // Reconnect sonrası session otomatik geri gelmez — tekrar aç
+    if (activeGroupId) emitSessionOpen(activeGroupId);
   });
 
   socket.on("connect_error", (err) => {
@@ -43,74 +99,134 @@ export const initSocket = (token: string) => {
     }
   });
 
-  // Listen for Status Updates
-  socket.on("statusUpdate", (data: StatusUpdatePayload) => {
-    console.log("New status update received:", data);
-    const { userId, groupId, text, emoji, mood, updatedAt } = data;
+  // session:open sonrası tam state (ack ile aynı içerik)
+  socket.on("session:state", (state: SessionState) => {
+    if (!activeGroupId || state.group.id !== activeGroupId) return;
+    useAppStore.getState().setSession(state);
+  });
 
-    // Update Store
-    // We update the group status in the store regardless of which group is currently selected,
-    // so that when the user switches to that group, the data is already there.
-    // Zustand store will handle immutability updates.
-    useAppStore.getState().updateGroupStatus(groupId, {
-      userId,
-      groupId,
-      text,
-      emoji: emoji || null,
-      mood: mood || null,
-      updatedAt,
-    });
-
-    // If mood is present, also update mood
-    if (mood) {
-      useAppStore.getState().updateGroupMood(groupId, {
-        userId,
-        groupId,
-        text, // Mood update usually comes with status text, or we reuse it
-        emoji: emoji || null,
-        mood: mood,
-        updatedAt,
-      });
+  // Gruptaki her değişim
+  socket.on("session:update", (update: SessionUpdatePayload) => {
+    const applied = useAppStore.getState().applySessionUpdate(update);
+    if (!applied && activeGroupId) {
+      // Version atlandı → güncelleme kaçırıldı, tam state'i yeniden al
+      console.warn("session:update version atladı, session yeniden açılıyor");
+      emitSessionOpen(activeGroupId);
     }
   });
 
-  // Listen for Group Data Updates
-  socket.on("groupUpdate", (data: any) => {
-    console.log("Group update received:", data);
+  // Bir üye session'a girip çıktığında
+  socket.on("presence:update", ({ userId, online }: PresenceUpdatePayload) => {
+    useAppStore.getState().setPresence(userId, online);
   });
 
-  // Listen for Member Updates
-  socket.on("memberUpdate", (data: { groupId: string; members: any[] }) => {
-    console.log("Member update received for group:", data.groupId);
-    useAppStore.getState().updateGroupMembers(data.groupId, data.members);
+  // Session sunucu tarafından kapatıldığında
+  socket.on("session:closed", ({ reason }: SessionClosedPayload) => {
+    console.log("session:closed:", reason);
+    switch (reason) {
+      case "removed":
+      case "deleted":
+        // Gruptan çıkarıldık veya grup silindi → session'ı kapat, listeyi yenile
+        useAppStore.getState().clearSession();
+        if (activeGroupId) {
+          const { groups, setGroups, setCurrentGroup } = useAppStore.getState();
+          const remaining = groups.filter((g) => g.id !== activeGroupId);
+          setGroups(remaining);
+          // Boş ekrana düşürme — varsa kalan ilk gruba geç
+          setCurrentGroup(remaining[0]?.id ?? null);
+          activeGroupId = null;
+          sessionRefCount = 0;
+        }
+        queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+        break;
+      case "switched":
+        // Başka grupta session açıldı; yeni state zaten geliyor — dokunma
+        break;
+      case "server":
+        // Sunucu kaynaklı kapanış → yeniden dene
+        useAppStore.getState().clearSession();
+        if (activeGroupId) emitSessionOpen(activeGroupId);
+        break;
+    }
   });
-};
 
-export const joinGroupRoom = (groupId: string) => {
-  if (socket && socket.connected) {
-    console.log("🚪 Joining room:", groupId);
-    socket.emit("joinRoom", groupId);
-  } else if (socket) {
-    // If not connected yet, wait for connect and then join
-    socket.once("connect", () => {
-      console.log("🚪 Joining room (after connect):", groupId);
-      socket?.emit("joinRoom", groupId);
+  // Kendi premium durumun değiştiğinde (session gerekmez)
+  socket.on("premium:update", ({ isPremium }: PremiumUpdatePayload) => {
+    useAppStore.getState().setPremium(isPremium);
+  });
+
+  // Uygulama yaşam döngüsü:
+  // - Arka plan: session'ı sunucu tarafında kapat — kullanıcı "session'da" görünürse
+  //   status push'ları ona hiç gitmez (dökümandaki öneri).
+  // - Öne dönüş: session'ı tam state ile yeniden aç ve grup listesini tazele.
+  if (!appStateSubscription) {
+    appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (!socket) return;
+      if (state === "background") {
+        if (activeGroupId && socket.connected) {
+          socket.emit("session:close", {}, () => {});
+        }
+      } else if (state === "active") {
+        if (activeGroupId) emitSessionOpen(activeGroupId);
+        queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+      }
     });
   }
 };
 
-export const leaveGroupRoom = (groupId: string) => {
-  if (socket && socket.connected) {
-    console.log("🚪 Leaving room:", groupId);
-    socket.emit("leaveRoom", groupId);
+/** Grup ekranına girerken çağrılır. Kullanıcı başına tek aktif session vardır. */
+export const openSession = (groupId: string) => {
+  if (activeGroupId === groupId) {
+    sessionRefCount += 1;
+    return;
+  }
+  activeGroupId = groupId;
+  sessionRefCount = 1;
+  emitSessionOpen(groupId);
+};
+
+/** Grup ekranından çıkarken çağrılır (arka plana düşünce de önerilir). */
+export const closeSession = () => {
+  sessionRefCount = Math.max(0, sessionRefCount - 1);
+  if (sessionRefCount > 0) return; // Session'ı kullanan başka ekran var
+
+  activeGroupId = null;
+  useAppStore.getState().clearSession();
+  if (socket?.connected) {
+    socket.emit("session:close", {}, () => {});
   }
 };
 
+/**
+ * Durum paylaş — aktif session'daki gruba işlenir, groupId gönderilmez.
+ * Rate limit: 10 istek / 10 sn. Önce session açık olmalıdır.
+ */
+export const updateStatus = (input: StatusUpdateInput): Promise<StatusEntry> =>
+  new Promise((resolve, reject) => {
+    if (!socket?.connected) {
+      reject(new Error("Socket bağlantısı yok"));
+      return;
+    }
+    socket.emit(
+      "status:update",
+      input,
+      (res: SocketAck<{ status: StatusEntry }>) => {
+        if (res.ok) resolve(res.status);
+        else reject(new Error(res.error));
+      },
+    );
+  });
+
 export const disconnectSocket = () => {
+  activeGroupId = null;
+  sessionRefCount = 0;
+  appStateSubscription?.remove();
+  appStateSubscription = null;
   if (socket) {
     socket.disconnect();
     socket = null;
   }
+  useAppStore.getState().clearSession();
 };
 
 export const getSocket = () => socket;

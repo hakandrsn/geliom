@@ -1,15 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 
 // Hooks & Contexts
-import { useCustomStatuses, useDefaultStatuses, useSetUserStatus } from "@/api";
-import { useTheme } from "@/contexts/ThemeContext";
+import {
+  applySavedOrder,
+  useCustomStatuses,
+  useDefaultStatuses,
+  useSetUserStatus,
+  useStatusOrder,
+} from "@/api";
 import { useManageStatusMood } from "@/hooks/useManageStatusMood";
 import { useAppStore } from "@/store/useAppStore";
+import { layout, radius, spacing } from "@/theme/tokens";
 
 // Components
-import AddStatusMoodModal from "@/components/dashboard/AddStatusMoodModal";
-import { GeliomButton } from "@/components/shared";
+import { StatusMoodBottomSheet } from "@/components/bottomsheets";
+import { Chip, Skeleton } from "@/components/ui";
+import { useBottomSheet } from "@/contexts/BottomSheetContext";
 
 interface StatusSelectorProps {
   groupId: string;
@@ -22,9 +29,12 @@ function StatusSelector({
   currentStatusId,
   onAddPress,
 }: StatusSelectorProps) {
-  const { colors } = useTheme();
   const user = useAppStore((state) => state.user);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  // Kendi mevcut status kaydım — mood'u ezmemek için seçimde korunur
+  const myStatus = useAppStore((state) =>
+    user ? state.session?.group.statuses[user.id] : undefined,
+  );
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
   // LOCAL STATE: Anında UI tepkisi için
   const [activeId, setActiveId] = useState<string | number | undefined>(
@@ -43,6 +53,7 @@ function StatusSelector({
     useDefaultStatuses();
   const { data: customStatuses = [], isLoading: isLoadingCustom } =
     useCustomStatuses(groupId, user?.id);
+  const { data: statusOrder = [] } = useStatusOrder(user?.id, groupId);
   const setStatusMutation = useSetUserStatus();
 
   const handleStatusSelect = useCallback(
@@ -52,151 +63,95 @@ function StatusSelector({
       // 1. UI'ı ANINDA güncelle
       setActiveId(status.id);
 
-      // 2. Mutation'ı tetikle
+      // 2. Socket üzerinden paylaş — mevcut mood (ve emojisi) korunur
       setStatusMutation.mutate({
-        groupId: groupId,
         text: status.text,
-        emoji: status.emoji,
+        emoji: status.emoji ?? myStatus?.emoji ?? undefined,
+        mood: myStatus?.mood ?? undefined,
       });
     },
-    [user, groupId, setStatusMutation],
+    [user, setStatusMutation, myStatus],
   );
 
   const isLoading = isLoadingDefault || isLoadingCustom;
 
-  // Tüm liste elemanlarını (Butonlar + Ekle butonu) tek bir dizide hazırla
-  const allItems = useMemo(() => {
-    const all = [...customStatuses, ...defaultStatuses].sort((a, b) => {
+  // Kullanıcının kaydettiği sıralama uygulanır; sıralama yoksa
+  // custom'lar önce, sonra alfabetik
+  const allStatuses = useMemo(() => {
+    const sorted = [...customStatuses, ...defaultStatuses].sort((a, b) => {
       if (a.is_custom && !b.is_custom) return -1;
       if (!a.is_custom && b.is_custom) return 1;
       return a.text.localeCompare(b.text);
     });
-
-    // Ekle butonunu sona ekle
-    return [...all, { id: -1, text: "Ekle", is_custom: false }];
-  }, [customStatuses, defaultStatuses]);
+    return applySavedOrder(sorted, statusOrder);
+  }, [customStatuses, defaultStatuses, statusOrder]);
 
   if (isLoading) {
-    return <ActivityIndicator size="small" color={colors.primary} />;
+    return (
+      <View style={styles.skeletonRow}>
+        {[110, 90, 100, 84].map((w, i) => (
+          <Skeleton key={i} width={w} height={40} radius={radius.full} />
+        ))}
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
-      {/* LegendList yerine ScrollView kullanıyoruz */}
+    <View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       >
-        {allItems.map((item) => {
-          // "Ekle" Butonu
-          if (item.id === -1) {
-            return (
-              <View key="add-button" style={styles.buttonWrapper}>
-                <GeliomButton
-                  state="passive"
-                  onPress={() =>
-                    checkSubscriptionAndProceed(() => setIsModalVisible(true))
-                  }
-                  size="small"
-                  layout="icon-only"
-                  icon="add"
-                  style={{
-                    borderColor: colors.stroke,
-                    borderWidth: 1,
-                    borderStyle: "dashed",
+        {allStatuses.map((item) => (
+          <Chip
+            key={item.id.toString()}
+            label={item.text}
+            emoji={item.emoji}
+            // Yerel seçim yoksa store'daki mevcut status metniyle eşleştir
+            selected={
+              activeId !== undefined
+                ? activeId === item.id
+                : item.text === myStatus?.text
+            }
+            onPress={() => handleStatusSelect(item)}
+          />
+        ))}
+
+        <Chip
+          dashed
+          icon="add"
+          label="Ekle"
+          onPress={() =>
+            checkSubscriptionAndProceed(() =>
+              openBottomSheet(
+                <StatusMoodBottomSheet
+                  type="status"
+                  onSave={async (text, emoji) => {
+                    await handleAddStatus(text, emoji);
+                    closeBottomSheet();
                   }}
-                />
-              </View>
-            );
+                  onCancel={closeBottomSheet}
+                />,
+                { snapPoints: ["55%"] },
+              ),
+            )
           }
-
-          // Normal Status Butonu
-          const isSelected = activeId === item.id;
-
-          return (
-            <View
-              key={item.id.toString()}
-              style={[
-                styles.buttonContainer,
-                isSelected && styles.buttonContainerSelected,
-              ]}
-            >
-              {/* Arkaplan Dolgusu */}
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { borderRadius: 12, overflow: "hidden" },
-                ]}
-              >
-                <View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    { backgroundColor: colors.secondaryBackground },
-                  ]}
-                />
-              </View>
-
-              <GeliomButton
-                state={isSelected ? "active" : "passive"}
-                onPress={() => handleStatusSelect(item)}
-                size="small"
-                layout="icon-left"
-                icon={isSelected ? "radio-button-on" : "radio-button-off"}
-                backgroundColor="transparent"
-                textColor={isSelected ? colors.tertiary : colors.text}
-                textStyle={isSelected ? { fontWeight: "bold" } : undefined}
-                style={
-                  [
-                    styles.button,
-                    {
-                      borderColor: isSelected ? colors.primary : "transparent",
-                    },
-                  ] as any
-                }
-              >
-                {item.text}
-              </GeliomButton>
-            </View>
-          );
-        })}
+        />
       </ScrollView>
-
-      <AddStatusMoodModal
-        visible={isModalVisible}
-        type="status"
-        onClose={() => setIsModalVisible(false)}
-        onSave={handleAddStatus}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {},
   listContent: {
-    paddingLeft: 12,
-    paddingRight: 12,
-    gap: 12,
-    paddingBottom: 8,
+    paddingHorizontal: layout.screenPadding,
+    gap: spacing.sm,
   },
-  buttonWrapper: {
-    marginBottom: 4,
-  },
-  buttonContainer: {
-    marginBottom: 4,
-    borderRadius: 12,
-  },
-  buttonContainerSelected: {
-    transform: [{ translateY: 1 }],
-  },
-  button: {
-    minWidth: 100,
-    borderRadius: 12,
-    borderWidth: 1,
-    height: 40,
-    zIndex: 2,
-    marginBottom: 0,
+  skeletonRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: layout.screenPadding,
   },
 });
 

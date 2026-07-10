@@ -1,6 +1,5 @@
 import { Stack } from "expo-router";
 import React from "react";
-import { StyleSheet } from "react-native";
 
 export default function GroupStackLayout() {
   // Example logic, pending requests only visible to owner usually
@@ -15,8 +14,6 @@ export default function GroupStackLayout() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="create-group" />
-      <Stack.Screen name="join-group" />
       <Stack.Screen name="join-requests" />
       <Stack.Screen name="search-user" />
       <Stack.Screen name="manage-members" />
@@ -25,12 +22,3 @@ export default function GroupStackLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingRight: 16,
-  },
-  // Styles kept for potential header usage if enabled
-});

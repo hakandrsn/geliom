@@ -89,32 +89,23 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 
   // State colors - memoize edildi
   const stateColors = useMemo(() => {
-    const activeColor = colors.primary;
-    const passiveColor = colors.tertiary;
-    const loadingColor = colors.secondary;
-
     switch (state) {
-      case 'active':
-        return {
-          backgroundColor: backgroundColor || activeColor,
-          textColor: textColor || '#FFFFFF',
-          borderColor: 'transparent',
-        };
       case 'passive':
         return {
-          backgroundColor: backgroundColor || passiveColor + '40',
+          backgroundColor: backgroundColor || colors.passiveState,
           textColor: textColor || colors.primary,
           borderColor: 'transparent',
         };
       case 'loading':
         return {
-          backgroundColor: backgroundColor || loadingColor,
+          backgroundColor: backgroundColor || colors.loadingState,
           textColor: textColor || '#FFFFFF',
           borderColor: 'transparent',
         };
+      case 'active':
       default:
         return {
-          backgroundColor: backgroundColor || activeColor,
+          backgroundColor: backgroundColor || colors.primary,
           textColor: textColor || '#FFFFFF',
           borderColor: 'transparent',
         };

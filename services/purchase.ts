@@ -1,3 +1,4 @@
+import { appConfig } from "@/config/app.config";
 import { useAppStore } from "@/store/useAppStore";
 import { Linking } from "react-native";
 import { adapty, createPaywallView } from "react-native-adapty";
@@ -16,7 +17,7 @@ export const activateAdapty = async (): Promise<void> => {
   isAdaptyActivating = true;
 
   activationPromise = (async () => {
-    const key = process.env.EXPO_PUBLIC_ADAPTY_PUBLIC_SDK_KEY;
+    const key = appConfig.adaptySdkKey;
     if (!key) {
       console.warn("Adapty key missing");
       isAdaptyActivating = false;
@@ -90,7 +91,10 @@ export const showPaywall = async (options: ShowPaywallOptions = {}) => {
           try {
             // Safe check using getProfile or verify purchase object
             const profile = await adapty.getProfile();
-            if (profile.accessLevels?.["premium"]?.isActive) {
+            const hasActive = Object.values(profile.accessLevels || {}).some(
+              (l) => l.isActive,
+            );
+            if (hasActive) {
               useAppStore.getState().setSubscribed(true);
               onSuccess?.(purchase);
             } else {

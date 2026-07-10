@@ -1,118 +1,103 @@
 import type { DashboardMember } from "@/api/dashboard";
 import { Typography } from "@/components/shared";
+import { Avatar, Card } from "@/components/ui";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getAvatarSource } from "@/utils/avatar";
-import { Image } from "expo-image";
+import { radius, spacing } from "@/theme/tokens";
+import { formatStatusMood } from "@/utils/status-display";
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import Animated from "react-native-reanimated";
 
 interface CurrentUserHeaderProps {
-  member: DashboardMember; // YENİ TİP
+  member: DashboardMember;
 }
 
+/**
+ * Kompakt "benim durumum" kartı — tek satır: avatar + isim + mevcut durum.
+ * Asıl alan grup üyelerine ait olduğu için bilinçli olarak küçük tutuldu.
+ */
 export default function CurrentUserHeader({ member }: CurrentUserHeaderProps) {
   const { colors } = useTheme();
 
   const displayName = member.displayName || member.customId || "Ben";
-  const avatarSource = getAvatarSource(member.photoUrl);
-
-  const statusText = member.statusText;
-  const statusColor = colors.secondaryText; // Simplifying color logic for now as requested
-
+  // Status ve mood birlikte gösterilir: "Toplantıda / Yorgun", tek varsa teki
+  const statusLine = formatStatusMood(member.statusText, member.moodText);
   const moodEmoji = member.moodEmoji;
 
   return (
-    <Animated.View style={styles.container}>
-      <View style={styles.topRow}>
-        <View style={styles.userInfo}>
-          <Image
-            source={avatarSource}
-            style={styles.avatar}
-            contentFit="cover"
-          />
-          <View style={styles.greetingContainer}>
-            <Typography variant="caption" color={colors.secondaryText}>
-              Tekrar merhaba,
-            </Typography>
-            <Typography variant="h4" color={colors.text} style={styles.name}>
-              {displayName}
+    <Card padding={spacing.md}>
+      <View style={styles.row}>
+        <Avatar photoUrl={member.photoUrl} size={44} ring badge={moodEmoji} />
+
+        <View style={styles.info}>
+          <Typography
+            variant="body"
+            fontWeight="semibold"
+            color={colors.text}
+            numberOfLines={1}
+          >
+            {displayName}
+          </Typography>
+
+          <View style={styles.statusRow}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: statusLine
+                    ? colors.success
+                    : colors.lightText,
+                },
+              ]}
+            />
+            <Typography
+              variant="caption"
+              color={statusLine ? colors.secondaryText : colors.lightText}
+              numberOfLines={1}
+              style={styles.statusText}
+            >
+              {statusLine || "Aşağıdan durumunu seç"}
             </Typography>
           </View>
         </View>
 
-        {moodEmoji && (
-          <View
-            style={[
-              styles.moodBadge,
-              { backgroundColor: colors.cardBackground },
-            ]}
-          >
-            <Typography variant="h3">{moodEmoji}</Typography>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.statusContainer}>
-        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-        <Typography
-          variant="h3"
-          color={statusText ? colors.text : colors.secondaryText}
-          style={styles.statusText}
+        <View
+          style={[styles.meBadge, { backgroundColor: colors.passiveState }]}
         >
-          {statusText || "Durum ayarla..."}
-        </Typography>
+          <Typography variant="caption" fontWeight="semibold" color={colors.primary}>
+            Sen
+          </Typography>
+        </View>
       </View>
-    </Animated.View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: 24,
-    paddingHorizontal: 4,
-  },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  userInfo: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: spacing.md,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  info: {
+    flex: 1,
+    gap: 2,
   },
-  greetingContainer: {
-    justifyContent: "center",
-  },
-  name: {
-    fontWeight: "700",
-  },
-  moodBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  statusContainer: {
+  statusRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingLeft: 4,
+    gap: spacing.xs + 2,
   },
   statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   statusText: {
-    fontWeight: "800",
+    flex: 1,
+  },
+  meBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
   },
 });

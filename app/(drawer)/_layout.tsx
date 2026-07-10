@@ -1,4 +1,3 @@
-import { useGroupJoinRequestsRealtime } from "@/api/groups";
 import { GroupListBottomSheet } from "@/components/bottomsheets";
 import { useAppStore } from "@/store/useAppStore"; // Added Store
 import { Ionicons } from "@expo/vector-icons";
@@ -27,14 +26,11 @@ export default function DrawerLayout() {
   const isLoading = false; // Auth check handled in root layout or store initialization
   const session = !!user; // Derived from store
 
-  // Realtime subscription
-  useGroupJoinRequestsRealtime(selectedGroup?.id || "");
-
   const createHandleGroupHeaderPress = useCallback(
     (navigation: any) => {
       return () => {
         if (!selectedGroup || groups.length === 0) {
-          router.push("/(drawer)/(group)/create-group");
+          router.push("/create-group");
           return;
         }
 
@@ -106,7 +102,7 @@ export default function DrawerLayout() {
         options={({ navigation }) => ({
           headerTitle: () => (
             <GroupHeader
-              group={selectedGroup}
+              group={selectedGroup ?? null}
               onPress={createHandleGroupHeaderPress(navigation)}
             />
           ),

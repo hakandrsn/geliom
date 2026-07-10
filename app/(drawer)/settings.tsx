@@ -1,38 +1,73 @@
+import { useDeleteUser } from "@/api";
 import { BaseLayout, Typography } from "@/components/shared";
-// Removed Contexts
+import { ListItem } from "@/components/ui";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotificationSettings } from "@/hooks/useNotificationSettings";
 import { useAppStore } from "@/store/useAppStore";
-import { Ionicons } from "@expo/vector-icons";
+import { layout, radius, spacing } from "@/theme/tokens";
+import auth from "@react-native-firebase/auth";
 import { useRouter } from "expo-router";
-import {
-  Alert,
-  StyleSheet,
-  Switch,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Alert, StyleSheet, Switch, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
-
-// ... (keep file content structure)
 
 export default function SettingsScreen() {
   const { colors, toggleTheme, isDark } = useTheme();
   const { user } = useAppStore();
   const router = useRouter();
+  const deleteUser = useDeleteUser();
 
   // Notification Hook
-  const { isNotificationsEnabled, toggleNotifications, openSettings } =
+  const { isNotificationsEnabled, toggleNotifications } =
     useNotificationSettings();
 
-  const handleNotificationPress = () => {
-    openSettings();
+  // App Store 5.1.1(v): hesap oluşturulabilen uygulamada uygulama içi hesap silme zorunlu
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Hesabı Sil",
+      "Hesabınız kalıcı olarak silinecek. Sahibi olduğunuz gruplar tamamen silinir, üyesi olduklarınızdan çıkarılırsınız. Bu işlem geri alınamaz.",
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Devam Et",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Emin misiniz?",
+              "Tüm verileriniz kalıcı olarak silinecek.",
+              [
+                { text: "Vazgeç", style: "cancel" },
+                {
+                  text: "Hesabımı Sil",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      await deleteUser.mutateAsync();
+                      // Backend Firebase Auth kaydını da sildi — lokal oturumu kapat
+                      await auth().signOut().catch(() => {});
+                      router.replace("/(auth)/login");
+                    } catch (error: any) {
+                      const backendMessage = error?.response?.data?.message;
+                      Alert.alert(
+                        "Hata",
+                        (Array.isArray(backendMessage)
+                          ? backendMessage[0]
+                          : backendMessage) ||
+                          "Hesap silinemedi. Lütfen tekrar deneyin.",
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handlePrivacySettings = () => {
     Alert.alert("Gizlilik", "Gizlilik ayarları yakında eklenecek");
   };
-  // ...
 
   const handleLanguageSettings = () => {
     Alert.alert("Dil", "Dil ayarları yakında eklenecek");
@@ -54,190 +89,99 @@ export default function SettingsScreen() {
         <View style={styles.content}>
           {/* Genel Ayarlar */}
           <Typography
-            variant="h6"
+            variant="label"
+            fontWeight="semibold"
             color={colors.secondaryText}
             style={styles.sectionTitle}
           >
             GENEL
           </Typography>
 
-          <View
-            style={[
-              styles.settingItem,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.stroke,
-              },
-            ]}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons
-                name={isDark ? "moon" : "sunny"}
-                size={22}
-                color={colors.text}
+          <ListItem
+            icon={isDark ? "moon" : "sunny"}
+            iconColor={colors.text}
+            title="Koyu Tema"
+            right={
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: colors.stroke, true: colors.passiveState }}
+                thumbColor={isDark ? colors.primary : colors.white}
               />
-              <Typography
-                variant="body"
-                color={colors.text}
-                style={styles.settingText}
-              >
-                Koyu Tema
-              </Typography>
-            </View>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: colors.stroke, true: colors.primary + "80" }}
-              thumbColor={isDark ? colors.primary : colors.white}
-            />
-          </View>
+            }
+          />
 
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.stroke,
-              },
-            ]}
-            activeOpacity={1}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="notifications" size={22} color={colors.text} />
-              <Typography
-                variant="body"
-                color={colors.text}
-                style={styles.settingText}
-              >
-                Bildirimler
-              </Typography>
-            </View>
-            <Switch
-              value={isNotificationsEnabled}
-              onValueChange={toggleNotifications}
-              trackColor={{ false: colors.stroke, true: colors.primary + "80" }}
-              thumbColor={
-                isNotificationsEnabled ? colors.primary : colors.white
-              }
-            />
-          </TouchableOpacity>
+          <ListItem
+            icon="notifications"
+            iconColor={colors.text}
+            title="Bildirimler"
+            right={
+              <Switch
+                value={isNotificationsEnabled}
+                onValueChange={toggleNotifications}
+                trackColor={{ false: colors.stroke, true: colors.passiveState }}
+                thumbColor={
+                  isNotificationsEnabled ? colors.primary : colors.white
+                }
+              />
+            }
+          />
 
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.stroke,
-              },
-            ]}
+          <ListItem
+            icon="language"
+            iconColor={colors.text}
+            title="Dil"
+            subtitle="Türkçe"
             onPress={handleLanguageSettings}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="language" size={22} color={colors.text} />
-              <Typography
-                variant="body"
-                color={colors.text}
-                style={styles.settingText}
-              >
-                Dil
-              </Typography>
-            </View>
-            <View style={styles.settingRight}>
-              <Typography
-                variant="caption"
-                color={colors.secondaryText}
-                style={{ marginRight: 8 }}
-              >
-                Türkçe
-              </Typography>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.secondaryText}
-              />
-            </View>
-          </TouchableOpacity>
+          />
 
           {/* Gizlilik & Güvenlik */}
           <Typography
-            variant="h6"
+            variant="label"
+            fontWeight="semibold"
             color={colors.secondaryText}
             style={styles.sectionTitle}
           >
             GİZLİLİK & GÜVENLİK
           </Typography>
 
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.stroke,
-              },
-            ]}
+          <ListItem
+            icon="shield-checkmark"
+            iconColor={colors.text}
+            title="Gizlilik Ayarları"
             onPress={handlePrivacySettings}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="shield-checkmark" size={22} color={colors.text} />
-              <Typography
-                variant="body"
-                color={colors.text}
-                style={styles.settingText}
-              >
-                Gizlilik Ayarları
-              </Typography>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.secondaryText}
-            />
-          </TouchableOpacity>
+          />
 
           {/* Diğer */}
           <Typography
-            variant="h6"
+            variant="label"
+            fontWeight="semibold"
             color={colors.secondaryText}
             style={styles.sectionTitle}
           >
             DİĞER
           </Typography>
 
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.stroke,
-              },
-            ]}
+          <ListItem
+            icon="trash"
+            title="Önbelleği Temizle"
+            destructive
             onPress={handleClearCache}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="trash" size={22} color={colors.error} />
-              <Typography
-                variant="body"
-                color={colors.error}
-                style={styles.settingText}
-              >
-                Önbelleği Temizle
-              </Typography>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.secondaryText}
-            />
-          </TouchableOpacity>
+          />
+
+          <ListItem
+            icon="person-remove"
+            title="Hesabı Sil"
+            subtitle="Tüm verileriniz kalıcı olarak silinir"
+            destructive
+            onPress={handleDeleteAccount}
+          />
 
           {/* Kullanıcı Bilgileri */}
           <View
             style={[
               styles.userInfo,
-              {
-                backgroundColor: colors.secondaryBackground,
-                borderColor: colors.stroke,
-              },
+              { backgroundColor: colors.secondaryBackground },
             ]}
           >
             <Typography variant="caption" color={colors.secondaryText}>
@@ -255,41 +199,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
+    padding: layout.screenPadding,
   },
   sectionTitle: {
-    marginTop: 24,
-    marginBottom: 12,
-    marginLeft: 4,
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  settingLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  settingRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  settingText: {
-    marginLeft: 12,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.xs,
+    letterSpacing: 1,
   },
   userInfo: {
-    marginTop: 32,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    marginTop: spacing.xxxl,
+    padding: spacing.lg,
+    borderRadius: radius.md,
     alignItems: "center",
   },
 });

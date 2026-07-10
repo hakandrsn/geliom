@@ -1,39 +1,28 @@
 import React from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 // Contexts & Theme
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
 
 // Components
-import { useGroupEventsRealtime } from "@/api/groups";
+import { useGroupSession } from "@/api/groups";
 import { DashboardView, EmptyStateView } from "@/components/dashboard";
+import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import { BaseLayout } from "@/components/shared";
-
-// Events Realtime (DashboardView dışında event dinlemek gerekebilir diye bırakıyoruz)
 
 export default function HomeScreen() {
   const { groups, currentGroupId, isLoading } = useAppStore();
   const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const { colors } = useTheme();
 
-  // Sadece Events için dinleme yapıyoruz.
-  // Status ve Mood artık DashboardView -> useDashboardRealtime içinde yönetiliyor.
-  useGroupEventsRealtime(selectedGroup?.id || "");
+  // Grup ekranı açıkken socket session'ı canlı tutulur:
+  // tüm üye/status/mood verisi ve patch'ler buradan store'a akar.
+  useGroupSession(selectedGroup?.id);
 
   // İçerik Render Mantığı
   const renderContent = () => {
     if (isLoading) {
-      return (
-        <View
-          style={[
-            styles.loadingContainer,
-            { backgroundColor: colors.background },
-          ]}
-        >
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      );
+      return <DashboardSkeleton />;
     }
 
     if (selectedGroup) {
@@ -50,11 +39,3 @@ export default function HomeScreen() {
     </BaseLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

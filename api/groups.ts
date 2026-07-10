@@ -1,64 +1,56 @@
 import { useAppStore } from "@/store/useAppStore";
+import { getMoodOrder, getStatusOrder } from "@/utils/storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { apiClient } from "./client";
+import { DEFAULT_MOODS, DEFAULT_STATUSES } from "./constants";
+import { groupKeys, statusKeys } from "./keys";
+import { closeSession, openSession, updateStatus } from "./socket";
 import {
-  eventKeys,
-  groupKeys,
-  moodKeys,
-  nicknameKeys,
-  statusKeys,
-} from "./keys";
-import {
+  AddGroupMoodResponse,
+  CreateGroupResponse,
+  GetGroupRequestsResponse,
+  GetMyGroupsResponse,
   Group,
-  GroupMember,
-  GroupMood,
+  GroupSummary,
   JoinRequest,
-  UpdateStatusResponse,
+  StatusEntry,
+  StatusOption,
+  StatusUpdateInput,
+  UpdateGroupResponse,
 } from "./types";
 
-import { joinGroupRoom, leaveGroupRoom } from "./socket";
+export { groupKeys };
 
 // ==========================================
-// GROUPS (Core)
+// GROUPS (Core — REST)
 // ==========================================
+
+const toGroupSummary = (group: Group, role: "ADMIN" | "MEMBER"): GroupSummary => ({
+  id: group.id,
+  name: group.name,
+  description: group.description,
+  inviteCode: group.inviteCode,
+  ownerId: group.ownerId,
+  role,
+  memberCount: Object.keys(group.members ?? {}).length,
+  joinedAt: group.createdAt,
+});
 
 export const useUserGroups = () => {
   const setGroups = useAppStore((state) => state.setGroups);
 
   return useQuery({
     queryKey: groupKeys.lists(),
-    queryFn: async (): Promise<Group[]> => {
-      const response = await apiClient.get("/users/me/groups");
-      const memberships = response.data;
-      const groups = memberships.map((m: any) => m.group);
-      setGroups(groups);
-      return groups;
+    queryFn: async (): Promise<GroupSummary[]> => {
+      const response = await apiClient.get<GetMyGroupsResponse>(
+        "/users/me/groups",
+      );
+      setGroups(response.data);
+      return response.data;
     },
     staleTime: 2 * 60 * 1000,
-  });
-};
-
-export const useGroup = (id: string) => {
-  return useQuery({
-    queryKey: groupKeys.detail(id),
-    queryFn: async (): Promise<Group> => {
-      const response = await apiClient.get(`/groups/${id}`);
-      return response.data;
-    },
-    enabled: !!id,
-  });
-};
-
-export const useGroupByInviteCode = (inviteCode: string) => {
-  return useQuery({
-    queryKey: groupKeys.invite(inviteCode),
-    queryFn: async (): Promise<Group> => {
-      const response = await apiClient.get(`/groups/invite/${inviteCode}`);
-      return response.data;
-    },
-    enabled: !!inviteCode && inviteCode.length >= 6,
-    retry: false,
   });
 };
 
@@ -67,16 +59,16 @@ export const useCreateGroup = () => {
   const addGroup = useAppStore((state) => state.addGroup);
 
   return useMutation({
-    mutationFn: async (data: {
-      name: string;
-      type: string;
-    }): Promise<Group> => {
-      const response = await apiClient.post("/groups", data);
+    mutationFn: async (data: { name: string }): Promise<Group> => {
+      // Bilinmeyen alanlar 400 döndürür — sadece name gönderilir
+      const response = await apiClient.post<CreateGroupResponse>("/groups", {
+        name: data.name,
+      });
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (group) => {
+      addGroup(toGroupSummary(group, "ADMIN"));
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
-      addGroup(data as any);
     },
   });
 };
@@ -92,16 +84,20 @@ export const useUpdateGroup = () => {
       id: string;
       updates: { name?: string; description?: string };
     }): Promise<Group> => {
-      const response = await apiClient.patch(`/groups/${id}`, updates);
+      const response = await apiClient.patch<UpdateGroupResponse>(
+        `/groups/${id}`,
+        updates,
+      );
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
+      // Aktif session'a değişiklik zaten canlı yayınlanır (group.updated)
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupKeys.detail(data.id) });
     },
   });
 };
 
+/** Davet koduyla direkt katılım (6 karakter). */
 export const useJoinGroup = () => {
   const queryClient = useQueryClient();
 
@@ -124,72 +120,17 @@ export const useLeaveGroup = () => {
       await apiClient.delete(`/groups/${groupId}/leave`);
     },
     onSuccess: (_, groupId) => {
+      const { groups, setGroups, currentGroupId, setCurrentGroup, session } =
+        useAppStore.getState();
+      setGroups(groups.filter((g) => g.id !== groupId));
+      if (currentGroupId === groupId) setCurrentGroup(null);
+      if (session?.group.id === groupId) closeSession();
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) });
     },
   });
 };
 
-export const useTransferGroupOwnership = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      groupId,
-      newOwnerId,
-    }: {
-      groupId: string;
-      newOwnerId: string;
-    }): Promise<void> => {
-      await apiClient.post(`/groups/${groupId}/transfer-ownership`, {
-        newOwnerId,
-      });
-    },
-    onSuccess: (_, { groupId }) => {
-      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) });
-      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
-    },
-  });
-};
-
-// ==========================================
-// MEMBERS
-// ==========================================
-
-// Extended GroupMember interface for UI compatibility
-export interface UIGroupMember extends GroupMember {
-  id: string; // Alias for userId
-  displayName?: string;
-  photoUrl?: string; // from contract or joined user
-  customId?: string;
-}
-
-export const useGroupMembers = (groupId: string) => {
-  const updateGroupMembers = useAppStore((state) => state.updateGroupMembers);
-
-  return useQuery({
-    queryKey: groupKeys.members(groupId),
-    queryFn: async (): Promise<UIGroupMember[]> => {
-      const response = await apiClient.get(`/groups/${groupId}/members`);
-      const rawMembers: any[] = response.data;
-
-      const members: UIGroupMember[] = rawMembers.map((m: any) => ({
-        ...m,
-        id: m.userId,
-        displayName: m.user?.displayName || m.displayName,
-        photoUrl: m.user?.photoUrl || m.photoUrl,
-        customId: m.user?.customId || m.customId,
-        role: m.role || "MEMBER",
-      }));
-
-      updateGroupMembers(groupId, members);
-      return members;
-    },
-    enabled: !!groupId,
-  });
-};
-
+/** Admin: üyeyi gruptan çıkarır. Değişiklik session'a member.left ile canlı düşer. */
 export const useRemoveGroupMember = () => {
   const queryClient = useQueryClient();
 
@@ -203,61 +144,24 @@ export const useRemoveGroupMember = () => {
     }): Promise<void> => {
       await apiClient.delete(`/groups/${groupId}/members/${userId}`);
     },
-    onSuccess: (_, { groupId }) => {
-      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
     },
   });
 };
 
-export const useInviteUser = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      groupId,
-      userId,
-    }: {
-      groupId: string;
-      userId: string;
-    }): Promise<void> => {
-      await apiClient.post(`/groups/${groupId}/invite`, { userId });
-    },
-    onSuccess: (_, { groupId }) => {
-      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
-    },
-  });
-};
-
 // ==========================================
-// JOIN REQUESTS
+// JOIN REQUESTS (Admin onaylı akış)
 // ==========================================
 
 export const useGroupJoinRequests = (groupId: string) => {
   return useQuery({
     queryKey: groupKeys.requests(groupId),
-    queryFn: async (): Promise<
-      (JoinRequest & {
-        requester: {
-          id: string;
-          displayName?: string;
-          photoUrl?: string;
-          customId?: string;
-        };
-      })[]
-    > => {
-      const response = await apiClient.get(`/groups/${groupId}/requests`);
-      const rawRequests: any[] = response.data;
-
-      return rawRequests.map((req) => ({
-        ...req,
-        requester: {
-          id: req.user.id,
-          displayName: req.user.displayName || undefined,
-          photoUrl: req.user.photoUrl || undefined,
-          customId: req.user.customId,
-        },
-      }));
+    queryFn: async (): Promise<JoinRequest[]> => {
+      const response = await apiClient.get<GetGroupRequestsResponse>(
+        `/groups/${groupId}/requests`,
+      );
+      return response.data;
     },
     enabled: !!groupId,
   });
@@ -267,9 +171,8 @@ export const useSendJoinRequest = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (groupId: string): Promise<JoinRequest> => {
-      const response = await apiClient.post(`/groups/${groupId}/join-request`);
-      return response.data;
+    mutationFn: async (groupId: string): Promise<void> => {
+      await apiClient.post(`/groups/${groupId}/join-request`);
     },
     onSuccess: (_, groupId) => {
       queryClient.invalidateQueries({ queryKey: groupKeys.requests(groupId) });
@@ -297,7 +200,7 @@ export const useRespondToJoinRequest = () => {
     },
     onSuccess: (_, { groupId }) => {
       queryClient.invalidateQueries({ queryKey: groupKeys.requests(groupId) });
-      queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
     },
   });
 };
@@ -322,19 +225,23 @@ export const useRejectJoinRequest = () => {
   };
 };
 
-export const useGroupJoinRequestsRealtime = (groupId: string) => {
-  // Placeholder for future realtime implementation
-  return;
-};
+// ==========================================
+// SESSION (Socket)
+// ==========================================
 
-export const useGroupEventsRealtime = (groupId: string) => {
+/**
+ * Grup ekranı açıkken socket session'ını yönetir:
+ * mount'ta `session:open`, unmount'ta / grup değişince `session:close`.
+ * Tam grup verisi (üyeler, statüler, mood'lar) store'daki `session`'a akar.
+ */
+export const useGroupSession = (groupId: string | null | undefined) => {
   useEffect(() => {
     if (!groupId) return;
 
-    joinGroupRoom(groupId);
+    openSession(groupId);
 
     return () => {
-      leaveGroupRoom(groupId);
+      closeSession();
     };
   }, [groupId]);
 };
@@ -343,95 +250,238 @@ export const useGroupEventsRealtime = (groupId: string) => {
 // STATUS & MOODS
 // ==========================================
 
-export interface CreateStatusPayload {
-  groupId: string;
-  text: string;
-  emoji?: string;
-  mood?: string;
-  owner_id?: string;
-  is_custom?: boolean;
-  notifies?: boolean;
-}
-
+/**
+ * Durum paylaşımı — SADECE socket üzerinden yapılır (REST endpoint'i yok).
+ * Aktif session'daki gruba işlenir; önce `useGroupSession` ile session açılmalıdır.
+ */
 export const useSetUserStatus = () => {
-  const queryClient = useQueryClient();
-  const updateGroupStatus = useAppStore((state) => state.updateGroupStatus);
-  const updateGroupMood = useAppStore((state) => state.updateGroupMood);
+  const setOwnStatus = useAppStore((state) => state.setOwnStatus);
+  const user = useAppStore((state) => state.user);
 
   return useMutation({
-    mutationFn: async (
-      payload: CreateStatusPayload,
-    ): Promise<UpdateStatusResponse> => {
-      const response = await apiClient.post("/status", payload);
-      return response.data;
+    mutationFn: async (payload: StatusUpdateInput): Promise<StatusEntry> => {
+      return updateStatus(payload);
     },
-    onSuccess: (data) => {
-      updateGroupStatus(data.groupId, {
-        userId: data.userId,
-        text: data.text,
-        emoji: data.emoji,
-        updatedAt: data.updatedAt,
-      } as any);
-
-      if (data.mood) {
-        updateGroupMood(data.groupId, {
-          userId: data.userId,
-          mood: data.mood,
-          updatedAt: data.updatedAt,
-        } as any);
-      }
-
-      queryClient.invalidateQueries({
-        queryKey: groupKeys.detail(data.groupId),
-      });
+    onSuccess: (status) => {
+      // Ack'teki status ile optimistic UI'ı doğrula
+      if (user?.id) setOwnStatus(user.id, status);
     },
   });
 };
 
-// Legacy UseCreateMood adaptation
-export const useCreateMood = () => {
-  const queryClient = useQueryClient();
+export interface MoodOption {
+  id: string;
+  text: string;
+  emoji: string | null;
+  mood: string;
+  isCustom: boolean;
+}
 
+/** Varsayılan mood'lar + aktif session'daki grubun custom mood'ları. */
+export const useMoods = (groupId?: string) => {
+  const session = useAppStore((state) => state.session);
+
+  const customMoods: MoodOption[] =
+    session && (!groupId || session.group.id === groupId)
+      ? (session.group.customMoods ?? []).map((m) => ({
+          id: m.id,
+          text: m.text,
+          emoji: m.emoji,
+          mood: m.mood,
+          isCustom: true,
+        }))
+      : [];
+
+  const data: MoodOption[] = [
+    ...customMoods,
+    ...DEFAULT_MOODS.map((m) => ({ ...m, isCustom: false })),
+  ];
+
+  return { data, isLoading: false, error: null };
+};
+
+/** Admin + Premium: gruba custom mood ekle (canlı yayınlanır — mood.added). */
+export const useCreateMood = () => {
   return useMutation({
     mutationFn: async ({
       groupId,
       data,
     }: {
       groupId: string;
-      data: { text: string; emoji: string; mood: string };
-    }): Promise<GroupMood> => {
-      // Assuming endpoint is similar or we map it to status or group moods
+      data: { text: string; emoji?: string; mood: string };
+    }): Promise<AddGroupMoodResponse> => {
       const response = await apiClient.post(`/groups/${groupId}/moods`, data);
       return response.data;
     },
-    onSuccess: (_, { groupId }) => {
-      queryClient.invalidateQueries({
-        queryKey: [...moodKeys.lists(), groupId],
-      });
-    },
+    // Session patch'i (mood.added) store'u zaten güncelleyecek
   });
 };
 
-export const useMoods = (groupId?: string) => {
-  return useQuery({
-    queryKey: [...moodKeys.lists(), groupId || "all"],
-    queryFn: async (): Promise<GroupMood[]> => {
-      try {
-        const response = await apiClient.get("/moods", { params: { groupId } });
-        return response.data;
-      } catch (e) {
-        return [];
-      }
+/** Admin: gruptan custom mood sil (canlı yayınlanır — mood.removed). */
+export const useDeleteMood = () => {
+  return useMutation({
+    mutationFn: async ({
+      groupId,
+      moodId,
+    }: {
+      groupId: string;
+      moodId: string;
+    }): Promise<void> => {
+      await apiClient.delete(`/groups/${groupId}/moods/${moodId}`);
     },
+    // Session patch'i (mood.removed) store'u zaten güncelleyecek
   });
+};
+
+// ------------------------------------------------------------------
+// Custom status'ler — API'de karşılığı yok; GRUBA ÖZEL olarak
+// kullanıcı + grup başına lokal (AsyncStorage) tutulur.
+// Paylaşım anı yine socket status:update'tir.
+// ------------------------------------------------------------------
+
+const customStatusStorageKey = (userId: string, groupId: string) =>
+  `geliom:custom-statuses:${userId}:${groupId}`;
+
+const readCustomStatuses = async (
+  userId: string,
+  groupId: string,
+): Promise<StatusOption[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(
+      customStatusStorageKey(userId, groupId),
+    );
+    return raw ? (JSON.parse(raw) as StatusOption[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeCustomStatuses = async (
+  userId: string,
+  groupId: string,
+  statuses: StatusOption[],
+): Promise<void> => {
+  await AsyncStorage.setItem(
+    customStatusStorageKey(userId, groupId),
+    JSON.stringify(statuses),
+  );
 };
 
 export const useCustomStatuses = (groupId?: string, userId?: string) => {
   return useQuery({
     queryKey: statusKeys.custom(groupId, userId),
-    queryFn: async (): Promise<any[]> => {
-      return []; // Mock
+    queryFn: async (): Promise<StatusOption[]> => {
+      if (!userId || !groupId) return [];
+      return readCustomStatuses(userId, groupId);
     },
+    enabled: !!userId && !!groupId,
+    initialData: [],
+  });
+};
+
+export const useCreateCustomStatus = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      groupId,
+      text,
+      emoji,
+    }: {
+      userId: string;
+      groupId: string;
+      text: string;
+      emoji?: string;
+    }): Promise<StatusOption> => {
+      const statuses = await readCustomStatuses(userId, groupId);
+      const status: StatusOption = {
+        id: `custom-${Date.now()}`,
+        text,
+        emoji,
+        is_custom: true,
+      };
+      await writeCustomStatuses(userId, groupId, [status, ...statuses]);
+      return status;
+    },
+    onSuccess: (_, { userId, groupId }) => {
+      queryClient.invalidateQueries({
+        queryKey: statusKeys.custom(groupId, userId),
+      });
+    },
+  });
+};
+
+export const useDeleteCustomStatus = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      groupId,
+      statusId,
+    }: {
+      userId: string;
+      groupId: string;
+      statusId: string;
+    }): Promise<void> => {
+      const statuses = await readCustomStatuses(userId, groupId);
+      await writeCustomStatuses(
+        userId,
+        groupId,
+        statuses.filter((s) => s.id !== statusId),
+      );
+    },
+    onSuccess: (_, { userId, groupId }) => {
+      queryClient.invalidateQueries({
+        queryKey: statusKeys.custom(groupId, userId),
+      });
+    },
+  });
+};
+
+// ------------------------------------------------------------------
+// Sıralama — kullanıcı + grup başına lokal tutulur ve seçicilerde uygulanır.
+// ------------------------------------------------------------------
+
+/**
+ * Kaydedilmiş sıralamayı bir listeye uygular: sıralamada olanlar o sırayla
+ * öne gelir, olmayanlar mevcut sıralarıyla sona eklenir.
+ */
+export const applySavedOrder = <T extends { id: string | number }>(
+  items: T[],
+  order: string[],
+): T[] => {
+  if (!order.length) return items;
+  const ordered: T[] = [];
+  for (const id of order) {
+    const item = items.find((i) => String(i.id) === id);
+    if (item) ordered.push(item);
+  }
+  const rest = items.filter((i) => !order.includes(String(i.id)));
+  return [...ordered, ...rest];
+};
+
+export const useStatusOrder = (userId?: string, groupId?: string) => {
+  return useQuery({
+    queryKey: statusKeys.order("status", userId, groupId),
+    queryFn: async (): Promise<string[]> => {
+      if (!userId || !groupId) return [];
+      return getStatusOrder(userId, groupId);
+    },
+    enabled: !!userId && !!groupId,
+    initialData: [],
+  });
+};
+
+export const useMoodOrder = (userId?: string, groupId?: string) => {
+  return useQuery({
+    queryKey: statusKeys.order("mood", userId, groupId),
+    queryFn: async (): Promise<string[]> => {
+      if (!userId || !groupId) return [];
+      return getMoodOrder(userId, groupId);
+    },
+    enabled: !!userId && !!groupId,
     initialData: [],
   });
 };
@@ -439,254 +489,8 @@ export const useCustomStatuses = (groupId?: string, userId?: string) => {
 export const useDefaultStatuses = () => {
   return useQuery({
     queryKey: statusKeys.default,
-    queryFn: async (): Promise<any[]> => {
-      const texts = [
-        "Müsait",
-        "Meşgul",
-        "Toplantıda",
-        "Okulda",
-        "İşte",
-        "Uykuda",
-        "Spor yapıyor",
-      ];
-      return texts.map((text, index) => ({
-        id: `default-${index}`,
-        text,
-        is_custom: false,
-      }));
-    },
+    queryFn: async (): Promise<StatusOption[]> => DEFAULT_STATUSES,
     staleTime: Infinity,
-  });
-};
-
-export const useDeleteStatus = () => {
-  return useMutation({
-    mutationFn: async () => {},
-  });
-};
-export const useDeleteMood = () => {
-  return useMutation({
-    mutationFn: async () => {},
-  });
-};
-export const useCreateStatus = () => {
-  return useMutation({
-    mutationFn: async () => {},
-  });
-};
-
-// ==========================================
-// NICKNAMES (Group Scoped)
-// ==========================================
-
-export const useGroupNicknames = (groupId: string) => {
-  return useQuery({
-    queryKey: nicknameKeys.group(groupId),
-    queryFn: async (): Promise<any[]> => {
-      const response = await apiClient.get(`/groups/${groupId}/nicknames`);
-      return response.data || [];
-    },
-    enabled: !!groupId,
-  });
-};
-
-export const useNickname = (
-  groupId: string,
-  setterUserId: string,
-  targetUserId: string,
-) => {
-  return useQuery({
-    queryKey: nicknameKeys.specific(groupId, setterUserId, targetUserId),
-    queryFn: async (): Promise<any | null> => {
-      const response = await apiClient.get(`/nicknames/specific`, {
-        params: { groupId, setterUserId, targetUserId },
-      });
-      return response.data || null;
-    },
-    enabled: !!(groupId && setterUserId && targetUserId),
-  });
-};
-
-export const useCreateNickname = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (nicknameData: any): Promise<any> => {
-      const response = await apiClient.post("/nicknames", nicknameData);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: nicknameKeys.group(data.group_id),
-      });
-    },
-  });
-};
-
-export const useUpdateNickname = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      groupId,
-      setterUserId,
-      targetUserId,
-      updates,
-    }: {
-      groupId: string;
-      setterUserId: string;
-      targetUserId: string;
-      updates: any;
-    }): Promise<any> => {
-      const response = await apiClient.patch("/nicknames", {
-        groupId,
-        setterUserId,
-        targetUserId,
-        ...updates,
-      });
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: nicknameKeys.group(data.group_id),
-      });
-    },
-  });
-};
-
-export const useDeleteNickname = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      groupId,
-      setterUserId,
-      targetUserId,
-    }: {
-      groupId: string;
-      setterUserId: string;
-      targetUserId: string;
-    }): Promise<void> => {
-      await apiClient.delete("/nicknames", {
-        data: { groupId, setterUserId, targetUserId },
-      });
-    },
-    onSuccess: (_, { groupId }) => {
-      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
-      queryClient.invalidateQueries({ queryKey: nicknameKeys.group(groupId) });
-    },
-  });
-};
-
-export const useUpsertNickname = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (nicknameData: any): Promise<any> => {
-      const response = await apiClient.post("/nicknames/upsert", nicknameData);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: nicknameKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: nicknameKeys.group(data.group_id),
-      });
-    },
-  });
-};
-
-// ==========================================
-// EVENTS (Group Scoped)
-// ==========================================
-
-export const useGroupEvents = (groupId: string) => {
-  return useQuery({
-    queryKey: eventKeys.group(groupId),
-    queryFn: async (): Promise<any[]> => {
-      const response = await apiClient.get(`/groups/${groupId}/events`);
-      return response.data || [];
-    },
-    enabled: !!groupId,
-  });
-};
-
-export const useUpcomingGroupEvents = (groupId: string) => {
-  return useQuery({
-    queryKey: eventKeys.upcoming(groupId),
-    queryFn: async (): Promise<any[]> => {
-      const response = await apiClient.get(
-        `/groups/${groupId}/events/upcoming`,
-      );
-      return response.data || [];
-    },
-    enabled: !!groupId,
-  });
-};
-
-export const useEvent = (id: string) => {
-  return useQuery({
-    queryKey: eventKeys.detail(id),
-    queryFn: async (): Promise<any | null> => {
-      const response = await apiClient.get(`/events/${id}`);
-      return response.data;
-    },
-    enabled: !!id,
-  });
-};
-
-export const useCreateEvent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (eventData: any): Promise<any> => {
-      const response = await apiClient.post("/events", eventData);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: eventKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: eventKeys.group(data.group_id),
-      });
-    },
-  });
-};
-
-export const useUpdateEvent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      id,
-      updates,
-    }: {
-      id: string;
-      updates: any;
-    }): Promise<any> => {
-      const response = await apiClient.patch(`/events/${id}`, updates);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: eventKeys.all });
-      queryClient.invalidateQueries({ queryKey: eventKeys.detail(data.id) });
-      queryClient.invalidateQueries({
-        queryKey: eventKeys.group(data.group_id),
-      });
-    },
-  });
-};
-
-export const useDeleteEvent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (id: string): Promise<void> => {
-      await apiClient.delete(`/events/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: eventKeys.all });
-    },
   });
 };
 
@@ -694,6 +498,7 @@ export const useDeleteEvent = () => {
 // NOTIFICATIONS (Settings)
 // ==========================================
 
+/** Bu grubun push bildirimlerini benim için aç/kapat. */
 export const useMuteGroup = () => {
   const queryClient = useQueryClient();
 
@@ -707,7 +512,7 @@ export const useMuteGroup = () => {
     }): Promise<void> => {
       await apiClient.post(`/groups/${groupId}/mute`, { isMuted });
     },
-    onSuccess: (_, { groupId }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
     },
   });

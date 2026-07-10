@@ -2,11 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { darkColors, lightColors } from '../theme/colors';
+import { getShadows } from '../theme/tokens';
 
 // 1. Context'i oluştur
 export const ThemeContext = createContext({
   isDark: false,
   colors: lightColors,
+  shadows: getShadows(false),
   toggleTheme: () => {},
 });
 
@@ -48,9 +50,10 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Mevcut temaya göre doğru renk paletini seç
   const themeColors = isDark ? darkColors : lightColors;
+  const themeShadows = getShadows(isDark);
 
   return (
-    <ThemeContext.Provider value={{ isDark, colors: themeColors, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, colors: themeColors, shadows: themeShadows, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

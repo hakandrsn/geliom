@@ -1,4 +1,4 @@
-import { useGroupByInviteCode, useSendJoinRequest } from "@/api/groups";
+import { useJoinGroup } from "@/api/groups";
 import KeyboardAwareView from "@/components/KeyboardAwareView";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -8,6 +8,8 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const INVITE_CODE_LENGTH = 6;
 
 export default function JoinGroupScreen() {
   const { user } = useAppStore();
@@ -20,16 +22,13 @@ export default function JoinGroupScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
 
-  // Davet kodu ile grubu bul
-  const { data: group, refetch: refetchGroup } = useGroupByInviteCode(
-    inviteCode.trim().toUpperCase(),
-  );
+  const joinGroup = useJoinGroup();
 
-  const createJoinRequest = useSendJoinRequest();
+  const isCodeComplete = inviteCode.trim().length === INVITE_CODE_LENGTH;
 
-  const handleJoinRequest = async () => {
-    if (!inviteCode.trim()) {
-      setCodeError("Davet kodu gerekli");
+  const handleJoin = async () => {
+    if (!isCodeComplete) {
+      setCodeError(`${INVITE_CODE_LENGTH} haneli davet kodu gerekli`);
       return;
     }
 
@@ -38,29 +37,33 @@ export default function JoinGroupScreen() {
       return;
     }
 
-    if (!group) {
-      setCodeError("Geçersiz davet kodu");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       setCodeError(null);
 
-      await createJoinRequest.mutateAsync(group.id);
+      const group = await joinGroup.mutateAsync({
+        inviteCode: inviteCode.trim().toUpperCase(),
+      });
 
-      Alert.alert(
-        "İstek Gönderildi",
-        `${group.name} grubuna katılma isteğiniz gönderildi. Grup kurucusu onayladığında gruba katılacaksınız.`,
-        [
-          {
-            text: "Tamam",
-            onPress: () => router.replace("/(drawer)/home"),
-          },
-        ],
-      );
+      Alert.alert("Gruba Katıldınız", `${group.name} grubuna katıldınız.`, [
+        {
+          text: "Tamam",
+          onPress: () => router.replace("/(drawer)/home"),
+        },
+      ]);
     } catch (error: any) {
-      setCodeError(error.message || "İstek gönderilemedi");
+      const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message;
+      if (status === 404) {
+        setCodeError("Geçersiz davet kodu");
+      } else if (status === 409) {
+        setCodeError(
+          (Array.isArray(backendMessage) ? backendMessage[0] : backendMessage) ||
+            "Gruba katılamadınız (zaten üye olabilirsiniz veya limit dolu)",
+        );
+      } else {
+        setCodeError(error.message || "Gruba katılamadınız");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -71,11 +74,6 @@ export default function JoinGroupScreen() {
     const cleaned = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
     setInviteCode(cleaned);
     setCodeError(null);
-
-    // Eğer kod 8 karakter ise otomatik arama yap
-    if (cleaned.length === 8) {
-      refetchGroup();
-    }
   };
 
   return (
@@ -119,7 +117,8 @@ export default function JoinGroupScreen() {
             color={colors.secondaryText}
             style={{ textAlign: "center" }}
           >
-            Grup kurucusundan aldığınız 8 haneli davet kodunu girin
+            Grup kurucusundan aldığınız {INVITE_CODE_LENGTH} haneli davet
+            kodunu girin
           </Typography>
         </View>
 
@@ -140,16 +139,16 @@ export default function JoinGroupScreen() {
                   color: colors.text,
                   borderColor: codeError
                     ? colors.error
-                    : group
+                    : isCodeComplete
                       ? colors.success
                       : colors.stroke,
                 },
               ]}
-              placeholder="ABC12345"
+              placeholder="AB3K9X"
               placeholderTextColor={colors.secondaryText + "80"}
               value={inviteCode}
               onChangeText={handleCodeChange}
-              maxLength={8}
+              maxLength={INVITE_CODE_LENGTH}
               autoCapitalize="characters"
               autoCorrect={false}
             />
@@ -162,71 +161,19 @@ export default function JoinGroupScreen() {
                 {codeError}
               </Typography>
             )}
-            {group && !codeError && (
-              <Typography
-                variant="caption"
-                color={colors.success}
-                style={{ marginTop: 4 }}
-              >
-                ✓ {group.name} grubu bulundu
-              </Typography>
-            )}
           </View>
 
-          {group && (
-            <View
-              style={[
-                styles.groupInfo,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.stroke,
-                },
-              ]}
-            >
-              <View style={styles.groupInfoHeader}>
-                <View
-                  style={[
-                    styles.groupIcon,
-                    { backgroundColor: colors.primary + "20" },
-                  ]}
-                >
-                  <Ionicons
-                    name={"people"}
-                    // name={group.type === 'family' ? 'home' : group.type === 'work' ? 'briefcase' : 'people'}
-                    // Type field might not be present in basic Group interface? Check API types.
-                    // Assuming it is there or defaulting.
-                    size={24}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.groupInfoText}>
-                  <Typography
-                    variant="h5"
-                    color={colors.text}
-                    numberOfLines={1}
-                  >
-                    {group.name}
-                  </Typography>
-                  <Typography variant="caption" color={colors.secondaryText}>
-                    Kurucu:{" "}
-                    {
-                      group.owner_id /* Owner object might not be here, just ID */
-                    }
-                  </Typography>
-                </View>
-              </View>
-            </View>
-          )}
-
           <GeliomButton
-            state={isSubmitting ? "loading" : group ? "active" : "passive"}
+            state={
+              isSubmitting ? "loading" : isCodeComplete ? "active" : "passive"
+            }
             layout="full-width"
             size="large"
-            icon="send"
-            onPress={handleJoinRequest}
-            disabled={!group || isSubmitting}
+            icon="enter"
+            onPress={handleJoin}
+            disabled={!isCodeComplete || isSubmitting}
           >
-            {isSubmitting ? "Gönderiliyor..." : "Katılma İsteği Gönder"}
+            {isSubmitting ? "Katılınıyor..." : "Gruba Katıl"}
           </GeliomButton>
         </View>
       </KeyboardAwareView>
@@ -266,25 +213,5 @@ const styles = StyleSheet.create({
     fontFamily: "Comfortaa-Bold",
     letterSpacing: 2,
     textAlign: "center",
-  },
-  groupInfo: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 16,
-  },
-  groupInfoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  groupIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  groupInfoText: {
-    flex: 1,
   },
 });

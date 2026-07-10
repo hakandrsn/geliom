@@ -1,6 +1,18 @@
-import { useCreateMood, useMuteGroup, useUpdateGroup } from "@/api";
-import { GroupNameBottomSheet } from "@/components/bottomsheets";
+import {
+  useCreateCustomStatus,
+  useCreateMood,
+  useGroupJoinRequests,
+  useGroupSession,
+  useMuteGroup,
+  useUpdateGroup,
+} from "@/api";
+import {
+  ConfirmSheet,
+  GroupNameBottomSheet,
+  StatusMoodBottomSheet,
+} from "@/components/bottomsheets";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
+import { ListItem } from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
@@ -17,7 +29,7 @@ import {
 } from "react-native";
 
 export default function GroupManagementScreen() {
-  const { currentGroupId, groups, user } = useAppStore();
+  const { currentGroupId, groups, user, session } = useAppStore();
   const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const { colors } = useTheme();
   const router = useRouter();
@@ -27,14 +39,27 @@ export default function GroupManagementScreen() {
 
   const updateGroup = useUpdateGroup();
 
-  const createMood = useCreateMood(); // Correctly imported from api/moods
+  const createMood = useCreateMood();
+  const createCustomStatus = useCreateCustomStatus();
   const muteGroup = useMuteGroup();
 
-  const isOwner = selectedGroup?.owner_id === user?.id;
+  // Ekran açıkken session'ı canlı tut (mute durumu session'dan okunur)
+  useGroupSession(selectedGroup?.id);
 
-  // Pending requests: Implement if needed using useGroupJoinRequests
-  // const { data: joinRequests = [] } = useGroupJoinRequests(selectedGroup?.id || '', 'pending');
-  const pendingRequestsCount = 0; // joinRequests.length;
+  const isOwner = selectedGroup?.ownerId === user?.id;
+
+  // Kendi üyeliğimin mute durumu aktif session'dan okunur
+  const myMembership =
+    session && user && session.group.id === selectedGroup?.id
+      ? session.group.members[user.id]
+      : undefined;
+  const isGroupMuted = myMembership?.isMuted ?? false;
+
+  // Bekleyen istekler (sadece admin görebilir)
+  const { data: joinRequests = [] } = useGroupJoinRequests(
+    isOwner && selectedGroup ? selectedGroup.id : "",
+  );
+  const pendingRequestsCount = joinRequests.length;
 
   const handleJoinRequestsPress = () => {
     if (selectedGroup) {
@@ -91,8 +116,8 @@ export default function GroupManagementScreen() {
   }
 
   const copyInviteCode = async () => {
-    if (selectedGroup.invite_code) {
-      await Clipboard.setStringAsync(selectedGroup.invite_code);
+    if (selectedGroup.inviteCode) {
+      await Clipboard.setStringAsync(selectedGroup.inviteCode);
       setIsCopying(true);
       setTimeout(() => setIsCopying(false), 2000);
     }
@@ -123,63 +148,99 @@ export default function GroupManagementScreen() {
     );
   };
 
+  // Custom status'ler bu gruba özel, lokal tutulur (bkz. useCustomStatuses)
   const handleCreateStatus = () => {
-    // Feature not ready
-    Alert.alert("Yakında", "Özel durum oluşturma özelliği yakında eklenecek.");
-  };
-
-  const handleCreateMood = () => {
-    Alert.prompt("Yeni Mood Ekle", "Mood metnini girin (örn: Kod yazıyorum)", [
-      {
-        text: "İptal",
-        style: "cancel",
-      },
-      {
-        text: "Ekle",
-        onPress: (text?: string) => {
-          if (text) {
-            // Basic implementation, asking only for text for now
-            // Default emoji and mood key until UI supports picking them
-            createMood.mutate(
-              {
-                groupId: selectedGroup.id,
-                data: {
-                  text,
-                  emoji: "✨",
-                  mood: text.toLowerCase().replace(/\s/g, "_"),
-                },
-              },
-              {
-                onSuccess: () => Alert.alert("Başarılı", "Mood eklendi"),
-                onError: (e: any) =>
-                  Alert.alert("Hata", e.message || "Mood eklenemedi"),
-              },
-            );
+    if (!user?.id) return;
+    openBottomSheet(
+      <StatusMoodBottomSheet
+        type="status"
+        onSave={async (text, emoji) => {
+          try {
+            await createCustomStatus.mutateAsync({
+              userId: user.id,
+              groupId: selectedGroup.id,
+              text,
+              emoji: emoji || undefined,
+            });
+            closeBottomSheet();
+            Alert.alert("Başarılı", "Özel durum eklendi");
+          } catch (e: any) {
+            Alert.alert("Hata", e.message || "Durum eklenemedi");
           }
-        },
-      },
-    ]);
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ["55%"] },
+    );
   };
 
+  // Alert.prompt iOS-only olduğu için bottom sheet kullanılır (Android desteği)
+  const handleCreateMood = () => {
+    openBottomSheet(
+      <StatusMoodBottomSheet
+        type="mood"
+        onSave={async (text, emoji) => {
+          createMood.mutate(
+            {
+              groupId: selectedGroup.id,
+              data: {
+                text,
+                emoji: emoji || "✨",
+                mood: text.toLowerCase().replace(/\s/g, "_"),
+              },
+            },
+            {
+              onSuccess: () => Alert.alert("Başarılı", "Mood eklendi"),
+              onError: (e: any) => {
+                const backendMessage = e?.response?.data?.message;
+                Alert.alert(
+                  "Hata",
+                  (Array.isArray(backendMessage)
+                    ? backendMessage[0]
+                    : backendMessage) ||
+                    e.message ||
+                    "Mood eklenemedi",
+                );
+              },
+            },
+          );
+          closeBottomSheet();
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ["50%"] },
+    );
+  };
+
+  // Alert yerine ortak onay sheet'i — grup adı bağlam olarak gösterilir
   const handleMuteToggle = () => {
-    // Need to know current state, assumed false or fetched from membership
-    // For now toggling via prompt or direct action if we knew state
-    Alert.alert(
-      "Grubu Sessize Al",
-      "Bu gruptan gelen bildirimleri kapatmak istiyor musunuz?",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Sessize Al",
-          onPress: () => {
-            // muteGroup.mutate({ groupId: selectedGroup.id, isMuted: true })
-            Alert.alert(
-              "Bilgi",
-              "Mute özelliği tam entegrasyon bekliyor (membership verisi)",
-            );
-          },
-        },
-      ],
+    const next = !isGroupMuted;
+    openBottomSheet(
+      <ConfirmSheet
+        icon={next ? "notifications-off-outline" : "notifications-outline"}
+        title={next ? "Grubu Sessize Al" : "Sessize Almayı Kaldır"}
+        message={
+          next
+            ? `"${selectedGroup.name}" grubundan gelen bildirimler kapatılacak. Devam etmek istiyor musun?`
+            : `"${selectedGroup.name}" grubundan gelen bildirimler tekrar açılacak. Devam etmek istiyor musun?`
+        }
+        confirmLabel={next ? "Sessize Al" : "Bildirimleri Aç"}
+        destructive={next}
+        onConfirm={async () => {
+          try {
+            await muteGroup.mutateAsync({
+              groupId: selectedGroup.id,
+              isMuted: next,
+            });
+            closeBottomSheet();
+          } catch (e: any) {
+            closeBottomSheet();
+            Alert.alert("Hata", e.message || "İşlem başarısız oldu");
+          }
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      { snapPoints: ["40%"] },
     );
   };
 
@@ -247,31 +308,18 @@ export default function GroupManagementScreen() {
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
       >
-        {/* Davet Kodu Kartı */}
-        <View
-          style={[
-            styles.inviteCard,
-            {
-              backgroundColor: colors.cardBackground,
-              borderColor: colors.stroke,
-            },
-          ]}
-        >
-          <View style={styles.inviteCardHeader}>
-            <Ionicons name="key-outline" size={24} color={colors.primary} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Typography variant="h5" color={colors.text}>
-                {selectedGroup.name} - Davet Kodu
-              </Typography>
-            </View>
-          </View>
+        {/* Davet Kodu — çerçevesiz, sade */}
+        <View style={styles.inviteSection}>
+          <Typography variant="caption" color={colors.secondaryText}>
+            {selectedGroup.name} • Davet Kodu
+          </Typography>
           <View style={styles.inviteCodeContainer}>
             <Typography
               variant="h3"
               color={colors.primary}
               style={styles.inviteCode}
             >
-              {selectedGroup.invite_code || "N/A"}
+              {selectedGroup.inviteCode || "N/A"}
             </Typography>
             <GeliomButton
               state={isCopying ? "active" : "passive"}
@@ -282,14 +330,6 @@ export default function GroupManagementScreen() {
               {isCopying ? "Kopyalandı" : "Kopyala"}
             </GeliomButton>
           </View>
-          <Typography
-            variant="caption"
-            color={colors.secondaryText}
-            style={{ marginTop: 8 }}
-          >
-            Bu kodu paylaşarak kullanıcılar grubunuza katılma isteği
-            gönderebilir
-          </Typography>
         </View>
 
         {/* Grup Ayarları (Sadece Owner) */}
@@ -304,216 +344,84 @@ export default function GroupManagementScreen() {
             </Typography>
 
             {/* Grup Adı Değiştir */}
-            <TouchableOpacity
+            <ListItem
+              icon="pencil-outline"
+              title="Grup Adı"
+              subtitle={selectedGroup.name}
               onPress={handleUpdateGroupName}
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.stroke,
-                },
-              ]}
-            >
-              <View style={styles.settingItemContent}>
-                <Ionicons
-                  name="pencil-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <View style={styles.settingItemText}>
-                  <Typography variant="body" color={colors.text}>
-                    Grup Adı
-                  </Typography>
-                  <Typography variant="caption" color={colors.secondaryText}>
-                    {selectedGroup.name}
-                  </Typography>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.secondaryText}
-                />
-              </View>
-            </TouchableOpacity>
+            />
 
             {/* Özel Durum Ekle */}
-            <TouchableOpacity
+            <ListItem
+              icon="add-circle-outline"
+              title="Özel Durum Ekle"
+              subtitle="Gruba özel durum oluştur"
+              premium
               onPress={handleCreateStatus}
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.stroke,
-                },
-              ]}
-            >
-              <View style={styles.settingItemContent}>
-                <Ionicons
-                  name="add-circle-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <View style={styles.settingItemText}>
-                  <Typography variant="body" color={colors.text}>
-                    Özel Durum Ekle
-                  </Typography>
-                  <Typography variant="caption" color={colors.secondaryText}>
-                    Gruba özel durum oluştur
-                  </Typography>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.secondaryText}
-                />
-              </View>
-            </TouchableOpacity>
+            />
 
             {/* Özel Mood Ekle */}
-            <TouchableOpacity
+            <ListItem
+              icon="happy-outline"
+              title="Özel Mood Ekle"
+              subtitle="Gruba özel mood oluştur"
+              premium
               onPress={handleCreateMood}
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.stroke,
-                },
-              ]}
-            >
-              <View style={styles.settingItemContent}>
-                <Ionicons
-                  name="happy-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <View style={styles.settingItemText}>
-                  <Typography variant="body" color={colors.text}>
-                    Özel Mood Ekle
-                  </Typography>
-                  <Typography variant="caption" color={colors.secondaryText}>
-                    Gruba özel mood oluştur
-                  </Typography>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.secondaryText}
-                />
-              </View>
-            </TouchableOpacity>
-
-            {/* Status ve Mood Sırala - Link deactivated or active? */}
-            <TouchableOpacity
-              onPress={() =>
-                router.push("/(drawer)/(group)/reorder-status-mood")
-              }
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.stroke,
-                },
-              ]}
-            >
-              <View style={styles.settingItemContent}>
-                <Ionicons
-                  name="reorder-three-outline"
-                  size={20}
-                  color={colors.primary}
-                />
-                <View style={styles.settingItemText}>
-                  <Typography variant="body" color={colors.text}>
-                    Status ve Mood Sırala
-                  </Typography>
-                  <Typography variant="caption" color={colors.secondaryText}>
-                    Status ve mood sıralamasını düzenle
-                  </Typography>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.secondaryText}
-                />
-              </View>
-            </TouchableOpacity>
-            {/* Grubu Sessize Al */}
-            <TouchableOpacity
-              onPress={handleMuteToggle}
-              style={[
-                styles.settingItem,
-                {
-                  backgroundColor: colors.cardBackground,
-                  borderColor: colors.stroke,
-                },
-              ]}
-            >
-              <View style={styles.settingItemContent}>
-                <Ionicons
-                  name="notifications-off-outline"
-                  size={20}
-                  color={colors.error}
-                />
-                <View style={styles.settingItemText}>
-                  <Typography variant="body" color={colors.text}>
-                    Grubu Sessize Al
-                  </Typography>
-                  <Typography variant="caption" color={colors.secondaryText}>
-                    Bildirimleri kapat
-                  </Typography>
-                </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={18}
-                  color={colors.secondaryText}
-                />
-              </View>
-            </TouchableOpacity>
+            />
           </View>
         )}
 
-        {/* Yönetim Butonları */}
-        <View style={styles.actionsContainer}>
+        {/* Kişisel Ayarlar (tüm üyeler) */}
+        <View style={styles.settingsSection}>
           <Typography
             variant="h5"
             color={colors.text}
             style={styles.sectionTitle}
           >
-            Üye Yönetimi
+            Kişisel Ayarlar
           </Typography>
 
-          {/* Tüm Üyeler için */}
-          <TouchableOpacity
-            onPress={() => router.push("/(drawer)/(group)/manage-members")}
-            style={[
-              styles.memberButton,
-              {
-                backgroundColor: colors.cardBackground,
-                borderColor: colors.stroke,
-              },
-            ]}
-          >
-            <View style={styles.memberButtonContent}>
-              <Ionicons
-                name="people-outline"
-                size={24}
-                color={colors.primary}
-              />
-              <View style={styles.memberButtonText}>
-                <Typography variant="h5" color={colors.text}>
-                  Üyeleri Yönet
-                </Typography>
-                <Typography variant="caption" color={colors.secondaryText}>
-                  Üyeleri görüntüle, takma ad ver, sessize al
-                </Typography>
-              </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.secondaryText}
-              />
-            </View>
-          </TouchableOpacity>
+          {/* Sıralama */}
+          <ListItem
+            icon="swap-vertical-outline"
+            title="Sıralama"
+            subtitle="Status ve mood sırasını düzenle"
+            onPress={() => router.push("/(drawer)/(group)/reorder-status-mood")}
+          />
+
+          {/* Grubu Sessize Al — herkes kendi bildirimini yönetir */}
+          <ListItem
+            icon={
+              isGroupMuted
+                ? "notifications-outline"
+                : "notifications-off-outline"
+            }
+            iconColor={colors.error}
+            title={isGroupMuted ? "Sessize Almayı Kaldır" : "Grubu Sessize Al"}
+            subtitle={isGroupMuted ? "Bildirimleri aç" : "Bildirimleri kapat"}
+            onPress={handleMuteToggle}
+          />
         </View>
+
+        {/* Üye Yönetimi — sadece grup sahibi */}
+        {isOwner && (
+          <View style={styles.actionsContainer}>
+            <Typography
+              variant="h5"
+              color={colors.text}
+              style={styles.sectionTitle}
+            >
+              Üye Yönetimi
+            </Typography>
+
+            <ListItem
+              icon="people-outline"
+              title="Üyeleri Yönet"
+              subtitle="Üyeleri görüntüle ve düzenle"
+              onPress={() => router.push("/(drawer)/(group)/manage-members")}
+            />
+          </View>
+        )}
       </ScrollView>
     </BaseLayout>
   );
@@ -551,7 +459,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 12,
   },
-  contentContainer: {},
+  contentContainer: {
+    paddingBottom: 64,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -559,22 +469,16 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     paddingHorizontal: 24,
   },
-  inviteCard: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 20,
+  inviteSection: {
+    paddingHorizontal: 4,
+    paddingTop: 8,
     marginBottom: 24,
-  },
-  inviteCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
+    gap: 4,
   },
   inviteCodeContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
   },
   inviteCode: {
     letterSpacing: 2,
@@ -583,38 +487,11 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: 12,
   },
-  memberButton: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 16,
-  },
-  memberButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  memberButtonText: {
-    flex: 1,
-    marginLeft: 12,
-  },
   settingsSection: {
     marginBottom: 24,
   },
   sectionTitle: {
     marginBottom: 12,
     marginLeft: 4,
-  },
-  settingItem: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    marginBottom: 8,
-  },
-  settingItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  settingItemText: {
-    flex: 1,
-    marginLeft: 12,
   },
 });

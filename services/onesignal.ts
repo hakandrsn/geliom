@@ -1,8 +1,8 @@
-import Constants from "expo-constants";
+import { appConfig } from "@/config/app.config";
 import { OneSignal } from "react-native-onesignal";
 
-// OneSignal App ID - app.json'dan al
-const ONESIGNAL_APP_ID = Constants.expoConfig?.extra?.oneSignalAppId;
+// OneSignal App ID — tek config noktasından gelir
+const ONESIGNAL_APP_ID = appConfig.oneSignalAppId;
 
 // OneSignal initialization state
 let isOneSignalInitialized = false;
@@ -218,34 +218,26 @@ const performOneSignalLogin = async (
   );
 };
 
-// Kullanıcıyı OneSignal'e login et (external ID ile - Supabase auth ID)
-// Player ID hazır olana kadar bekler (push subscription oluşmalı)
-export const loginOneSignal = async (
-  externalId: string,
-  maxRetries: number = 10,
-  delay: number = 1000,
-): Promise<void> => {
+/**
+ * Kullanıcıyı OneSignal'e login et (external ID = Firebase UID).
+ *
+ * ÖNEMLİ: Bu fonksiyon izin dialogu TETİKLEMEZ — izin akışı
+ * (`initializeOneSignal`) onboarding sonunda bağlamlı olarak çalışır.
+ * İzin henüz yoksa external ID beklemeye alınır; subscription oluştuğunda
+ * (izin verilince) login otomatik tamamlanır.
+ */
+export const loginOneSignal = async (externalId: string): Promise<void> => {
   try {
-    // OneSignal'in initialize edilip edilmediğini kontrol et
-    if (!isOneSignalInitialized) {
-      await initializeOneSignal();
-    }
+    initializeOneSignalSDK();
 
-    // Player ID hazır olana kadar bekle
-    let playerId: string | null = null;
-    for (let i = 0; i < maxRetries; i++) {
-      playerId = await getOneSignalPlayerId();
-      if (playerId) break;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-
+    const playerId = await getOneSignalPlayerId();
     if (!playerId) {
-      // Player ID yoksa, subscription oluşunca login yapmak için external ID'yi kaydet
+      // Push subscription yok (izin verilmemiş/oluşmamış) —
+      // subscription oluşunca login yapmak için external ID'yi kaydet
       pendingExternalId = externalId;
       return;
     }
 
-    // Player ID hazırsa, login yap
     await performOneSignalLogin(externalId, playerId, 3, 1000);
   } catch (error) {
     console.error("❌ OneSignal login hatası:", error);

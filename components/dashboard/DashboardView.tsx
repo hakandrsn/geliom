@@ -1,26 +1,26 @@
 import React, { useMemo } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
+import { FlatList, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Contexts & Theme
-import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
 
 // API
 import { useDashboardRealtime, useGroupDashboardData } from "@/api/dashboard";
 
 // Business Components
-import { Group } from "@/api";
+import { GroupSummary } from "@/api";
 import DashboardEmpty from "@/components/business/DashboardEmpty";
 import DashboardHeader from "@/components/business/DashboardHeader";
 import DashboardMemberItem from "@/components/business/DashboardMembers";
+import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
+import { spacing } from "@/theme/tokens";
 
 interface DashboardViewProps {
-  group: Group;
+  group: GroupSummary;
 }
 
 function DashboardView({ group }: DashboardViewProps) {
-  const { colors } = useTheme();
   const user = useAppStore((state) => state.user);
   const insets = useSafeAreaInsets();
 
@@ -41,12 +41,9 @@ function DashboardView({ group }: DashboardViewProps) {
     [members, user],
   );
 
+  // Spinner yerine gerçek yerleşimi taklit eden iskelet göster
   if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -54,9 +51,14 @@ function DashboardView({ group }: DashboardViewProps) {
       <FlatList
         data={otherMembers}
         keyExtractor={(item) => item.userId}
+        // Bounce kapalı; üye yoksa scroll da gereksiz — her şey ekrana sığar
+        bounces={false}
+        overScrollMode="never"
+        scrollEnabled={otherMembers.length > 0}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 20 },
+          { paddingBottom: insets.bottom + spacing.lg },
         ]}
         // HEADER: group prop'u burada doğruca geçiliyor
         ListHeaderComponent={
@@ -81,14 +83,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   listContent: {
-    paddingHorizontal: 0,
-    paddingTop: 0,
+    // Liste boşken ListEmptyComponent'in kalan alanı doldurup ortalanabilmesi için
+    flexGrow: 1,
   },
 });
 

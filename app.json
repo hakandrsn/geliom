@@ -7,7 +7,6 @@
     "icon": "./assets/images/ios-light.png",
     "scheme": "geliom",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.eoist.geliom",
@@ -21,7 +20,9 @@
         ]
       },
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "NHKQ38KYTV"
@@ -34,7 +35,6 @@
         "backgroundColor": "#E6F4FE"
       },
       "googleServicesFile": "./google-services.json",
-      "edgeToEdgeEnabled": true,
       "package": "com.eoist.geliom"
     },
     "web": {
@@ -45,7 +45,9 @@
       "expo-router",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
-      ["@react-native-google-signin/google-signin"],
+      [
+        "@react-native-google-signin/google-signin"
+      ],
       [
         "expo-splash-screen",
         {
@@ -69,13 +71,9 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1",
-            "useFrameworks": "static"
-          },
-          "android": {
-            "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
-            "buildToolsVersion": "35.0.0"
+            "deploymentTarget": "16.4",
+            "useFrameworks": "static",
+            "buildReactNativeFromSource": true
           }
         }
       ],
@@ -99,7 +97,19 @@
           "icon": "./assets/images/ios-tinted.png",
           "color": "#2E7D32"
         }
-      ]
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "geliom",
+          "organization": "eoist"
+        }
+      ],
+      "expo-image",
+      "expo-sharing",
+      "expo-status-bar",
+      "react-native-adapty"
     ],
     "experiments": {
       "typedRoutes": true,

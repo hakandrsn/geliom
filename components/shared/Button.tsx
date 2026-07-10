@@ -56,7 +56,8 @@ export default function Button({
   const getTextColor = () => {
     if (isEffectivelyDisabled) return colors.secondaryText;
     if (variant === "outline") return colors.primary;
-    return colors.text;
+    // Gradient/primary zemin her iki temada da koyu — beyaz metin kontrastı garanti eder
+    return "#FFFFFF";
   };
 
   const content = (

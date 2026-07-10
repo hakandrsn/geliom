@@ -52,9 +52,10 @@ export default function CreateGroupScreen() {
     try {
       setIsSubmitting(true);
 
+      // API sadece name kabul eder (bilinmeyen alanlar 400 döner);
+      // grup tipi yalnızca UI'da kalan görsel bir seçimdir.
       await createGroupMutation.mutateAsync({
         name: name.trim(),
-        type,
       });
 
       // Backend automatically adds creator as admin, but store needs update

@@ -31,7 +31,7 @@ interface BottomSheetProviderProps {
 }
 
 export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ children }) => {
-    const { colors } = useTheme();
+    const { colors, shadows } = useTheme();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const [content, setContent] = useState<ReactNode>(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -74,7 +74,11 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
         
         setContent(newContent);
         setIsOpen(true);
-        bottomSheetRef.current?.snapToIndex(newOptions?.index ?? 0);
+        // Yeni snapPoints render'a yansımadan snapToIndex çağrılırsa sheet
+        // eski yüksekliğe açılır — bir frame bekle
+        requestAnimationFrame(() => {
+            bottomSheetRef.current?.snapToIndex(newOptions?.index ?? 0);
+        });
     }, [isOpen]);
 
     // Close Bottom Sheet
@@ -95,23 +99,19 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
     }, []);
 
     // Render backdrop
+    // NOT: Burada animatedIndex.value kontrolüyle null dönmek backdrop'u
+    // kalıcı olarak yok ediyordu (açılışta value=-1 → null → bir daha render
+    // edilmiyor). BottomSheetBackdrop kapalıyken zaten dokunuşları geçirir.
     const renderBackdrop = useCallback(
-        (props: any) => {
-            // Android'de backdrop touch event'leri blokluyor
-            // Sadece bottom sheet açıksa (index >= 0) backdrop göster
-            if (props.animatedIndex?.value < 0) {
-                return null;
-            }
-            return (
-                <BottomSheetBackdrop
-                    {...props}
-                    disappearsOnIndex={-1}
-                    appearsOnIndex={0}
-                    opacity={0.5}
-                    pressBehavior={options.enableOverlayTap ? 'close' : 'none'}
-                />
-            );
-        },
+        (props: any) => (
+            <BottomSheetBackdrop
+                {...props}
+                disappearsOnIndex={-1}
+                appearsOnIndex={0}
+                opacity={0.55}
+                pressBehavior={options.enableOverlayTap ? 'close' : 'none'}
+            />
+        ),
         [options.enableOverlayTap]
     );
 
@@ -138,16 +138,19 @@ export const BottomSheetProvider: React.FC<BottomSheetProviderProps> = ({ childr
                 backdropComponent={renderBackdrop}
                 handleIndicatorStyle={[
                     styles.handleIndicator,
-                    { backgroundColor: colors.activeState },
+                    { backgroundColor: colors.lightText },
                     options.handleIndicatorStyle,
                 ]}
                 backgroundStyle={[
-                    { backgroundColor: colors.secondaryBackground },
+                    styles.sheetBackground,
+                    // rgba kart rengi sheet'te görünmez kalıyordu — opak yüzey şart
+                    { backgroundColor: colors.sheetBackground },
+                    shadows.floating,
                     options.backgroundStyle,
                 ]}
                 keyboardBehavior="interactive"
-                keyboardBlurBehavior="none"
-                android_keyboardInputMode="adjustPan"
+                keyboardBlurBehavior="restore"
+                android_keyboardInputMode="adjustResize"
                 enableDynamicSizing={false}
                 animateOnMount={false}
                 onChange={(index) => {
@@ -179,6 +182,10 @@ const styles = StyleSheet.create({
         width: 40,
         height: 4,
         borderRadius: 2,
+    },
+    sheetBackground: {
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
     },
     contentContainer: {
         flex: 1,

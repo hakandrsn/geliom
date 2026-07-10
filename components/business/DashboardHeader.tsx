@@ -1,14 +1,16 @@
 import { DashboardMember } from "@/api/dashboard";
+import type { GroupSummary } from "@/api/types";
+import { BouncyButton } from "@/components/anim/AnimatedComponents";
 import { Typography } from "@/components/shared";
+import { SectionHeader } from "@/components/ui";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
-import type { GroupWithOwner } from "@/types/database";
-import { groupTypeSelector } from "@/utils/group-type-selector";
+import { layout, radius, spacing } from "@/theme/tokens";
 import { Ionicons } from "@expo/vector-icons";
-import { DrawerNavigationProp } from "@react-navigation/drawer";
-import { useNavigation } from "@react-navigation/native";
-import React, { useMemo } from "react";
-import { Share, StyleSheet, TouchableOpacity, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
 
 // Components
 import CurrentUserHeader from "@/components/dashboard/CurrentUserHeader";
@@ -17,7 +19,7 @@ import StatusSelector from "@/components/dashboard/StatusSelector";
 
 interface DashboardHeaderProps {
   myMemberData?: DashboardMember;
-  group: GroupWithOwner;
+  group: GroupSummary;
   otherMemberLength: number;
 }
 
@@ -28,7 +30,15 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const { colors } = useTheme();
   const user = useAppStore((state) => state.user);
-  const navigation = useNavigation<DrawerNavigationProp<any>>();
+
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
+  }, []);
 
   // Mapping global user to DashboardMember format if myMemberData is incomplete
   const selfMember: DashboardMember = useMemo(
@@ -42,83 +52,98 @@ export default function DashboardHeader({
     [myMemberData, user],
   );
 
-  const handleShareInvite = async () => {
-    try {
-      await Share.share({
-        message: `${group.name} grubuna katıl!\n\nDavet Kodu: ${group.invite_code}\n\nUygulamayı indir ve bu kodu kullanarak gruba katıl.`,
-        title: `${group.name} - Grup Daveti`,
-      });
-    } catch (error) {
-      console.error("Davet paylaşılırken hata oluştu:", error);
-    }
+  const handleCopyInviteCode = async () => {
+    if (!group.inviteCode) return;
+    await Clipboard.setStringAsync(group.inviteCode);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <View style={styles.headerContainer}>
-      {/* 0. Top Bar (Group Info & Actions) */}
-      <View style={styles.topBar}>
-        <View style={styles.titleContainer}>
-          <Typography variant="h2" color={colors.text} numberOfLines={1}>
-            {group.name}
-          </Typography>
-          <Typography variant="caption" color={colors.secondaryText}>
-            {groupTypeSelector(group.type || "")} • {otherMemberLength + 1} Üye
-          </Typography>
-        </View>
-
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            onPress={handleShareInvite}
-            style={[
-              styles.iconButton,
-              { backgroundColor: colors.cardBackground },
-            ]}
-          >
-            <Ionicons
-              name="share-social-outline"
-              size={24}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.openDrawer()}
-            style={[
-              styles.iconButton,
-              { backgroundColor: colors.cardBackground },
-            ]}
-          >
-            <Ionicons name="menu-outline" size={28} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* 1. Benim Kartım */}
-      <View style={styles.paddedSection}>
+      {/* 1. Benim Kartım — en üstte */}
+      <View style={[styles.paddedSection, styles.selfSection]}>
         <CurrentUserHeader member={selfMember} />
       </View>
 
-      {/* 2. Status & Mood Selectors */}
-      <View style={styles.selectorsContainer}>
-        <StatusSelector
-          groupId={group.id}
-          currentStatusId={undefined} // Handled by text/emoji matching eventually or store
-        />
-        <MoodSelector
-          groupId={group.id}
-          currentMoodId={undefined} // Handled by store or matching
-        />
+      {/* 2. Grup adı + davet kodunu kopyala */}
+      <View style={styles.groupRow}>
+        <View style={styles.titleContainer}>
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+            color={colors.text}
+            numberOfLines={1}
+          >
+            {group.name}
+          </Typography>
+          <Typography variant="caption" color={colors.secondaryText}>
+            {otherMemberLength + 1} Üye
+          </Typography>
+        </View>
+
+        <BouncyButton
+          onPress={handleCopyInviteCode}
+          style={[
+            styles.copyButton,
+            {
+              backgroundColor: copied
+                ? colors.success + "22"
+                : colors.passiveState,
+            },
+          ]}
+        >
+          <Ionicons
+            name={copied ? "checkmark" : "copy-outline"}
+            size={15}
+            color={copied ? colors.success : colors.primary}
+          />
+          <Typography
+            variant="caption"
+            fontWeight="semibold"
+            color={copied ? colors.success : colors.primary}
+          >
+            {copied ? "Kopyalandı" : "Kopyala"}
+          </Typography>
+        </BouncyButton>
       </View>
 
-      {/* 3. Alt Bölüm Başlığı */}
+      {/* 3. Status & Mood Selectors */}
+      <View style={styles.selectorsContainer}>
+        <View style={styles.paddedSection}>
+          <Typography
+            variant="label"
+            fontWeight="semibold"
+            color={colors.secondaryText}
+            style={styles.selectorLabel}
+          >
+            Aklında hangisi var?
+          </Typography>
+        </View>
+        <StatusSelector groupId={group.id} currentStatusId={undefined} />
+
+        <View style={styles.paddedSection}>
+          <Typography
+            variant="label"
+            fontWeight="semibold"
+            color={colors.secondaryText}
+            style={[styles.selectorLabel, styles.selectorLabelSecond]}
+          >
+            Neler hissediyorsun?
+          </Typography>
+        </View>
+        <MoodSelector groupId={group.id} currentMoodId={undefined} />
+      </View>
+
+      {/* 4. Üye Listesi Başlığı */}
       <View style={styles.paddedSection}>
-        <Typography
-          variant="h5"
-          color={colors.text}
+        <SectionHeader
+          title="Üyeler"
+          count={otherMemberLength}
           style={styles.sectionTitle}
-        >
-          {groupTypeSelector(group.type || "")} ({otherMemberLength})
-        </Typography>
+        />
       </View>
     </View>
   );
@@ -126,42 +151,44 @@ export default function DashboardHeader({
 
 const styles = StyleSheet.create({
   headerContainer: {
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  topBar: {
+  selfSection: {
+    paddingTop: spacing.sm,
+  },
+  groupRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingHorizontal: layout.screenPadding,
+    marginTop: spacing.lg,
   },
   titleContainer: {
     flex: 1,
-    marginRight: 12,
+    marginRight: spacing.md,
   },
-  actionButtons: {
+  copyButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
+    gap: spacing.xs + 2,
+    height: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
   },
   paddedSection: {
-    paddingHorizontal: 8,
+    paddingHorizontal: layout.screenPadding,
   },
   selectorsContainer: {
-    gap: 8,
-    marginTop: 8,
+    marginTop: spacing.xl,
+  },
+  selectorLabel: {
+    letterSpacing: 0.2,
+    marginBottom: spacing.sm,
+  },
+  selectorLabelSecond: {
+    marginTop: spacing.lg,
   },
   sectionTitle: {
-    marginBottom: 4,
-    marginLeft: 4,
-    marginTop: 20,
+    marginTop: spacing.xl,
   },
 });

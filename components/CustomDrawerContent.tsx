@@ -6,15 +6,16 @@ import { useTheme } from "@/contexts/ThemeContext";
 // import { supabase } from "@/lib/supabase"; // Removed Supabase
 import { useAppStore } from "@/store/useAppStore"; // Added Store
 import { getAvatarSource } from "@/utils/avatar";
+import auth from "@react-native-firebase/auth";
 import { openPrivacyPolicy, openTermsOfUse } from "@/utils/linking";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import {
   DrawerContentComponentProps,
   DrawerContentScrollView,
   DrawerItem,
-} from "@react-navigation/drawer";
-import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+} from "expo-router/drawer";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -39,14 +40,13 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
   const [newDisplayName, setNewDisplayName] = useState("");
   const updateUserMutation = useUpdateUser();
 
-  // Simulate signOut without Supabase
   const signOut = async () => {
     try {
-      // If there is an API call for logout (e.g. invalidate session cookie), call it here.
-      // e.g. await apiClient.post('/auth/logout');
-      // For now, client-side clear is what was requested/compatible with context removal.
+      // Firebase oturumunu kapat — _layout'taki auth listener socket + push
+      // bağlantılarını (disconnectUserServices) buradan tetiklenerek kapatır
+      await auth().signOut();
       clearState(); // Clear app store state
-      router.replace("/(auth)/welcome"); // Redirect to welcome
+      router.replace("/(auth)/login"); // Redirect to login
     } catch (e) {
       console.error("Sign out exception:", e);
     }
@@ -95,7 +95,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
     }
 
     updateUserMutation.mutate(
-      { id: user.id, updates: { displayName: newDisplayName.trim() } },
+      { displayName: newDisplayName.trim() },
       {
         onSuccess: () => {
           setEditNameModalVisible(false);

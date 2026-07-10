@@ -1,9 +1,12 @@
 import {
+  useCreateCustomStatus,
   useCreateMood,
+  useDeleteCustomStatus,
   useDeleteMood,
-  useDeleteStatus,
   useSetUserStatus,
 } from "@/api";
+import { FIRST_SUBSCRIPTION_PLACEMENT } from "@/constants/adapty";
+import { showPaywall } from "@/services/purchase";
 import { useAppStore } from "@/store/useAppStore";
 import { Alert } from "react-native";
 
@@ -11,24 +14,28 @@ export function useManageStatusMood(groupId: string) {
   const user = useAppStore((state) => state.user);
 
   // Mutations
-  const createStatus = useSetUserStatus();
-  const deleteStatus = useDeleteStatus();
+  const setStatus = useSetUserStatus();
   const createMood = useCreateMood();
   const deleteMood = useDeleteMood();
+  const createCustomStatus = useCreateCustomStatus();
+  const deleteCustomStatus = useDeleteCustomStatus();
 
   const isSubscribed = useAppStore((state) => state.isSubscribed);
 
+  /**
+   * Özel status: gruba özel lokal listeye kaydedilir (tekrar seçilebilsin
+   * diye) ve socket üzerinden aktif session'a hemen paylaşılır.
+   */
   const handleAddStatus = async (text: string, emoji?: string) => {
     if (!user) return;
     try {
-      await createStatus.mutateAsync({
+      await createCustomStatus.mutateAsync({
+        userId: user.id,
+        groupId,
         text,
         emoji,
-        owner_id: user.id,
-        groupId, // Changed to match payload
-        is_custom: true,
-        notifies: false,
       });
+      await setStatus.mutateAsync({ text, emoji });
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -37,40 +44,50 @@ export function useManageStatusMood(groupId: string) {
     }
   };
 
+  /** Gruba custom mood ekler — Admin + Premium gerektirir (grup başına 10). */
   const handleAddMood = async (text: string, emoji: string) => {
     if (!user) return;
 
     if (!isSubscribed) {
-      Alert.alert(
-        "Premium Özellik",
-        "Mood eklemek için premium üye olmalısınız.",
-      );
+      // Alert yerine doğrudan paywall — satın alma tamamlanırsa işlem devam eder
+      showPaywall({
+        placementId: FIRST_SUBSCRIPTION_PLACEMENT,
+        onSuccess: () => handleAddMood(text, emoji),
+      });
       return;
     }
 
     try {
       await createMood.mutateAsync({
         groupId,
-        data: { text, emoji, mood: "custom" }, // Adjusted payload structure for useCreateMood
+        data: { text, emoji, mood: text.toLowerCase().replace(/\s/g, "_") },
       });
-    } catch (error) {
+    } catch (error: any) {
+      // 409: admin değil / limit dolu — backend mesajını göster
+      const backendMessage = error?.response?.data?.message;
       const errorMessage =
-        error instanceof Error ? error.message : String(error);
+        (Array.isArray(backendMessage) ? backendMessage[0] : backendMessage) ||
+        (error instanceof Error ? error.message : String(error));
       console.error("Mood ekleme hatası:", errorMessage);
-      Alert.alert("Hata", "Mood eklenirken bir hata oluştu.");
+      Alert.alert("Hata", errorMessage || "Mood eklenirken bir hata oluştu.");
     }
   };
 
+  /** Gruba özel lokal status'ü siler. */
   const handleDeleteStatus = (id: string) => {
-    // Changed id to string based on mutation type likely
-    Alert.alert("Status Sil", "Bu statusu silmek istediğinize emin misiniz?", [
+    if (!user) return;
+    Alert.alert("Status Sil", "Bu status'ü silmek istediğinize emin misiniz?", [
       { text: "İptal", style: "cancel" },
       {
         text: "Sil",
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteStatus.mutateAsync(); // useDeleteStatus warns distinct handling not impl?
+            await deleteCustomStatus.mutateAsync({
+              userId: user.id,
+              groupId,
+              statusId: id,
+            });
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
@@ -82,34 +99,47 @@ export function useManageStatusMood(groupId: string) {
     ]);
   };
 
+  /** Gruptan custom mood siler — Admin gerektirir; herkese canlı yansır. */
   const handleDeleteMood = (id: string) => {
-    Alert.alert("Mood Sil", "Bu moodu silmek istediğinize emin misiniz?", [
+    Alert.alert("Mood Sil", "Bu mood'u silmek istediğinize emin misiniz?", [
       { text: "İptal", style: "cancel" },
       {
         text: "Sil",
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteMood.mutateAsync();
-          } catch (error) {
+            await deleteMood.mutateAsync({ groupId, moodId: id });
+          } catch (error: any) {
+            // 409: admin değil — backend mesajını göster
+            const backendMessage = error?.response?.data?.message;
             const errorMessage =
-              error instanceof Error ? error.message : String(error);
+              (Array.isArray(backendMessage)
+                ? backendMessage[0]
+                : backendMessage) ||
+              (error instanceof Error ? error.message : String(error));
             console.error("Mood silme hatası:", errorMessage);
-            Alert.alert("Hata", "Mood silinirken bir hata oluştu.");
+            Alert.alert(
+              "Hata",
+              errorMessage || "Mood silinirken bir hata oluştu.",
+            );
           }
         },
       },
     ]);
   };
 
+  /**
+   * Premium gerektiren aksiyonların kapısı.
+   * Abone değilse paywall açılır; satın alma başarılıysa aksiyon otomatik devam eder.
+   */
   const checkSubscriptionAndProceed = (onProceed: () => void) => {
     if (isSubscribed) {
       onProceed();
     } else {
-      Alert.alert(
-        "Premium Özellik",
-        "Bu özellik için premium üye olmalısınız.",
-      );
+      showPaywall({
+        placementId: FIRST_SUBSCRIPTION_PLACEMENT,
+        onSuccess: () => onProceed(),
+      });
     }
   };
 
@@ -119,7 +149,7 @@ export function useManageStatusMood(groupId: string) {
     handleDeleteStatus,
     handleDeleteMood,
     checkSubscriptionAndProceed,
-    isCreatingStatus: createStatus.isPending,
+    isCreatingStatus: setStatus.isPending,
     isCreatingMood: createMood.isPending,
   };
 }

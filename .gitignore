@@ -57,3 +57,5 @@ app-example
 .env
 google-services.json
 GoogleService-Info.plist
+
+.env.local

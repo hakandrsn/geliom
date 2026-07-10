@@ -32,17 +32,14 @@ export default function JoinRequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Sadece owner ise istekleri göster
-  const isOwner = selectedGroup?.owner_id === user?.id; // snake_case
+  const isOwner = selectedGroup?.ownerId === user?.id;
   const groupId = selectedGroup?.id || "";
 
   const {
     data: requests = [],
     isLoading,
     refetch,
-  } = useGroupJoinRequests(groupId); // Removed status arg if fixed to 'pending' in API or if hook doesn't support it
-
-  // Realtime subscription removed - relying on Refetch or Socket global
-  // useGroupJoinRequestsRealtime(groupId);
+  } = useGroupJoinRequests(groupId);
 
   const approveRequest = useApproveJoinRequest();
   const rejectRequest = useRejectJoinRequest();
@@ -56,7 +53,7 @@ export default function JoinRequestsScreen() {
   const handleApprove = async (request: any) => {
     Alert.alert(
       "İsteği Onayla",
-      `${request.requester?.displayName || request.requester?.customId || "Kullanıcı"} gruba katılacak. Onaylıyor musunuz?`,
+      `${request.displayName || "Kullanıcı"} gruba katılacak. Onaylıyor musunuz?`,
       [
         { text: "İptal", style: "cancel" },
         {
@@ -65,9 +62,8 @@ export default function JoinRequestsScreen() {
             try {
               await approveRequest.mutateAsync({
                 requestId: request.id,
-                groupId: request.groupId, // camelCase
-                response: "APPROVED", // Added response arg if needed by mutation wrapper
-              } as any);
+                groupId,
+              });
               Alert.alert("Başarılı", "Kullanıcı gruba eklendi");
             } catch (error: any) {
               Alert.alert("Hata", error.message || "İstek onaylanamadı");
@@ -81,7 +77,7 @@ export default function JoinRequestsScreen() {
   const handleReject = async (request: any) => {
     Alert.alert(
       "İsteği Reddet",
-      `${request.requester?.displayName || request.requester?.customId || "Kullanıcı"}nın isteğini reddetmek istediğinize emin misiniz?`,
+      `${request.displayName || "Kullanıcı"}nın isteğini reddetmek istediğinize emin misiniz?`,
       [
         { text: "İptal", style: "cancel" },
         {
@@ -91,9 +87,8 @@ export default function JoinRequestsScreen() {
             try {
               await rejectRequest.mutateAsync({
                 requestId: request.id,
-                groupId: request.groupId, // camelCase
-                response: "REJECTED",
-              } as any);
+                groupId,
+              });
             } catch (error: any) {
               Alert.alert("Hata", error.message || "İstek reddedilemedi");
             }
@@ -279,19 +274,11 @@ export default function JoinRequestsScreen() {
                       { backgroundColor: colors.primary + "20" },
                     ]}
                   >
-                    {request.requester?.photoUrl ? (
-                      <Ionicons
-                        name="person"
-                        size={24}
-                        color={colors.primary}
-                      />
-                    ) : (
-                      <Ionicons
-                        name="person-outline"
-                        size={24}
-                        color={colors.primary}
-                      />
-                    )}
+                    <Ionicons
+                      name="person-outline"
+                      size={24}
+                      color={colors.primary}
+                    />
                   </View>
                   <View style={styles.requestInfo}>
                     <Typography
@@ -299,10 +286,7 @@ export default function JoinRequestsScreen() {
                       color={colors.text}
                       numberOfLines={1}
                     >
-                      {request.requester?.displayName || "İsimsiz Kullanıcı"}
-                    </Typography>
-                    <Typography variant="caption" color={colors.secondaryText}>
-                      @{request.requester?.customId || "N/A"}
+                      {request.displayName || "İsimsiz Kullanıcı"}
                     </Typography>
                     <Typography
                       variant="caption"

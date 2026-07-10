@@ -1,6 +1,4 @@
-import { getAvatarSource } from "@/utils/avatar";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -48,7 +46,7 @@ function GroupListBottomSheetComponent() {
     closeBottomSheet();
     // Bottom sheet tamamen kapandıktan sonra navigate et
     setTimeout(() => {
-      router.push("/(drawer)/(group)/create-group");
+      router.push("/create-group");
     }, 300);
   }, [closeBottomSheet, router]);
 
@@ -57,21 +55,19 @@ function GroupListBottomSheetComponent() {
     closeBottomSheet();
     // Bottom sheet tamamen kapandıktan sonra navigate et
     setTimeout(() => {
-      router.push("/(drawer)/(group)/join-group");
+      router.push("/join-group");
     }, 300);
   }, [closeBottomSheet, router]);
 
   // Gruplar yüklenirken gösterilecek içerik
+  // NOT: Sheet yüzey rengi BottomSheetContext'ten gelir (sheetBackground) —
+  // içerikte ayrıca zemin boyama, yarı saydam rgba'lar sheet'i "bg'siz" gösteriyordu.
   if (isLoading) {
     return (
       <View
         style={[
           styles.container,
-          {
-            backgroundColor: colors.secondaryBackground,
-            justifyContent: "center",
-            alignItems: "center",
-          },
+          { justifyContent: "center", alignItems: "center" },
         ]}
       >
         <ActivityIndicator size="large" color={colors.primary} />
@@ -87,14 +83,9 @@ function GroupListBottomSheetComponent() {
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.secondaryBackground },
-      ]}
-    >
-      <View style={styles.header}>
-        <Typography variant="h3" color={colors.text} style={styles.headerTitle}>
+    <View style={styles.container}>
+      <View style={[styles.header, { borderBottomColor: colors.stroke }]}>
+        <Typography variant="h4" color={colors.text} style={styles.headerTitle}>
           Gruplarım
         </Typography>
         <TouchableOpacity
@@ -136,47 +127,31 @@ function GroupListBottomSheetComponent() {
                     styles.groupItem,
                     {
                       backgroundColor: isSelected
-                        ? colors.tertiary + "30"
+                        ? colors.passiveState
                         : colors.cardBackground,
                       borderColor: isSelected ? colors.primary : colors.stroke,
                     },
                   ]}
                 >
                   <View style={styles.groupItemContent}>
-                    {group.owner ? (
-                      <View style={styles.avatarContainer}>
-                        <Image
-                          source={getAvatarSource(group.owner?.photoUrl)}
-                          style={styles.avatarImage}
-                          contentFit="cover"
-                        />
-                      </View>
-                    ) : (
-                      <View
-                        style={[
-                          styles.iconBadge,
-                          {
-                            backgroundColor: isSelected
-                              ? colors.primary
-                              : colors.cardBackground,
-                            borderColor: colors.stroke,
-                            borderWidth: isSelected ? 0 : 1,
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name={
-                            group.type === "family"
-                              ? "home"
-                              : group.type === "work"
-                                ? "briefcase"
-                                : "people"
-                          }
-                          size={20}
-                          color={isSelected ? "white" : colors.secondaryText}
-                        />
-                      </View>
-                    )}
+                    <View
+                      style={[
+                        styles.iconBadge,
+                        {
+                          backgroundColor: isSelected
+                            ? colors.primary
+                            : colors.cardBackground,
+                          borderColor: colors.stroke,
+                          borderWidth: isSelected ? 0 : 1,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="people"
+                        size={20}
+                        color={isSelected ? "white" : colors.secondaryText}
+                      />
+                    </View>
                     <View style={styles.groupInfo}>
                       <Typography
                         variant="h5"
@@ -191,17 +166,10 @@ function GroupListBottomSheetComponent() {
                         color={colors.secondaryText}
                         style={styles.groupType}
                       >
-                        {(group as any).member_count
-                          ? `${(group as any).member_count} Üye`
+                        {group.memberCount
+                          ? `${group.memberCount} Üye`
                           : "Grup"}{" "}
-                        •{" "}
-                        {group.type === "family"
-                          ? "Aile"
-                          : group.type === "friends"
-                            ? "Arkadaşlar"
-                            : group.type === "work"
-                              ? "İş"
-                              : "Diğer"}
+                        • {group.role === "ADMIN" ? "Yönetici" : "Üye"}
                       </Typography>
                     </View>
                     {isSelected && (
@@ -255,7 +223,7 @@ function GroupListBottomSheetComponent() {
             </Pressable>
 
             <Pressable style={styles.modalOption} onPress={handleJoinGroup}>
-              <Ionicons name="person-add" size={24} color={colors.secondary} />
+              <Ionicons name="person-add" size={24} color={colors.success} />
               <Typography
                 variant="h5"
                 color={colors.text}
@@ -287,7 +255,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
   },
   headerTitle: {
     fontWeight: "bold",

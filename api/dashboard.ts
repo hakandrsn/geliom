@@ -1,13 +1,12 @@
 import { useAppStore } from "@/store/useAppStore";
 import { useMemo } from "react";
-import { useGroupMembers } from "./groups";
+import { DEFAULT_MOODS } from "./constants";
 
 export interface DashboardMember {
   userId: string;
   displayName?: string;
   photoUrl?: string;
   customId?: string;
-  nickname?: string;
   // Status info
   statusText?: string;
   statusEmoji?: string;
@@ -17,58 +16,59 @@ export interface DashboardMember {
   updatedAt?: string;
   role?: string;
   isMuted?: boolean;
+  isOnline?: boolean;
 }
 
+/**
+ * Dashboard verisi tek kaynaktan gelir: aktif socket session'ı.
+ * `session.group.members` ve `session.group.statuses` userId ile key'lenmiş map'lerdir.
+ */
 export const useGroupDashboardData = (groupId: string) => {
-  const {
-    data: queryMembers = [],
-    isLoading,
-    error,
-  } = useGroupMembers(groupId);
-  const groups = useAppStore((state) => state.groups);
-  const group = groups.find((g) => g.id === groupId);
+  const session = useAppStore((state) => state.session);
+  const hasSession = !!session && session.group.id === groupId;
 
   const mappedMembers: DashboardMember[] = useMemo(() => {
-    // Collect members from store if available, otherwise from query
-    const membersToMap = group?.members || queryMembers;
+    if (!hasSession || !session) return [];
 
-    return membersToMap.map((m: any) => {
-      const userId = m.id || m.userId;
+    const { members, statuses, customMoods } = session.group;
+    const online = new Set(session.onlineUserIds);
+    // StatusEntry.mood bir key tutar ("happy" gibi) — görünen metin/emoji mood tanımından çözülür
+    const moodDefs = [...(customMoods ?? []), ...DEFAULT_MOODS];
 
-      // Get latest status/mood from store
-      const status = group?.statuses?.find((s) => s.userId === userId);
-      const mood = group?.moods?.find((mood) => mood.userId === userId);
+    return Object.entries(members).map(([userId, member]) => {
+      const status = statuses[userId];
+      const moodDef = status?.mood
+        ? moodDefs.find((m) => m.mood === status.mood)
+        : undefined;
 
       return {
-        userId: userId,
-        displayName: m.displayName || m.display_name,
-        photoUrl: m.photoUrl || m.photo_url,
-        customId: m.customId || m.custom_user_id,
-        nickname: m.nickname,
+        userId,
+        displayName: member.displayName ?? undefined,
+        photoUrl: member.photoUrl ?? undefined,
+        customId: member.customId,
 
-        statusText: status?.text || m.status?.text,
-        statusEmoji: status?.emoji || m.status?.emoji,
-        moodEmoji: mood?.emoji || m.mood?.emoji,
-        moodText: mood?.mood || m.mood?.mood,
-        updatedAt:
-          status?.updatedAt ||
-          mood?.updatedAt ||
-          m.status?.updatedAt ||
-          m.mood?.updatedAt,
+        statusText: status?.text,
+        statusEmoji: status?.emoji ?? undefined,
+        moodEmoji: moodDef?.emoji ?? status?.emoji ?? undefined,
+        moodText: moodDef?.text ?? status?.mood ?? undefined,
+        updatedAt: status?.updatedAt,
 
-        role: m.role || "MEMBER",
-        isMuted: m.isMuted,
+        role: member.role,
+        isMuted: member.isMuted,
+        isOnline: online.has(userId),
       };
     });
-  }, [group, queryMembers]);
+  }, [hasSession, session]);
 
   return {
     data: mappedMembers,
-    isLoading: isLoading && mappedMembers.length === 0,
-    error,
+    isLoading: !hasSession,
+    error: null,
   };
 };
 
-export const useDashboardRealtime = (groupId: string) => {
-  // Realtime updates are handled via the store subscription in useGroupDashboardData
-};
+/**
+ * Session yaşam döngüsü home ekranında `useGroupSession` ile yönetilir;
+ * burada ikinci bir open/close yapılmaz. Store subscription canlı akışı sağlar.
+ */
+export const useDashboardRealtime = (_groupId: string) => {};

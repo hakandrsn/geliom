@@ -1,14 +1,4 @@
 export const apiUtils = {
-  // Generate unique invite code
-  generateInviteCode: () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let result = "";
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  },
-
   // Format date for display
   formatEventDate: (dateString: string) => {
     const date = new Date(dateString);
@@ -20,22 +10,6 @@ export const apiUtils = {
       minute: "2-digit",
     });
   },
-
-  // Check if subscription is active
-  isSubscriptionActive: (subscription: {
-    status: string;
-    expires_at?: string | null;
-  }) => {
-    if (subscription.status !== "active") return false;
-
-    if (subscription.expires_at) {
-      const expiresAt = new Date(subscription.expires_at);
-      const now = new Date();
-      return expiresAt > now;
-    }
-
-    return true; // expires_at null ise sınırsız abonelik
-  },
 };
 
 export const DEFAULT_STATUSES = [
@@ -46,4 +20,18 @@ export const DEFAULT_STATUSES = [
   { id: "default-4", text: "İşte", is_custom: false },
   { id: "default-5", text: "Uykuda", is_custom: false },
   { id: "default-6", text: "Spor yapıyor", is_custom: false },
+];
+
+/**
+ * Client tarafı varsayılan mood listesi.
+ * API yalnızca grup başına custom mood tutar (Group.customMoods);
+ * varsayılanlar uygulamada sabittir.
+ */
+export const DEFAULT_MOODS = [
+  { id: "mood-default-0", text: "Mutlu", emoji: "😊", mood: "happy" },
+  { id: "mood-default-1", text: "Meşgul", emoji: "💻", mood: "busy" },
+  { id: "mood-default-2", text: "Rahat", emoji: "😌", mood: "relaxed" },
+  { id: "mood-default-3", text: "Yorgun", emoji: "🥱", mood: "tired" },
+  { id: "mood-default-4", text: "Enerjik", emoji: "⚡", mood: "energetic" },
+  { id: "mood-default-5", text: "Üzgün", emoji: "😔", mood: "sad" },
 ];

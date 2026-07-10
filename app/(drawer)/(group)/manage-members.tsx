@@ -1,30 +1,17 @@
 import {
-  UIGroupMember as GroupMember,
-  useDeleteNickname,
-  useGroupMembers,
-  useGroupNicknames,
+  useGroupSession,
   useLeaveGroup,
-  useMutedNotificationsList,
   useRemoveGroupMember,
-  useToggleMuteUser,
-  useTransferGroupOwnership,
   useUpdateUserAvatar,
-  useUpsertNickname,
 } from "@/api";
-import {
-  NicknameBottomSheet,
-  TransferOwnershipBottomSheet,
-} from "@/components/bottomsheets";
-// Added useBottomSheet import
+import type { GroupMemberEntry } from "@/api/types";
 import { AvatarSelector, BaseLayout, Typography } from "@/components/shared";
-import { useBottomSheet } from "@/contexts/BottomSheetContext";
-// Removed Contexts
 import { useTheme } from "@/contexts/ThemeContext";
-import { useAppStore } from "@/store/useAppStore"; // Added Store
+import { useAppStore } from "@/store/useAppStore";
 import { getAvatarSource } from "@/utils/avatar";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,133 +22,39 @@ import {
   View,
 } from "react-native";
 
+interface MemberRow extends GroupMemberEntry {
+  id: string; // userId
+  isOnline: boolean;
+}
+
 export default function ManageMembersScreen() {
   const { colors } = useTheme();
-  const { user, currentGroupId, groups } = useAppStore();
+  const { user, currentGroupId, groups, session } = useAppStore();
   const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const router = useRouter();
-  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
   const [avatarSelectorVisible, setAvatarSelectorVisible] = useState(false);
 
-  const { data: members = [], isLoading: membersLoading } = useGroupMembers(
-    selectedGroup?.id || "",
-  );
-  const { data: nicknames = [] } = useGroupNicknames(selectedGroup?.id || "");
-  const { data: mutedUsers = [] } = useMutedNotificationsList(user?.id || "");
-
-  const upsertNickname = useUpsertNickname();
-  const deleteNickname = useDeleteNickname();
-  const toggleMute = useToggleMuteUser();
-  const transferOwnership = useTransferGroupOwnership();
   const leaveGroup = useLeaveGroup();
+  const removeMember = useRemoveGroupMember();
   const updateAvatar = useUpdateUserAvatar();
 
-  const isOwner = selectedGroup?.owner_id === user?.id;
-  const mutedUserIds = new Set(mutedUsers.map((m: any) => m.muted_user_id));
+  // Ekran açıkken session'ı canlı tut (ref-count'lu — home ile paylaşılır)
+  useGroupSession(selectedGroup?.id);
 
-  // Kullanıcının nickname'ini bul (mevcut kullanıcı için)
-  const getNicknameForUser = (targetUserId: string) => {
-    const nickname = nicknames.find(
-      (n) => n.setter_user_id === user?.id && n.target_user_id === targetUserId,
-    );
-    return nickname?.nickname;
-  };
+  const isOwner = selectedGroup?.ownerId === user?.id;
 
-  // Kullanıcı sessize alınmış mı?
-  const isMuted = (targetUserId: string) => {
-    return mutedUserIds.has(targetUserId);
-  };
-
-  const handleNicknamePress = (member: GroupMember) => {
-    const currentNickname = getNicknameForUser(member.id);
-
-    openBottomSheet(
-      <NicknameBottomSheet
-        member={member}
-        currentNickname={currentNickname}
-        onSave={async (nickname) => {
-          if (!user?.id || !selectedGroup?.id) return;
-
-          if (nickname.trim()) {
-            await upsertNickname.mutateAsync({
-              group_id: selectedGroup.id,
-              setter_user_id: user.id,
-              target_user_id: member.id,
-              nickname: nickname.trim(),
-            });
-          } else {
-            await deleteNickname.mutateAsync({
-              groupId: selectedGroup.id,
-              setterUserId: user.id,
-              targetUserId: member.id,
-            });
-          }
-          closeBottomSheet();
-        }}
-        onDelete={
-          currentNickname
-            ? async () => {
-                if (!user?.id || !selectedGroup?.id) return;
-                await deleteNickname.mutateAsync({
-                  groupId: selectedGroup.id,
-                  setterUserId: user.id,
-                  targetUserId: member.id,
-                });
-                closeBottomSheet();
-              }
-            : undefined
-        }
-        onCancel={closeBottomSheet}
-      />,
-      { snapPoints: ["45%"] },
-    );
-  };
-
-  const handleToggleMute = async (member: GroupMember) => {
-    if (!user?.id) return;
-
-    const currentlyMuted = isMuted(member.id);
-
-    try {
-      await toggleMute.mutateAsync({
-        muterUserId: user.id,
-        mutedUserId: member.id,
-        isCurrentlyMuted: currentlyMuted,
-      });
-    } catch (error) {
-      console.error("Sessize alma hatası:", error);
-      Alert.alert("Hata", "İşlem başarısız oldu");
-    }
-  };
-
-  const handleTransferOwnership = (member: GroupMember) => {
-    if (!selectedGroup?.id || !isOwner) return;
-
-    openBottomSheet(
-      <TransferOwnershipBottomSheet
-        member={member}
-        groupName={selectedGroup.name}
-        onConfirm={async () => {
-          try {
-            await transferOwnership.mutateAsync({
-              groupId: selectedGroup.id,
-              newOwnerId: member.id,
-            });
-            closeBottomSheet();
-            Alert.alert("Başarılı", "Yöneticilik devredildi");
-            // Artık yönetici olmadığımız için home'a replace ile git
-            router.replace("/(drawer)/home");
-          } catch (error) {
-            console.error("Yöneticilik devri hatası:", error);
-            Alert.alert("Hata", "Yöneticilik devredilemedi");
-          }
-        }}
-        onCancel={closeBottomSheet}
-      />,
-      { snapPoints: ["55%"] },
-    );
-  };
+  // Üye listesi aktif session'dan gelir (members: userId ile key'lenmiş map)
+  const hasSession = !!session && session.group.id === selectedGroup?.id;
+  const members: MemberRow[] = useMemo(() => {
+    if (!hasSession || !session) return [];
+    const online = new Set(session.onlineUserIds);
+    return Object.entries(session.group.members).map(([userId, member]) => ({
+      ...member,
+      id: userId,
+      isOnline: online.has(userId),
+    }));
+  }, [hasSession, session]);
 
   const handleAvatarSelect = async (avatar: string | null) => {
     if (!user?.id) {
@@ -179,60 +72,81 @@ export default function ManageMembersScreen() {
     }
   };
 
-  const removeMember = useRemoveGroupMember();
-
-  const handleRemoveMember = async (member: GroupMember) => {
+  /** Admin: üyeyi gruptan çıkarır — değişiklik herkese canlı yansır. */
+  const handleRemoveMember = (member: MemberRow) => {
     if (!selectedGroup?.id || !isOwner) return;
 
-    if (member.id === user?.id) {
-      // Kendini çıkarma
-      Alert.alert(
-        "Gruptan Ayrıl",
-        "Gruptan ayrılmak istediğinize emin misiniz?",
-        [
-          { text: "İptal", style: "cancel" },
-          {
-            text: "Ayrıl",
-            style: "destructive",
-            onPress: async () => {
-              try {
-                await leaveGroup.mutateAsync(selectedGroup.id); // Fixed: pass only groupId
-                // Gruptan ayrıldığımız için home'a replace ile git
-                router.replace("/(drawer)/home");
-              } catch (error) {
-                console.error("Gruptan ayrılma hatası:", error);
-                Alert.alert("Hata", "Gruptan ayrılamadınız");
-              }
-            },
+    Alert.alert(
+      "Üyeyi Çıkar",
+      `${member.displayName || member.customId} gruptan çıkarılacak. Emin misiniz?`,
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Çıkar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeMember.mutateAsync({
+                groupId: selectedGroup.id,
+                userId: member.id,
+              });
+            } catch (error: any) {
+              const backendMessage = error?.response?.data?.message;
+              Alert.alert(
+                "Hata",
+                (Array.isArray(backendMessage)
+                  ? backendMessage[0]
+                  : backendMessage) || "Üye çıkarılamadı",
+              );
+            }
           },
-        ],
-      );
-    } else {
-      // Başkasını çıkarma (sadece owner)
+        },
+      ],
+    );
+  };
+
+  // Kural: admin gruptan ayrılamaz — önce tüm üyeleri çıkarmalı.
+  // Grupta yalnızsa ayrılmak grubu tamamen siler.
+  const otherMemberCount = members.filter((m) => m.id !== user?.id).length;
+
+  const handleLeaveGroup = () => {
+    if (!selectedGroup?.id) return;
+
+    if (isOwner && otherMemberCount > 0) {
       Alert.alert(
-        "Üyeyi Çıkar",
-        `${member.displayName || member.customId} kullanıcısını gruptan çıkarmak istediğinize emin misiniz?`,
-        [
-          { text: "İptal", style: "cancel" },
-          {
-            text: "Çıkar",
-            style: "destructive",
-            onPress: async () => {
-              try {
-                await removeMember.mutateAsync({
-                  groupId: selectedGroup.id,
-                  userId: member.id,
-                });
-                Alert.alert("Başarılı", "Üye gruptan çıkarıldı");
-              } catch (error) {
-                console.error("Üye çıkarma hatası:", error);
-                Alert.alert("Hata", "Üye çıkarılamadı");
-              }
-            },
-          },
-        ],
+        "Ayrılamazsınız",
+        "Grup yöneticisi olarak gruptan ayrılamazsınız. Önce tüm üyeleri gruptan çıkarmalısınız.",
       );
+      return;
     }
+
+    Alert.alert(
+      isOwner ? "Grubu Sil" : "Gruptan Ayrıl",
+      isOwner
+        ? "Grupta başka üye yok — ayrıldığınızda grup kalıcı olarak silinecek. Emin misiniz?"
+        : "Gruptan ayrılmak istediğinize emin misiniz?",
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: isOwner ? "Grubu Sil" : "Ayrıl",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveGroup.mutateAsync(selectedGroup.id);
+              router.replace("/(drawer)/home");
+            } catch (error: any) {
+              const backendMessage = error?.response?.data?.message;
+              Alert.alert(
+                "Hata",
+                (Array.isArray(backendMessage)
+                  ? backendMessage[0]
+                  : backendMessage) || "Gruptan ayrılamadınız",
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (!selectedGroup) {
@@ -263,7 +177,7 @@ export default function ManageMembersScreen() {
     );
   }
 
-  if (membersLoading) {
+  if (!hasSession) {
     return (
       <BaseLayout
         headerShow={true}
@@ -293,22 +207,9 @@ export default function ManageMembersScreen() {
     );
   }
 
-  const renderMemberItem = ({ item }: { item: GroupMember }) => {
-    // GroupMember now has flatten properties or includes user info
-    // Assuming backend returns member merged with user info in GroupMember type or has user property
-    // Checking api/groups.ts: GroupMember has id, displayName, photoUrl, customId
-    // It does NOT have 'user' property or 'user_id' property in the interface I defined earlier.
-    // However, if backend returns membership (UserGroup), it might differ.
-    // The hook useGroupMembers calls /groups/:id/members.
-    // In api/groups.ts I defined GroupMember as { id, displayName, ... }.
-
-    // I shall align usage with GroupMember interface
-    // Let's assume item.id is the User ID for now as per my simpler interface definition.
-
-    const isMemberOwner = selectedGroup?.owner_id === item.id;
+  const renderMemberItem = ({ item }: { item: MemberRow }) => {
+    const isMemberOwner = selectedGroup.ownerId === item.id;
     const isCurrentUser = item.id === user?.id;
-    const nickname = getNicknameForUser(item.id);
-    const muted = isMuted(item.id);
 
     return (
       <View
@@ -328,6 +229,17 @@ export default function ManageMembersScreen() {
                 style={styles.avatarImage}
                 resizeMode="cover"
               />
+              {item.isOnline && (
+                <View
+                  style={[
+                    styles.onlineDot,
+                    {
+                      backgroundColor: colors.success,
+                      borderColor: colors.cardBackground,
+                    },
+                  ]}
+                />
+              )}
             </View>
             <View style={styles.memberInfo}>
               <Typography
@@ -335,19 +247,15 @@ export default function ManageMembersScreen() {
                 fontWeight="semibold"
                 style={styles.memberName}
               >
-                {nickname || item.displayName || item.customId || "Unknown"}
+                {item.displayName || item.customId || "İsimsiz"}
+                {isCurrentUser ? " (Sen)" : ""}
               </Typography>
-              {nickname && (
-                <Typography
-                  variant="caption"
-                  style={[
-                    styles.memberSubtext,
-                    { color: colors.secondaryText },
-                  ]}
-                >
-                  {item.displayName || item.customId}
-                </Typography>
-              )}
+              <Typography
+                variant="caption"
+                style={[styles.memberSubtext, { color: colors.secondaryText }]}
+              >
+                @{item.customId}
+              </Typography>
               <View style={styles.badges}>
                 {isMemberOwner && (
                   <Typography
@@ -355,14 +263,6 @@ export default function ManageMembersScreen() {
                     style={[styles.badge, { color: colors.primary }]}
                   >
                     Yönetici
-                  </Typography>
-                )}
-                {muted && (
-                  <Typography
-                    variant="caption"
-                    style={[styles.badge, { color: colors.error }]}
-                  >
-                    Sessize Alındı
                   </Typography>
                 )}
               </View>
@@ -373,74 +273,29 @@ export default function ManageMembersScreen() {
               onPress={() => setAvatarSelectorVisible(true)}
               style={[
                 styles.avatarEditButton,
-                { backgroundColor: colors.primary + "20" },
+                { backgroundColor: colors.passiveState },
               ]}
             >
               <Ionicons name="camera" size={18} color={colors.primary} />
             </TouchableOpacity>
           )}
-        </View>
-
-        <View style={styles.memberActions}>
-          {/* Nickname */}
-          <TouchableOpacity
-            onPress={() => handleNicknamePress(item)}
-            style={[
-              styles.actionButton,
-              { backgroundColor: colors.primary + "20" },
-            ]}
-          >
-            <Typography variant="bodySmall" style={{ color: colors.primary }}>
-              {nickname ? "✏️" : "➕"} Takma Ad
-            </Typography>
-          </TouchableOpacity>
-
-          {/* Sessize Al/Kaldır */}
-          <TouchableOpacity
-            onPress={() => handleToggleMute(item)}
-            style={[
-              styles.actionButton,
-              {
-                backgroundColor: muted
-                  ? colors.error + "20"
-                  : colors.secondary + "20",
-              },
-            ]}
-          >
-            <Typography
-              variant="bodySmall"
-              style={{ color: muted ? colors.error : colors.secondary }}
-            >
-              {muted ? "🔇 Aç" : "🔕 Sessize Al"}
-            </Typography>
-          </TouchableOpacity>
-
-          {/* Yöneticilik Devri (sadece owner, kendisi hariç) */}
-          {isOwner && !isCurrentUser && !isMemberOwner && (
-            <TouchableOpacity
-              onPress={() => handleTransferOwnership(item)}
-              style={[
-                styles.actionButton,
-                { backgroundColor: colors.warning + "20" },
-              ]}
-            >
-              <Typography variant="bodySmall" style={{ color: colors.warning }}>
-                👑 Yönetici Yap
-              </Typography>
-            </TouchableOpacity>
-          )}
-
-          {/* Üyeyi Çıkar (sadece owner veya kendisi) */}
-          {(isOwner || isCurrentUser) && (
+          {/* Admin, diğer üyeleri çıkarabilir */}
+          {isOwner && !isCurrentUser && (
             <TouchableOpacity
               onPress={() => handleRemoveMember(item)}
+              disabled={removeMember.isPending}
               style={[
-                styles.actionButton,
-                { backgroundColor: colors.error + "20" },
+                styles.removeButton,
+                { backgroundColor: colors.cardBackground, borderColor: colors.error },
               ]}
             >
-              <Typography variant="bodySmall" style={{ color: colors.error }}>
-                {isCurrentUser ? "🚪 Ayrıl" : "❌ Çıkar"}
+              <Ionicons name="person-remove" size={14} color={colors.error} />
+              <Typography
+                variant="caption"
+                fontWeight="semibold"
+                style={{ color: colors.error, marginLeft: 4 }}
+              >
+                Çıkar
               </Typography>
             </TouchableOpacity>
           )}
@@ -478,9 +333,39 @@ export default function ManageMembersScreen() {
               </Typography>
             </View>
           }
+          ListFooterComponent={
+            <TouchableOpacity
+              onPress={handleLeaveGroup}
+              style={[
+                styles.leaveButton,
+                {
+                  backgroundColor: colors.cardBackground,
+                  borderColor: colors.error,
+                },
+              ]}
+            >
+              <Ionicons
+                name={
+                  isOwner && otherMemberCount === 0
+                    ? "trash-outline"
+                    : "exit-outline"
+                }
+                size={20}
+                color={colors.error}
+              />
+              <Typography
+                variant="body"
+                fontWeight="semibold"
+                style={{ color: colors.error, marginLeft: 8 }}
+              >
+                {isOwner && otherMemberCount === 0
+                  ? "Grubu Sil ve Ayrıl"
+                  : "Gruptan Ayrıl"}
+              </Typography>
+            </TouchableOpacity>
+          }
         />
 
-        {/* Avatar Selector Modal - Bu kalsın çünkü AvatarSelector zaten mevcut bir component */}
         <AvatarSelector
           visible={avatarSelectorVisible}
           currentAvatar={user?.photoUrl}
@@ -515,7 +400,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
   },
   memberLeft: {
     flexDirection: "row",
@@ -527,12 +411,20 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     marginRight: 12,
-    overflow: "hidden",
   },
   avatarImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
+  },
+  onlineDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
   },
   avatarEditButton: {
     width: 32,
@@ -540,6 +432,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+  },
+  removeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   memberInfo: {
     flex: 1,
@@ -553,20 +453,18 @@ const styles = StyleSheet.create({
   badges: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 4,
   },
   badge: {
     fontWeight: "600",
   },
-  memberActions: {
+  leaveButton: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  actionButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingVertical: 14,
+    marginTop: 16,
   },
   emptyText: {
     textAlign: "center",

@@ -1,8 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Storage Keys
-const STATUS_ORDER_KEY = (userId: string) => `status_order_${userId}`;
-const MOOD_ORDER_KEY = (userId: string) => `mood_order_${userId}`;
+// Storage Keys — sıralamalar kullanıcı + grup başına tutulur
+// (custom status/mood'lar gruba özel olduğundan sıralama da gruba özeldir)
+const STATUS_ORDER_KEY = (userId: string, groupId: string) =>
+  `status_order_${userId}_${groupId}`;
+const MOOD_ORDER_KEY = (userId: string, groupId: string) =>
+  `mood_order_${userId}_${groupId}`;
 export const SELECTED_GROUP_STORAGE_KEY = "@geliom:selected_group_id";
 
 /**
@@ -38,13 +41,16 @@ export const setSelectedGroupId = async (
 };
 
 /**
- * Kullanıcının status sıralamasını local storage'dan alır
- * @param userId Kullanıcı ID'si
- * @returns Status ID'lerinin sıralı dizisi
+ * Kullanıcının bir gruptaki status sıralamasını local storage'dan alır
  */
-export const getStatusOrder = async (userId: string): Promise<string[]> => {
+export const getStatusOrder = async (
+  userId: string,
+  groupId: string,
+): Promise<string[]> => {
   try {
-    const stored = await AsyncStorage.getItem(STATUS_ORDER_KEY(userId));
+    const stored = await AsyncStorage.getItem(
+      STATUS_ORDER_KEY(userId, groupId),
+    );
     if (stored) {
       const parsed = JSON.parse(stored);
       return parsed.map(String); // Ensure everything is string
@@ -57,29 +63,32 @@ export const getStatusOrder = async (userId: string): Promise<string[]> => {
 };
 
 /**
- * Kullanıcının status sıralamasını local storage'a kaydeder
- * @param userId Kullanıcı ID'si
- * @param order Status ID'lerinin sıralı dizisi
+ * Kullanıcının bir gruptaki status sıralamasını local storage'a kaydeder
  */
 export const saveStatusOrder = async (
   userId: string,
+  groupId: string,
   order: string[],
 ): Promise<void> => {
   try {
-    await AsyncStorage.setItem(STATUS_ORDER_KEY(userId), JSON.stringify(order));
+    await AsyncStorage.setItem(
+      STATUS_ORDER_KEY(userId, groupId),
+      JSON.stringify(order),
+    );
   } catch (error) {
     console.error("Status order kaydetme hatası:", error);
   }
 };
 
 /**
- * Kullanıcının mood sıralamasını local storage'dan alır
- * @param userId Kullanıcı ID'si
- * @returns Mood ID'lerinin sıralı dizisi
+ * Kullanıcının bir gruptaki mood sıralamasını local storage'dan alır
  */
-export const getMoodOrder = async (userId: string): Promise<string[]> => {
+export const getMoodOrder = async (
+  userId: string,
+  groupId: string,
+): Promise<string[]> => {
   try {
-    const stored = await AsyncStorage.getItem(MOOD_ORDER_KEY(userId));
+    const stored = await AsyncStorage.getItem(MOOD_ORDER_KEY(userId, groupId));
     if (stored) {
       const parsed = JSON.parse(stored);
       return parsed.map(String);
@@ -92,16 +101,18 @@ export const getMoodOrder = async (userId: string): Promise<string[]> => {
 };
 
 /**
- * Kullanıcının mood sıralamasını local storage'a kaydeder
- * @param userId Kullanıcı ID'si
- * @param order Mood ID'lerinin sıralı dizisi
+ * Kullanıcının bir gruptaki mood sıralamasını local storage'a kaydeder
  */
 export const saveMoodOrder = async (
   userId: string,
+  groupId: string,
   order: string[],
 ): Promise<void> => {
   try {
-    await AsyncStorage.setItem(MOOD_ORDER_KEY(userId), JSON.stringify(order));
+    await AsyncStorage.setItem(
+      MOOD_ORDER_KEY(userId, groupId),
+      JSON.stringify(order),
+    );
   } catch (error) {
     console.error("Mood order kaydetme hatası:", error);
   }

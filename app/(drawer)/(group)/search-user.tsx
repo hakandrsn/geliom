@@ -1,14 +1,12 @@
-import { useInviteUser } from "@/api/groups";
 import { useUserByCustomId } from "@/api/users";
 import KeyboardAwareView from "@/components/KeyboardAwareView";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
-// Removed Contexts
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, StyleSheet, TextInput, View } from "react-native";
+import { Share, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function SearchUserScreen() {
@@ -20,7 +18,6 @@ export default function SearchUserScreen() {
   const headerHeight = 56 + insets.top;
 
   const [customUserId, setCustomUserId] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   // Custom user ID ile kullanıcı ara
@@ -30,10 +27,8 @@ export default function SearchUserScreen() {
     refetch: refetchUser,
   } = useUserByCustomId(customUserId.trim().toUpperCase());
 
-  // foundResult is { found: boolean, user?: ... }
+  // foundResult: { found: boolean, user?: { id, customId, displayName, photoUrl } }
   const foundUser = foundResult?.found ? foundResult.user : null;
-
-  const inviteUser = useInviteUser();
 
   const handleSearch = () => {
     if (!customUserId.trim()) {
@@ -45,53 +40,18 @@ export default function SearchUserScreen() {
     refetchUser();
   };
 
-  const handleSendInvite = async () => {
-    if (!foundUser) {
-      setSearchError("Kullanıcı bulunamadı");
-      return;
-    }
-
-    if (!user?.id) {
-      Alert.alert("Hata", "Kullanıcı bilgisi bulunamadı");
-      return;
-    }
-
-    if (!selectedGroup) {
-      Alert.alert("Hata", "Lütfen önce bir grup seçin");
-      return;
-    }
-
-    if (foundUser.id === user.id) {
-      Alert.alert("Hata", "Kendinize davet gönderemezsiniz");
-      return;
-    }
+  // API'de doğrudan davet endpoint'i yok — davet kodu paylaşılır,
+  // kullanıcı bu kodla katılır veya katılma isteği gönderir.
+  const handleShareInvite = async () => {
+    if (!selectedGroup) return;
 
     try {
-      setIsSubmitting(true);
-      setSearchError(null);
-
-      await inviteUser.mutateAsync({
-        groupId: selectedGroup.id,
-        userId: foundUser.id,
+      await Share.share({
+        message: `${selectedGroup.name} grubuna katıl!\n\nDavet Kodu: ${selectedGroup.inviteCode}\n\nUygulamayı indir ve bu kodu kullanarak gruba katıl.`,
+        title: `${selectedGroup.name} - Grup Daveti`,
       });
-
-      Alert.alert(
-        "Davet Gönderildi",
-        `${foundUser.displayName || foundUser.customId} kullanıcısına ${selectedGroup.name} grubuna katılma daveti gönderildi.`,
-        [
-          {
-            text: "Tamam",
-            onPress: () => {
-              setCustomUserId("");
-              router.back();
-            },
-          },
-        ],
-      );
-    } catch (error: any) {
-      setSearchError(error.message || "Davet gönderilemedi");
-    } finally {
-      setIsSubmitting(false);
+    } catch (error) {
+      console.error("Davet paylaşılırken hata oluştu:", error);
     }
   };
 
@@ -143,8 +103,8 @@ export default function SearchUserScreen() {
             color={colors.secondaryText}
             style={{ textAlign: "center" }}
           >
-            Kullanıcının custom ID&apos;sini girerek arama yapın ve gruba davet
-            gönderin
+            Kullanıcının custom ID&apos;sini girerek arama yapın ve gruba
+            katılması için davet kodunu paylaşın
           </Typography>
         </View>
 
@@ -205,6 +165,15 @@ export default function SearchUserScreen() {
                 {searchError}
               </Typography>
             )}
+            {foundResult && !foundResult.found && !searchError && (
+              <Typography
+                variant="caption"
+                color={colors.error}
+                style={{ marginTop: 4 }}
+              >
+                Kullanıcı bulunamadı
+              </Typography>
+            )}
             {foundUser && !searchError && (
               <Typography
                 variant="caption"
@@ -233,15 +202,11 @@ export default function SearchUserScreen() {
                     { backgroundColor: colors.primary + "20" },
                   ]}
                 >
-                  {foundUser.photoUrl ? (
-                    <Ionicons name="person" size={32} color={colors.primary} />
-                  ) : (
-                    <Ionicons
-                      name="person-outline"
-                      size={32}
-                      color={colors.primary}
-                    />
-                  )}
+                  <Ionicons
+                    name={foundUser.photoUrl ? "person" : "person-outline"}
+                    size={32}
+                    color={colors.primary}
+                  />
                 </View>
                 <View style={styles.userInfo}>
                   <Typography
@@ -252,17 +217,8 @@ export default function SearchUserScreen() {
                     {foundUser.displayName || "İsimsiz Kullanıcı"}
                   </Typography>
                   <Typography variant="caption" color={colors.secondaryText}>
-                    @{foundUser.custom_user_id}
+                    @{foundUser.customId}
                   </Typography>
-                  {foundUser.email && (
-                    <Typography
-                      variant="caption"
-                      color={colors.secondaryText}
-                      style={{ marginTop: 2 }}
-                    >
-                      {foundUser.email}
-                    </Typography>
-                  )}
                 </View>
               </View>
             </View>
@@ -289,7 +245,7 @@ export default function SearchUserScreen() {
                   color={colors.secondaryText}
                   style={{ marginLeft: 8 }}
                 >
-                  Davet gönderilecek grup:{" "}
+                  Davet kodu paylaşılacak grup:{" "}
                   <Typography
                     variant="caption"
                     color={colors.text}
@@ -322,26 +278,20 @@ export default function SearchUserScreen() {
                 color={colors.warning}
                 style={{ marginLeft: 8, flex: 1 }}
               >
-                Davet göndermek için önce bir grup seçmelisiniz.
+                Davet kodu paylaşmak için önce bir grup seçmelisiniz.
               </Typography>
             </View>
           )}
 
           <GeliomButton
-            state={
-              isSubmitting
-                ? "loading"
-                : foundUser && selectedGroup
-                  ? "active"
-                  : "passive"
-            }
+            state={selectedGroup ? "active" : "passive"}
             layout="full-width"
             size="large"
-            icon="send"
-            onPress={handleSendInvite}
-            disabled={!foundUser || !selectedGroup || isSubmitting}
+            icon="share-social"
+            onPress={handleShareInvite}
+            disabled={!selectedGroup}
           >
-            {isSubmitting ? "Gönderiliyor..." : "Davet Gönder"}
+            Davet Kodunu Paylaş
           </GeliomButton>
         </View>
       </KeyboardAwareView>

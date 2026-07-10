@@ -1,13 +1,11 @@
 import { BaseLayout, Typography } from '@/components/shared';
+import { ListItem } from '@/components/ui';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 export default function HelpSupportScreen() {
   const { colors } = useTheme();
-  const router = useRouter();
 
   const handleEmailSupport = () => {
     Linking.openURL('mailto:support@geliom.app?subject=Destek Talebi');
@@ -37,52 +35,27 @@ export default function HelpSupportScreen() {
             Sorularınız veya sorunlarınız için bizimle iletişime geçebilirsiniz.
           </Typography>
 
-          {/* İletişim Kartları */}
+          {/* İletişim Seçenekleri */}
           <View style={styles.cardContainer}>
-            <TouchableOpacity
-              style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
+            <ListItem
+              icon="mail"
+              title="E-posta"
+              subtitle="support@geliom.app"
               onPress={handleEmailSupport}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-                <Ionicons name="mail" size={24} color={colors.primary} />
-              </View>
-              <Typography variant="h5" color={colors.text} style={styles.cardTitle}>
-                E-posta
-              </Typography>
-              <Typography variant="caption" color={colors.secondaryText} style={styles.cardDescription}>
-                support@geliom.app
-              </Typography>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
+            />
+            <ListItem
+              icon="logo-whatsapp"
+              iconColor="#25D366"
+              title="WhatsApp"
+              subtitle="Hızlı destek"
               onPress={handleWhatsAppSupport}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: '#25D366' + '20' }]}>
-                <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
-              </View>
-              <Typography variant="h5" color={colors.text} style={styles.cardTitle}>
-                WhatsApp
-              </Typography>
-              <Typography variant="caption" color={colors.secondaryText} style={styles.cardDescription}>
-                Hızlı destek
-              </Typography>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.stroke }]}
+            />
+            <ListItem
+              icon="help-circle"
+              title="SSS"
+              subtitle="Sık sorulan sorular"
               onPress={handleFAQ}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: colors.tertiary + '20' }]}>
-                <Ionicons name="help-circle" size={24} color={colors.tertiary} />
-              </View>
-              <Typography variant="h5" color={colors.text} style={styles.cardTitle}>
-                SSS
-              </Typography>
-              <Typography variant="caption" color={colors.secondaryText} style={styles.cardDescription}>
-                Sık sorulan sorular
-              </Typography>
-            </TouchableOpacity>
+            />
           </View>
 
           {/* Uygulama Bilgileri */}
@@ -120,28 +93,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   cardContainer: {
-    gap: 16,
     marginBottom: 32,
-  },
-  card: {
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardTitle: {
-    marginBottom: 4,
-  },
-  cardDescription: {
-    textAlign: 'center',
   },
   infoBox: {
     padding: 20,

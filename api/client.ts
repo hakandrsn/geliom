@@ -1,17 +1,10 @@
+import { appConfig } from "@/config/app.config";
 import auth from "@react-native-firebase/auth";
 import axios from "axios";
 
-import { Platform } from "react-native";
-
-// Base URL for the backend API
-const BASE_URL =
-  Platform.OS === "android"
-    ? "http://10.0.2.2:3000/api"
-    : "http://localhost:3000/api";
-
-// Create axios instance
+// Create axios instance — base URL tek config noktasından gelir
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: appConfig.apiUrl,
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",

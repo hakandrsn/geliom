@@ -1,4 +1,4 @@
-import { groupKeys } from "@/api/groups";
+import { groupKeys } from "@/api/keys";
 import { useAppStore } from "@/store/useAppStore";
 import { setSelectedGroupId } from "@/utils/storage";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,12 +72,12 @@ export function NotificationHandler() {
       console.log("🔔 OneSignal notification clicked:", event);
 
       // additionalData'dan grup bilgisini al
+      // Push data formatı: { type: "status_update" | "join_request" | "request_approved", groupId, ... }
       const additionalData = event.notification.additionalData;
-      const groupId = additionalData?.group_id as string | undefined;
-      const groupName = additionalData?.group_name as string | undefined;
+      const groupId = additionalData?.groupId as string | undefined;
 
       if (!groupId) {
-        console.warn("⚠️ Bildirimde group_id bulunamadı");
+        console.warn("⚠️ Bildirimde groupId bulunamadı");
         return;
       }
 

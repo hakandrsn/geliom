@@ -1,15 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 
 // Hooks & Contexts
-import { useMoods, useSetUserStatus } from "@/api";
-import { useTheme } from "@/contexts/ThemeContext";
+import {
+  applySavedOrder,
+  useMoodOrder,
+  useMoods,
+  useSetUserStatus,
+} from "@/api";
 import { useManageStatusMood } from "@/hooks/useManageStatusMood";
 import { useAppStore } from "@/store/useAppStore";
+import { layout, radius, spacing } from "@/theme/tokens";
 
 // Components
-import AddStatusMoodModal from "@/components/dashboard/AddStatusMoodModal";
-import { GeliomButton } from "@/components/shared";
+import { StatusMoodBottomSheet } from "@/components/bottomsheets";
+import { Chip, Skeleton } from "@/components/ui";
+import { useBottomSheet } from "@/contexts/BottomSheetContext";
 
 interface MoodSelectorProps {
   groupId: string;
@@ -22,11 +28,20 @@ function MoodSelector({
   currentMoodId,
   onAddPress,
 }: MoodSelectorProps) {
-  const { colors } = useTheme();
   const user = useAppStore((state) => state.user);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  // Custom mood ekleme API'de admin (grup sahibi) + premium gerektirir —
+  // "Ekle" chip'i yalnızca grup sahibine gösterilir
+  const isOwner = useAppStore(
+    (state) =>
+      state.groups.find((g) => g.id === groupId)?.ownerId === state.user?.id,
+  );
+  // Kendi mevcut status kaydım — status metnini ezmemek için seçimde korunur
+  const myStatus = useAppStore((state) =>
+    user ? state.session?.group.statuses[user.id] : undefined,
+  );
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
-  // LOCAL STATE
+  // LOCAL STATE: Anında UI tepkisi için
   const [activeId, setActiveId] = useState<string | number | undefined>(
     currentMoodId,
   );
@@ -39,6 +54,7 @@ function MoodSelector({
   const { handleAddMood, checkSubscriptionAndProceed } =
     useManageStatusMood(groupId);
   const { data: allMoods = [], isLoading } = useMoods(groupId);
+  const { data: moodOrder = [] } = useMoodOrder(user?.id, groupId);
   const setStatusMutation = useSetUserStatus();
 
   const handleMoodSelect = useCallback(
@@ -47,143 +63,96 @@ function MoodSelector({
 
       setActiveId(mood.id);
 
+      // Socket üzerinden paylaş — mevcut status metni korunur,
+      // status yoksa text alanına mood adı yazılır (text zorunlu alan)
       setStatusMutation.mutate({
-        groupId: groupId,
-        text: mood.text,
-        emoji: mood.emoji,
-        mood: mood.text, // Assuming mood name is passed as mood field
+        text: myStatus?.text || mood.text,
+        emoji: mood.emoji ?? undefined,
+        mood: mood.mood,
       });
     },
-    [user, groupId, setStatusMutation],
+    [user, setStatusMutation, myStatus],
   );
 
-  // Tüm liste elemanlarını hazırla
-  const allItems = useMemo(() => {
+  // Kullanıcının kaydettiği sıralama uygulanır; sıralama yoksa
+  // custom'lar önce, sonra alfabetik
+  const sortedMoods = useMemo(() => {
     const sorted = [...allMoods].sort((a, b) => {
-      const aIsCustom = a.groupId != null;
-      const bIsCustom = b.groupId != null;
-      if (aIsCustom && !bIsCustom) return -1;
-      if (!aIsCustom && bIsCustom) return 1;
+      if (a.isCustom && !b.isCustom) return -1;
+      if (!a.isCustom && b.isCustom) return 1;
       return a.text.localeCompare(b.text);
     });
-    return [...sorted, { id: -1, text: "Ekle", emoji: "➕", groupId: null }];
-  }, [allMoods]);
+    return applySavedOrder(sorted, moodOrder);
+  }, [allMoods, moodOrder]);
 
   if (isLoading) {
-    return <ActivityIndicator size="small" color={colors.primary} />;
+    return (
+      <View style={styles.skeletonRow}>
+        {[96, 88, 104, 80].map((w, i) => (
+          <Skeleton key={i} width={w} height={40} radius={radius.full} />
+        ))}
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
+    <View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
       >
-        {allItems.map((item) => {
-          if (item.id === -1) {
-            return (
-              <View key="add-button" style={styles.buttonWrapper}>
-                <GeliomButton
-                  state="passive"
-                  onPress={() =>
-                    checkSubscriptionAndProceed(() => setIsModalVisible(true))
-                  }
-                  size="small"
-                  layout="icon-only"
-                  icon="add"
-                  style={{
-                    borderColor: colors.stroke,
-                    borderWidth: 1,
-                    borderStyle: "dashed",
-                  }}
-                />
-              </View>
-            );
-          }
+        {sortedMoods.map((item) => (
+          <Chip
+            key={item.id.toString()}
+            label={item.text}
+            emoji={item.emoji ?? undefined}
+            // Yerel seçim yoksa store'daki mevcut mood key'iyle eşleştir
+            selected={
+              activeId !== undefined
+                ? activeId === item.id
+                : item.mood === myStatus?.mood
+            }
+            onPress={() => handleMoodSelect(item)}
+          />
+        ))}
 
-          const isSelected = activeId === item.id;
-
-          return (
-            <View
-              key={item.id.toString()}
-              style={[
-                styles.buttonContainer,
-                isSelected && styles.buttonContainerSelected,
-              ]}
-            >
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { borderRadius: 12, overflow: "hidden" },
-                ]}
-              >
-                <View
-                  style={[
-                    StyleSheet.absoluteFill,
-                    { backgroundColor: colors.secondaryBackground },
-                  ]}
-                />
-              </View>
-
-              <GeliomButton
-                state={isSelected ? "active" : "passive"}
-                onPress={() => handleMoodSelect(item)}
-                size="small"
-                backgroundColor="transparent"
-                textColor={isSelected ? colors.tertiary : colors.text}
-                textStyle={isSelected ? { fontWeight: "bold" } : undefined}
-                style={
-                  [
-                    styles.button,
-                    {
-                      borderColor: isSelected ? colors.primary : "transparent",
-                    },
-                  ] as any
-                }
-              >
-                {item.emoji} {item.text}
-              </GeliomButton>
-            </View>
-          );
-        })}
+        {isOwner && (
+          <Chip
+            dashed
+            icon="add"
+            label="Ekle"
+            onPress={() =>
+              checkSubscriptionAndProceed(() =>
+                openBottomSheet(
+                  <StatusMoodBottomSheet
+                    type="mood"
+                    onSave={async (text, emoji) => {
+                      await handleAddMood(text, emoji);
+                      closeBottomSheet();
+                    }}
+                    onCancel={closeBottomSheet}
+                  />,
+                  { snapPoints: ["50%"] },
+                ),
+              )
+            }
+          />
+        )}
       </ScrollView>
-
-      <AddStatusMoodModal
-        visible={isModalVisible}
-        type="mood"
-        onClose={() => setIsModalVisible(false)}
-        onSave={(text, emoji) => handleAddMood(text, emoji)}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {},
   listContent: {
-    paddingLeft: 12,
-    paddingRight: 12,
-    gap: 12,
-    paddingBottom: 8,
+    paddingHorizontal: layout.screenPadding,
+    gap: spacing.sm,
   },
-  buttonWrapper: {
-    marginBottom: 4,
-  },
-  buttonContainer: {
-    marginBottom: 4,
-    borderRadius: 12,
-  },
-  buttonContainerSelected: {
-    transform: [{ translateY: 1 }],
-  },
-  button: {
-    minWidth: 80,
-    borderRadius: 12,
-    borderWidth: 1,
-    height: 40,
-    zIndex: 2,
-    marginBottom: 0,
+  skeletonRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: layout.screenPadding,
   },
 });
 

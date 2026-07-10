@@ -63,7 +63,7 @@ export default function StatusMoodBottomSheet({
               style={[
                 styles.emojiItem,
                 {
-                  backgroundColor: emoji === e ? colors.primary + '20' : colors.background,
+                  backgroundColor: emoji === e ? colors.passiveState : colors.background,
                   borderColor: emoji === e ? colors.primary : colors.stroke,
                 },
               ]}

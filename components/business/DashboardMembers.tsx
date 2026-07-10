@@ -1,13 +1,14 @@
 import type { DashboardMember } from "@/api/dashboard";
+import type { GroupSummary } from "@/api/types";
 import MemberCard from "@/components/dashboard/MemberCard";
-import type { GroupWithOwner } from "@/types/database";
+import { layout } from "@/theme/tokens";
 import { useRouter } from "expo-router";
 import React, { useCallback } from "react";
 import { StyleSheet, View } from "react-native";
 
 interface DashboardMemberItemProps {
   item: DashboardMember;
-  group: GroupWithOwner;
+  group: GroupSummary;
 }
 
 export default function DashboardMemberItem({
@@ -47,6 +48,6 @@ export default function DashboardMemberItem({
 
 const styles = StyleSheet.create({
   paddedSection: {
-    paddingHorizontal: 8,
+    paddingHorizontal: layout.screenPadding,
   },
 });

@@ -1,19 +1,20 @@
 import {
-  GroupMood as Mood,
+  MoodOption as Mood,
   StatusOption as Status,
+  statusKeys,
   useCustomStatuses,
   useDefaultStatuses,
+  useGroupSession,
   useMoods,
 } from "@/api";
 import { StatusMoodBottomSheet } from "@/components/bottomsheets";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
-// Removed Contexts
+import { IconButton, Skeleton } from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
-// import { useGroupContext } from '@/contexts/GroupContext';
-// import { useAuth } from '@/contexts/AuthContext';
 import { useManageStatusMood } from "@/hooks/useManageStatusMood";
-import { useAppStore } from "@/store/useAppStore"; // Added Store
+import { useAppStore } from "@/store/useAppStore";
+import { layout, spacing } from "@/theme/tokens";
 import {
   getMoodOrder,
   getStatusOrder,
@@ -21,26 +22,24 @@ import {
   saveStatusOrder,
 } from "@/utils/storage";
 import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import DraggableFlatList, {
-  RenderItemParams,
-  ScaleDecorator,
-} from "react-native-draggable-flatlist";
+import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 
-// type ItemType = Status | Mood; // Unused
-
+/**
+ * Sıralama ekranı.
+ *
+ * NOT: Önceden react-native-draggable-flatlist kullanılıyordu; paket
+ * Reanimated 4 ile uyumsuz olduğu için sürükleme hiç tetiklenmiyordu.
+ * Yukarı/aşağı ok butonlarıyla deterministik sıralamaya geçildi.
+ */
 export default function ReorderStatusMoodScreen() {
   const { colors } = useTheme();
   const { user, currentGroupId, groups } = useAppStore();
   const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
   const [activeTab, setActiveTab] = useState<"status" | "mood">("status");
@@ -48,6 +47,9 @@ export default function ReorderStatusMoodScreen() {
   const [moodOrder, setMoodOrder] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Ekran açıkken session'ı canlı tut — custom mood'lar session'dan gelir
+  useGroupSession(selectedGroup?.id);
 
   // Status ve mood verilerini çek
   const { data: defaultStatuses = [] } = useDefaultStatuses();
@@ -66,115 +68,80 @@ export default function ReorderStatusMoodScreen() {
     checkSubscriptionAndProceed,
   } = useManageStatusMood(selectedGroup?.id || "");
 
-  // Local storage'dan sıralamayı yükle
+  // Local storage'dan sıralamayı yükle (kullanıcı + grup başına)
   useEffect(() => {
     const loadOrders = async () => {
-      if (user?.id) {
+      if (user?.id && selectedGroup?.id) {
         const [statusOrderData, moodOrderData] = await Promise.all([
-          getStatusOrder(user.id),
-          getMoodOrder(user.id),
+          getStatusOrder(user.id, selectedGroup.id),
+          getMoodOrder(user.id, selectedGroup.id),
         ]);
-        // statusOrderData comes as numbers from storage, but we need strings for statuses now
-        // Assuming storage persists status IDs which are now strings (e.g. 'default-0')
-        // If storage has numbers, we might need a migration or mapping.
-        // For now, casting or assuming storage handles strings if modified.
-        // If getStatusOrder returns number[], we need to convert or expect strings.
-        // Let's assume for this refactor we reset/ignore old number-based status order for defaults
-        // or treat them as best effort.
-        setStatusOrder(statusOrderData.map(String)); // Convert to strings
+        setStatusOrder(statusOrderData.map(String));
         setMoodOrder(moodOrderData);
         setIsLoading(false);
       }
     };
     loadOrders();
-  }, [user?.id]);
+  }, [user?.id, selectedGroup?.id]);
 
-  // Status'leri birleştir ve sırala (tüm status'ler - custom + default)
-  const sortedStatuses = useMemo(() => {
-    const allStatuses = [...customStatuses, ...defaultStatuses];
-
-    if (statusOrder.length === 0) {
-      // Sıralama yoksa: Custom'lar önce, sonra default'lar
-      return allStatuses;
-    }
-
-    const ordered: Status[] = [];
-    const unordered: Status[] = [];
-
-    // Sıralamaya göre tüm status'leri ekle
-    statusOrder.forEach((statusId) => {
-      const status = allStatuses.find((s) => s.id === statusId);
-      if (status) {
-        ordered.push(status);
-      }
+  // Kayıtlı sıralamayı uygula; sıralamada olmayanlar mevcut sırayla sona eklenir
+  const applyOrder = <T extends { id: string | number }>(
+    items: T[],
+    order: string[],
+  ): T[] => {
+    if (!order.length) return items;
+    const ordered: T[] = [];
+    order.forEach((id) => {
+      const item = items.find((i) => String(i.id) === id);
+      if (item) ordered.push(item);
     });
-
-    // Sıralamada olmayan status'leri sona ekle
-    allStatuses.forEach((status) => {
-      if (
-        !statusOrder.includes(status.id) &&
-        !ordered.find((s) => s.id === status.id)
-      ) {
-        unordered.push(status);
-      }
-    });
-
-    return [...ordered, ...unordered];
-  }, [customStatuses, defaultStatuses, statusOrder]);
-
-  // Mood'ları sırala (tüm mood'lar - custom + default)
-  const sortedMoods = useMemo(() => {
-    if (moodOrder.length === 0) {
-      // Sıralama yoksa: Custom'lar önce, sonra default'lar
-      const customMoods = allMoods.filter((m) => m.groupId != null);
-      const defaultMoods = allMoods.filter((m) => m.groupId == null);
-      return [...customMoods, ...defaultMoods];
-    }
-
-    const ordered: Mood[] = [];
-    const unordered: Mood[] = [];
-
-    // Sıralamaya göre tüm mood'ları ekle (custom + default)
-    moodOrder.forEach((moodId) => {
-      const mood = allMoods.find((m) => m.id === moodId);
-      if (mood) {
-        ordered.push(mood);
-      }
-    });
-
-    // Sıralamada olmayan mood'ları sona ekle
-    allMoods.forEach((mood) => {
-      if (
-        !moodOrder.includes(mood.id) &&
-        !ordered.find((m) => m.id === mood.id)
-      ) {
-        unordered.push(mood);
-      }
-    });
-
-    return [...ordered, ...unordered];
-  }, [allMoods, moodOrder]);
-
-  const handleStatusDragEnd = ({ data }: { data: Status[] }) => {
-    const newOrder = data.map((s) => s.id);
-    setStatusOrder(newOrder);
-    setHasChanges(true);
+    const rest = items.filter((i) => !order.includes(String(i.id)));
+    return [...ordered, ...rest];
   };
 
-  const handleMoodDragEnd = ({ data }: { data: Mood[] }) => {
-    const newOrder = data.map((m) => m.id);
-    setMoodOrder(newOrder);
+  const sortedStatuses = useMemo(
+    () => applyOrder([...customStatuses, ...defaultStatuses], statusOrder),
+    [customStatuses, defaultStatuses, statusOrder],
+  );
+
+  const sortedMoods = useMemo(() => {
+    const customs = allMoods.filter((m) => m.isCustom);
+    const defaults = allMoods.filter((m) => !m.isCustom);
+    return applyOrder([...customs, ...defaults], moodOrder);
+  }, [allMoods, moodOrder]);
+
+  // Bir elemanı bir pozisyon yukarı/aşağı taşı
+  const moveItem = (index: number, direction: -1 | 1) => {
+    const items = activeTab === "status" ? sortedStatuses : sortedMoods;
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+
+    const ids = items.map((i) => String(i.id));
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+
+    if (activeTab === "status") {
+      setStatusOrder(ids);
+    } else {
+      setMoodOrder(ids);
+    }
     setHasChanges(true);
   };
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!user?.id || !selectedGroup?.id) return;
 
     try {
       await Promise.all([
-        saveStatusOrder(user.id, statusOrder),
-        saveMoodOrder(user.id, moodOrder),
+        saveStatusOrder(user.id, selectedGroup.id, statusOrder),
+        saveMoodOrder(user.id, selectedGroup.id, moodOrder),
       ]);
+      // Seçicilerdeki (StatusSelector/MoodSelector) sıralama query'lerini tazele
+      queryClient.invalidateQueries({
+        queryKey: statusKeys.order("status", user.id, selectedGroup.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: statusKeys.order("mood", user.id, selectedGroup.id),
+      });
       setHasChanges(false);
       router.back();
     } catch (error) {
@@ -187,7 +154,7 @@ export default function ReorderStatusMoodScreen() {
       openBottomSheet(
         <StatusMoodBottomSheet
           type={activeTab}
-          onSave={async (text, emoji, notifies) => {
+          onSave={async (text, emoji) => {
             if (activeTab === "status") {
               await handleAddStatus(text, emoji);
             } else {
@@ -202,131 +169,59 @@ export default function ReorderStatusMoodScreen() {
     });
   };
 
-  const renderStatusItem = ({
-    item,
-    drag,
-    isActive,
-  }: RenderItemParams<Status>) => {
-    const isCustom = item.is_custom;
+  // Ortak satır — zeminsiz, ok butonlarıyla taşınır
+  const renderRow = (
+    item: Status | Mood,
+    index: number,
+    total: number,
+    isCustom: boolean,
+    onDelete: () => void,
+  ) => (
+    <View
+      key={String(item.id)}
+      style={[styles.row, { borderBottomColor: colors.stroke }]}
+    >
+      {item.emoji ? (
+        <Typography variant="h6" style={styles.rowEmoji}>
+          {item.emoji}
+        </Typography>
+      ) : null}
 
-    return (
-      <ScaleDecorator>
-        <TouchableOpacity
-          onLongPress={drag}
-          disabled={isActive}
-          style={[
-            styles.item,
-            {
-              backgroundColor: colors.cardBackground,
-              borderColor: isActive ? colors.primary : colors.stroke,
-              opacity: isActive ? 0.8 : 1,
-            },
-          ]}
-        >
-          <View style={styles.itemContent}>
-            <Ionicons
-              name="reorder-three-outline"
-              size={24}
-              color={colors.secondaryText}
-              style={styles.dragHandle}
-            />
-            {item.emoji && (
-              <Typography variant="h6" style={{ marginRight: 8 }}>
-                {item.emoji}
-              </Typography>
-            )}
-            <Typography variant="body" color={colors.text} style={{ flex: 1 }}>
-              {item.text}
-            </Typography>
-            {isCustom && (
-              <TouchableOpacity
-                onPress={() => handleDeleteStatus(item.id)}
-                style={styles.deleteButton}
-              >
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </TouchableOpacity>
-      </ScaleDecorator>
-    );
-  };
-
-  const renderMoodItem = ({ item, drag, isActive }: RenderItemParams<Mood>) => {
-    const isCustom = item.groupId != null;
-
-    return (
-      <ScaleDecorator>
-        <TouchableOpacity
-          onLongPress={drag}
-          disabled={isActive}
-          style={[
-            styles.item,
-            {
-              backgroundColor: colors.cardBackground,
-              borderColor: isActive ? colors.primary : colors.stroke,
-              opacity: isActive ? 0.8 : 1,
-            },
-          ]}
-        >
-          <View style={styles.itemContent}>
-            <Ionicons
-              name="reorder-three-outline"
-              size={24}
-              color={colors.secondaryText}
-              style={styles.dragHandle}
-            />
-            {item.emoji && (
-              <Typography variant="h6" style={{ marginRight: 8 }}>
-                {item.emoji}
-              </Typography>
-            )}
-            <Typography variant="body" color={colors.text} style={{ flex: 1 }}>
-              {item.text}
-            </Typography>
-            {isCustom && (
-              <TouchableOpacity
-                onPress={() => handleDeleteMood(item.id)}
-                style={styles.deleteButton}
-              >
-                <Ionicons name="trash-outline" size={20} color={colors.error} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </TouchableOpacity>
-      </ScaleDecorator>
-    );
-  };
-
-  if (isLoading) {
-    return (
-      <BaseLayout
-        headerShow={true}
-        header={{
-          leftIcon: {
-            icon: <Ionicons name="arrow-back" size={24} color={colors.text} />,
-            onPress: () => router.back(),
-          },
-          title: (
-            <Typography variant="h5" color={colors.text}>
-              Status & Mood Yönetimi
-            </Typography>
-          ),
-          backgroundColor: colors.background,
-          style: { borderBottomWidth: 0 },
-        }}
+      <Typography
+        variant="body"
+        color={colors.text}
+        style={styles.rowText}
+        numberOfLines={1}
       >
-        <View
-          style={[
-            styles.loadingContainer,
-            { backgroundColor: colors.background },
-          ]}
-        >
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </BaseLayout>
-    );
-  }
+        {item.text}
+      </Typography>
+
+      {isCustom && (
+        <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
+          <Ionicons name="trash-outline" size={20} color={colors.error} />
+        </TouchableOpacity>
+      )}
+
+      <IconButton
+        icon="chevron-up"
+        variant="ghost"
+        size={36}
+        iconSize={20}
+        color={index === 0 ? colors.disabled : colors.secondaryText}
+        disabled={index === 0}
+        onPress={() => moveItem(index, -1)}
+      />
+      <IconButton
+        icon="chevron-down"
+        variant="ghost"
+        size={36}
+        iconSize={20}
+        color={index === total - 1 ? colors.disabled : colors.secondaryText}
+        disabled={index === total - 1}
+        onPress={() => moveItem(index, 1)}
+      />
+    </View>
+  );
 
   return (
     <BaseLayout
@@ -338,7 +233,7 @@ export default function ReorderStatusMoodScreen() {
         },
         title: (
           <Typography variant="h5" color={colors.text}>
-            Status & Mood Yönetimi
+            Sıralama
           </Typography>
         ),
         rightIcon: {
@@ -362,10 +257,7 @@ export default function ReorderStatusMoodScreen() {
         <View
           style={[
             styles.tabContainer,
-            {
-              backgroundColor: colors.cardBackground,
-              borderColor: colors.stroke,
-            },
+            { backgroundColor: colors.secondaryBackground },
           ]}
         >
           <TouchableOpacity
@@ -377,7 +269,7 @@ export default function ReorderStatusMoodScreen() {
           >
             <Typography
               variant="body"
-              color={activeTab === "status" ? colors.white : colors.text}
+              color={activeTab === "status" ? "#FFFFFF" : colors.text}
               fontWeight={activeTab === "status" ? "semibold" : "regular"}
             >
               Status
@@ -392,7 +284,7 @@ export default function ReorderStatusMoodScreen() {
           >
             <Typography
               variant="body"
-              color={activeTab === "mood" ? colors.white : colors.text}
+              color={activeTab === "mood" ? "#FFFFFF" : colors.text}
               fontWeight={activeTab === "mood" ? "semibold" : "regular"}
             >
               Mood
@@ -405,55 +297,43 @@ export default function ReorderStatusMoodScreen() {
           <Typography
             variant="caption"
             color={colors.secondaryText}
-            style={{ textAlign: "center", paddingHorizontal: 16 }}
+            style={{ textAlign: "center", paddingHorizontal: spacing.lg }}
           >
-            Tüm status/mood&apos;ları sürükleyip bırakarak sıralayabilirsiniz.
-            Özel olanları silebilirsiniz.
+            Ok butonlarıyla sırayı değiştir. Özel olanları silebilirsin.
           </Typography>
         </View>
 
-        {/* Status List */}
-        {activeTab === "status" && (
-          <View style={styles.listContainer}>
-            <View style={styles.section}>
-              <Typography
-                variant="h6"
-                color={colors.text}
-                style={styles.sectionTitle}
-              >
-                Status&apos;ler
-              </Typography>
-              <DraggableFlatList
-                data={sortedStatuses}
-                onDragEnd={handleStatusDragEnd}
-                keyExtractor={(item) => `status-${item.id}`}
-                renderItem={renderStatusItem}
-                contentContainerStyle={styles.listContent}
-              />
-            </View>
+        {isLoading ? (
+          <View style={styles.skeletonList}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} height={44} />
+            ))}
           </View>
-        )}
-
-        {/* Mood List */}
-        {activeTab === "mood" && (
-          <View style={styles.listContainer}>
-            <View style={styles.section}>
-              <Typography
-                variant="h6"
-                color={colors.text}
-                style={styles.sectionTitle}
-              >
-                Mood&apos;lar
-              </Typography>
-              <DraggableFlatList
-                data={sortedMoods}
-                onDragEnd={handleMoodDragEnd}
-                keyExtractor={(item) => `mood-${item.id}`}
-                renderItem={renderMoodItem}
-                contentContainerStyle={styles.listContent}
-              />
-            </View>
-          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {activeTab === "status"
+              ? sortedStatuses.map((item, index) =>
+                  renderRow(
+                    item,
+                    index,
+                    sortedStatuses.length,
+                    !!item.is_custom,
+                    () => handleDeleteStatus(String(item.id)),
+                  ),
+                )
+              : sortedMoods.map((item, index) =>
+                  renderRow(
+                    item,
+                    index,
+                    sortedMoods.length,
+                    !!(item as Mood).isCustom,
+                    () => handleDeleteMood(String(item.id)),
+                  ),
+                )}
+          </ScrollView>
         )}
       </View>
     </BaseLayout>
@@ -464,60 +344,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   tabContainer: {
     flexDirection: "row",
-    margin: 16,
-    padding: 4,
+    margin: layout.screenPadding,
+    padding: spacing.xs,
     borderRadius: 12,
-    borderWidth: 1,
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     borderRadius: 8,
     alignItems: "center",
   },
   infoContainer: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingBottom: spacing.md,
+    paddingHorizontal: layout.screenPadding,
   },
-  listContainer: {
-    flex: 1,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
+  skeletonList: {
+    paddingHorizontal: layout.screenPadding,
+    gap: spacing.md,
+    paddingTop: spacing.sm,
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingHorizontal: layout.screenPadding,
+    paddingBottom: 96,
   },
-  item: {
-    flexDirection: "row",
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  itemContent: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  rowEmoji: {
+    marginRight: spacing.xs,
+  },
+  rowText: {
     flex: 1,
   },
-  dragHandle: {
-    marginRight: 12,
-  },
   deleteButton: {
-    padding: 8,
-    marginLeft: 8,
+    padding: spacing.sm,
   },
 });

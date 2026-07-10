@@ -1,7 +1,10 @@
 import { apiClient } from "@/api/client";
 import { useUserGroups } from "@/api/groups";
-import { disconnectSocket, initSocket } from "@/api/socket";
 import { useTheme } from "@/contexts/ThemeContext";
+import {
+  connectUserServices,
+  disconnectUserServices,
+} from "@/services/connection";
 import { checkSubscription } from "@/services/purchase";
 import { useAppStore } from "@/store/useAppStore";
 import auth from "@react-native-firebase/auth";
@@ -13,9 +16,29 @@ import {
   useSegments,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StatusBar } from "react-native";
 import Provider from "./Provider";
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://7bd324fc8f5518b0a53f4553d12624b6@o4511013855887360.ingest.de.sentry.io/4511709727359056',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: true,
+
+  // Configure Session Replay
+  replaysSessionSampleRate: 0.1,
+  replaysOnErrorSampleRate: 1,
+  integrations: [Sentry.mobileReplayIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -39,6 +62,10 @@ function RootLayoutContent() {
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
   const isSyncing = useRef(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Firebase ilk auth cevabını verip backend sync denemesi tamamlanana kadar
+  // yönlendirme yapılmaz — aksi halde girişli kullanıcı bir anlığına login görür.
+  const [authResolved, setAuthResolved] = useState(false);
 
   const [fontsLoaded] = useFonts({
     "Comfortaa-Light": require("@/assets/fonts/Comfortaa-Light.ttf"),
@@ -48,7 +75,41 @@ function RootLayoutContent() {
     "Comfortaa-Bold": require("@/assets/fonts/Comfortaa-Bold.ttf"),
   });
 
-  // Auth Listener & Backend Sync
+  // Backend Sync: Lazy Sync pattern — ilk doğrulanmış istekte kullanıcı
+  // backend'de otomatik oluşturulur. Ağ hatasında 5 sn aralıkla yeniden dener;
+  // kullanıcı bu sırada login DEĞİL, index (bağlanıyor) ekranında bekler.
+  const syncWithBackend = useCallback(
+    async (currentUser: { uid: string; getIdToken: () => Promise<string> }) => {
+      if (isSyncing.current) return;
+      isSyncing.current = true;
+      try {
+        console.log("🔄 Syncing with backend (GET /users/me)...");
+        const response = await apiClient.get("/users/me");
+        console.log("✅ Backend user synced:", response.data);
+        setUser(response.data);
+
+        console.log("📂 Fetching groups...");
+        await refetchGroups();
+
+        await checkSubscription();
+
+        // Socket + push: kullanıcı oturumuna bağlı canlı servisler tek noktadan
+        console.log("🔌 Connecting user services (socket + push)...");
+        connectUserServices({
+          userId: currentUser.uid,
+          getToken: () => currentUser.getIdToken(),
+        });
+      } catch (error) {
+        console.error("❌ Backend sync başarısız, 5 sn sonra denenecek:", error);
+        retryTimer.current = setTimeout(() => syncWithBackend(currentUser), 5000);
+      } finally {
+        isSyncing.current = false;
+      }
+    },
+    [setUser, refetchGroups],
+  );
+
+  // Auth Listener
   useEffect(() => {
     console.log("🔐 Setting up Firebase auth listener...");
     const unsubscribe = auth().onAuthStateChanged(async (currentUser) => {
@@ -56,50 +117,34 @@ function RootLayoutContent() {
         "🔐 Firebase auth state changed:",
         currentUser ? `User: ${currentUser.email}` : "No user",
       );
+      if (retryTimer.current) {
+        clearTimeout(retryTimer.current);
+        retryTimer.current = null;
+      }
       setFirebaseUser(currentUser);
 
-      if (currentUser && !isSyncing.current) {
-        isSyncing.current = true;
-        try {
-          // Backend Sync: Lazy Sync pattern
-          const token = await currentUser.getIdToken(); // This is the recommended way in RN Firebase docs for user objects
-          console.log("token", token);
-
-          console.log("🔄 Syncing with backend (GET /users/me)...");
-          const response = await apiClient.get("/users/me");
-          console.log("✅ Backend user synced:", response.data);
-
-          setUser(response.data);
-
-          // Fetch groups
-          console.log("📂 Fetching groups...");
-          await refetchGroups();
-
-          // Check Subscription status
-          await checkSubscription();
-
-          // Connect Socket
-          console.log("🔌 Connecting to socket...");
-          initSocket(token);
-        } finally {
-          isSyncing.current = false;
-        }
-      } else if (!currentUser) {
+      if (currentUser) {
+        await syncWithBackend(currentUser);
+      } else {
         setUser(null);
-        disconnectSocket();
-        isSyncing.current = false;
+        disconnectUserServices();
       }
 
       setLoading(false);
+      setAuthResolved(true);
     });
 
-    return unsubscribe;
-  }, [setFirebaseUser, setUser, setLoading, refetchGroups]);
+    return () => {
+      unsubscribe();
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+  }, [setFirebaseUser, setUser, setLoading, syncWithBackend]);
 
   // Onboarding status is now part of the user object from backend
 
-  const isLoading =
-    authLoading || !fontsLoaded || (firebaseUser && user === undefined); // Wait for user to be fetched if firebaseUser exists
+  // authResolved: Firebase'in "girişli mi?" cevabı gelmeden yönlendirme yapma —
+  // store'daki isLoading false başladığı için tek başına güvenilir değil.
+  const isLoading = authLoading || !fontsLoaded || !authResolved;
 
   useEffect(() => {
     if (isLoading) return;
@@ -127,6 +172,11 @@ function RootLayoutContent() {
           }
         }
       }
+      // 3. Firebase girişli ama backend sync bekliyor/başarısız — login
+      // gösterme; index ekranı "bağlanılıyor" durumunu gösterir.
+      else if (inAuthGroup || inOnboarding) {
+        setTimeout(() => router.replace("/"), 0);
+      }
 
       // Hide splash screen once we know what to do
       await SplashScreen.hideAsync();
@@ -137,9 +187,11 @@ function RootLayoutContent() {
 
     checkAuth();
   }, [
+    isLoading,
     segments,
     router,
     rootNavigationState?.key,
+    firebaseUser,
     user,
     hasCompletedOnboarding,
   ]);
@@ -156,10 +208,10 @@ function RootLayoutContent() {
   );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   return (
     <Provider>
       <RootLayoutContent />
     </Provider>
   );
-}
+});

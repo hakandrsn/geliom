@@ -12,7 +12,7 @@ export interface ThemeColors {
   activeState: string; // Active State
   passiveState: string;   // Passive State
   loadingState: string;   // Loading State
-  
+
   // Gradyanlar
   linearGradient: string[];
 
@@ -25,6 +25,8 @@ export interface ThemeColors {
   background: string;
   secondaryBackground: string;
   cardBackground: string;
+  /** Bottom sheet / modal yüzeyi — HER ZAMAN opak olmalı (rgba katmanlar sheet'te görünmez kalır) */
+  sheetBackground: string;
 
   // Durum Renkleri
   success: string;
@@ -49,99 +51,103 @@ export interface ThemeColors {
 }
 
 /**
- * Light Theme - Social Harmony (Temiz, İndigo & Gül)
+ * Light Theme — Geliom (Okyanus Mavisi & Fıstık Yeşili)
+ * Marka: #0474B4 (mavi) + #D2E6B3 (soft yeşil)
  */
 export const lightColors: ThemeColors = {
-  // Marka - Modern, Güvenilir, Enerjik
-  primary: '#4F46E5',        // Indigo 600
-  secondary: '#E11D48',      // Rose 600
-  tertiary: '#8B5CF6',       // Violet 500
-  
+  // Marka
+  primary: '#0474B4',        // Okyanus mavisi
+  secondary: '#D2E6B3',      // Fıstık yeşili (soft accent)
+  tertiary: '#3E9BD6',       // Açık mavi
+
   // Component Durumları
-  activeState: '#4338CA',         // Indigo 700 (Aktif/Güçlü)
-  passiveState: 'rgba(99, 102, 241, 0.15)', // Indigo 500 @ 15% (Pasif/Hafif)
-  loadingState: '#6366F1',           // Indigo 500 (Yükleniyor/Canlı)
-  
-  linearGradient: ['#4F46E5', '#7C3AED'], // Indigo'dan Violet'e
-  
-  // Tipografi - Slate Serisi (Yüksek Okunabilirlik)
-  text: '#0F172A',           // Slate 900
-  secondaryText: '#475569',  // Slate 600
-  lightText: '#94A3B8',      // Slate 400
-  
-  // Arkaplanlar
-  background: '#F8FAFC',     // Slate 50
-  secondaryBackground: '#F1F5F9', // Slate 100
-  cardBackground: '#FFFFFF', // Saf Beyaz
-  
+  activeState: '#03608F',         // Koyu mavi (Aktif/Güçlü)
+  passiveState: 'rgba(4, 116, 180, 0.10)', // Mavi @ 10% (Pasif/Hafif)
+  loadingState: '#0587CF',           // Canlı mavi (Yükleniyor)
+
+  linearGradient: ['#0474B4', '#2FA3E0'], // Koyu maviden açık maviye
+
+  // Tipografi — koyu petrol tonları
+  text: '#10242F',
+  secondaryText: '#47616F',
+  lightText: '#8CA3AF',
+
+  // Arkaplanlar — box zeminleri rgba, soft katman hissi
+  background: '#F5F9FC',
+  secondaryBackground: 'rgba(4, 116, 180, 0.05)',
+  cardBackground: 'rgba(255, 255, 255, 0.92)',
+  sheetBackground: '#FFFFFF',
+
   // Durumlar
-  success: '#10B981',        // Emerald 500
-  warning: '#F59E0B',        // Amber 500
-  error: '#EF4444',          // Red 500
-  info: '#3B82F6',           // Blue 500
-  
+  success: '#8FBF5A',        // Marka yeşilinin doygun hali
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#0587CF',
+
   // Nötrler
-  black: '#020617',          // Slate 950
+  black: '#0A161D',
   white: '#FFFFFF',
-  gray: '#64748B',           // Slate 500
-  lightGray: '#E2E8F0',      // Slate 200
-  
+  gray: '#64798A',
+  lightGray: '#DFE9EF',
+
   // Etkileşim
-  disabled: '#CBD5E1',       // Slate 300
-  stroke: '#E2E8F0',         // Slate 200
-  passiveButton: 'rgba(57, 62, 70, 0.3)', // #393E46 @ 80%
-  
+  disabled: '#C3D2DB',
+  stroke: 'rgba(13, 59, 84, 0.10)',
+  passiveButton: 'rgba(57, 62, 70, 0.3)',
+
   // Katmanlar
-  overlay: 'rgba(15, 23, 42, 0.6)',     // Koyu Slate Overlay
+  overlay: 'rgba(10, 25, 35, 0.55)',
   blurBackground: 'rgba(255, 255, 255, 0.85)',
 };
 
 /**
- * Dark Theme - Deep Night Social (Göz yormayan Slate & Neon)
+ * Dark Theme — Soft Gece (koyu petrol zemin, yumuşak rgba katmanlar)
+ * Simsiyah değil; mavi-gri, göz yormayan bir karanlık.
  */
 export const darkColors: ThemeColors = {
-  // Marka - Karanlık modda görünürlük için daha açık/neon tonlar
-  primary: '#818CF8',        // Indigo 400
-  secondary: '#FB7185',      // Rose 400
-  tertiary: '#A78BFA',       // Violet 400
-  
+  // Marka — karanlıkta görünürlük için açık tonlar
+  primary: '#4FA9DC',
+  secondary: '#D2E6B3',
+  tertiary: '#7FC0E5',
+
   // Component Durumları
-  activeState: '#6366F1',         // Indigo 500 (Aktif)
-  passiveState: 'rgba(129, 140, 248, 0.2)', // Indigo 400 @ 20% (Pasif)
-  loadingState: '#4F46E5',           // Indigo 600 (Yükleniyor)
-  
-  linearGradient: ['#6366F1', '#8B5CF6'],
-  
+  activeState: '#0474B4',
+  passiveState: 'rgba(79, 169, 220, 0.16)',
+  loadingState: '#2F89BE',
+
+  linearGradient: ['#2F89BE', '#4FA9DC'],
+
   // Tipografi
-  text: '#F8FAFC',           // Slate 50
-  secondaryText: '#CBD5E1',  // Slate 300
-  lightText: '#64748B',      // Slate 500
-  
-  // Arkaplanlar
-  background: '#020617',     // Slate 950 (Derin Lacivert/Siyah)
-  secondaryBackground: '#0F172A', // Slate 900
-  cardBackground: '#1E293B', // Slate 800
-  
+  text: '#EEF4F8',
+  secondaryText: '#B9C7D1',
+  lightText: '#7C8E9A',
+
+  // Arkaplanlar — box zeminleri rgba beyaz katman: soft derinlik
+  background: '#16202A',
+  secondaryBackground: 'rgba(255, 255, 255, 0.05)',
+  cardBackground: 'rgba(255, 255, 255, 0.07)',
+  sheetBackground: '#20303F',
+
   // Durumlar
-  success: '#34D399',        // Emerald 400
-  warning: '#FBBF24',        // Amber 400
-  error: '#F87171',          // Red 400
-  info: '#60A5FA',           // Blue 400
-  
+  success: '#A9CF7C',
+  warning: '#FBBF24',
+  error: '#F87171',
+  info: '#60A5FA',
+
   // Nötrler
   black: '#000000',
-  white: '#F8FAFC',
-  gray: '#94A3B8',           // Slate 400
-  lightGray: '#334155',      // Slate 700
-  
+  white: '#F5F9FC',
+  gray: '#93A6B2',
+  lightGray: 'rgba(255, 255, 255, 0.12)',
+
   // Etkileşim
-  disabled: '#334155',       // Slate 700
-  stroke: '#334155',         // Slate 700
-  passiveButton: '#DBE2EF', // #393E46 @ 80%
-  
+  disabled: 'rgba(255, 255, 255, 0.16)',
+  stroke: 'rgba(255, 255, 255, 0.09)',
+  passiveButton: '#DBE2EF',
+
   // Katmanlar
-  overlay: 'rgba(0, 0, 0, 0.7)',
-  blurBackground: 'rgba(30, 41, 59, 0.8)', // Slate 800 bazlı
+  overlay: 'rgba(0, 0, 0, 0.6)',
+  blurBackground: 'rgba(22, 32, 42, 0.85)',
 };
 
 // Styled-components veya hook'larda kullanım için export

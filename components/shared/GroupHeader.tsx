@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import type { GroupSummary } from '@/api/types';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { GroupWithOwner } from '../../types/database';
 import { BouncyButton } from '../anim/AnimatedComponents';
 import Typography from './Typography';
 
 interface GroupHeaderProps {
-  group: GroupWithOwner | null;
+  group: GroupSummary | null;
   onPress: () => void;
 }
 

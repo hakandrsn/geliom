@@ -9,7 +9,6 @@ function Paywall({ paywall }:any) {
     }), []);
 
     const onCloseButtonPress = useCallback<EventHandlers['onCloseButtonPress']>(() => {}, []);
-    const onAndroidSystemBack = useCallback<EventHandlers['onAndroidSystemBack']>(() => {}, []);
     const onProductSelected = useCallback<EventHandlers['onProductSelected']>((productId) => {}, []);
     const onPurchaseStarted = useCallback<EventHandlers['onPurchaseStarted']>((product) => {}, []);
     const onPurchaseCompleted = useCallback<EventHandlers['onPurchaseCompleted']>((purchaseResult, product) => {}, []);
@@ -18,7 +17,6 @@ function Paywall({ paywall }:any) {
     const onRestoreCompleted = useCallback<EventHandlers['onRestoreCompleted']>((profile) => {}, []);
     const onRestoreFailed = useCallback<EventHandlers['onRestoreFailed']>((error) => {}, []);
     const onPaywallShown = useCallback<EventHandlers['onPaywallShown']>(() => {}, []);
-    const onPaywallClosed = useCallback<EventHandlers['onPaywallClosed']>(() => {}, []);
     const onRenderingFailed = useCallback<EventHandlers['onRenderingFailed']>((error) => {}, []);
     const onLoadingProductsFailed = useCallback<EventHandlers['onLoadingProductsFailed']>((error) => {}, []);
     const onUrlPress = useCallback<EventHandlers['onUrlPress']>((url) => {}, []);
@@ -31,7 +29,6 @@ function Paywall({ paywall }:any) {
             params={paywallParams}
             style={styles.paywall}
             onCloseButtonPress={onCloseButtonPress}
-            onAndroidSystemBack={onAndroidSystemBack}
             onProductSelected={onProductSelected}
             onPurchaseStarted={onPurchaseStarted}
             onPurchaseCompleted={onPurchaseCompleted}
@@ -40,7 +37,6 @@ function Paywall({ paywall }:any) {
             onRestoreCompleted={onRestoreCompleted}
             onRestoreFailed={onRestoreFailed}
             onPaywallShown={onPaywallShown}
-            onPaywallClosed={onPaywallClosed}
             onRenderingFailed={onRenderingFailed}
             onLoadingProductsFailed={onLoadingProductsFailed}
             onCustomAction={onCustomAction}
