@@ -5,22 +5,26 @@ import {
   useUpdateUserAvatar,
 } from "@/api";
 import type { GroupMemberEntry } from "@/api/types";
+import { BouncyButton } from "@/components/anim/AnimatedComponents";
+import { ConfirmSheet } from "@/components/bottomsheets";
 import { AvatarSelector, BaseLayout, Typography } from "@/components/shared";
+import { Avatar, IconButton } from "@/components/ui";
+import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
-import { getAvatarSource } from "@/utils/avatar";
+import { layout, radius, spacing } from "@/theme/tokens";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from "react-native";
+
+const CONFIRM_SHEET_HEIGHT = 340;
 
 interface MemberRow extends GroupMemberEntry {
   id: string; // userId
@@ -32,8 +36,7 @@ export default function ManageMembersScreen() {
   const { user, currentGroupId, groups, session } = useAppStore();
   const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const router = useRouter();
-
-  const [avatarSelectorVisible, setAvatarSelectorVisible] = useState(false);
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
 
   const leaveGroup = useLeaveGroup();
   const removeMember = useRemoveGroupMember();
@@ -56,52 +59,62 @@ export default function ManageMembersScreen() {
     }));
   }, [hasSession, session]);
 
-  const handleAvatarSelect = async (avatar: string | null) => {
-    if (!user?.id) {
-      Alert.alert("Hata", "Kullanıcı bilgisi bulunamadı");
-      return;
-    }
-
-    try {
-      await updateAvatar.mutateAsync(avatar);
-      Alert.alert("Başarılı", "Avatar güncellendi");
-    } catch (error: any) {
-      console.error("Avatar güncelleme hatası:", error);
-      const errorMessage = error?.message || "Avatar güncellenemedi";
-      Alert.alert("Hata", errorMessage);
-    }
+  const openAvatarPicker = () => {
+    if (!user?.id) return;
+    openBottomSheet(
+      <AvatarSelector
+        currentAvatar={user.photoUrl}
+        name={user.displayName}
+        seed={user.id}
+        onCancel={closeBottomSheet}
+        onSelect={async (avatar) => {
+          try {
+            await updateAvatar.mutateAsync(avatar);
+            closeBottomSheet();
+          } catch (error: any) {
+            closeBottomSheet();
+            console.error("Avatar güncelleme hatası:", error);
+            Alert.alert("Hata", error?.message || "Avatar güncellenemedi");
+          }
+        }}
+      />,
+      { snapPoints: ["90%"], scrollable: true },
+    );
   };
 
   /** Admin: üyeyi gruptan çıkarır — değişiklik herkese canlı yansır. */
   const handleRemoveMember = (member: MemberRow) => {
     if (!selectedGroup?.id || !isOwner) return;
+    const name = member.displayName || member.customId;
 
-    Alert.alert(
-      "Üyeyi Çıkar",
-      `${member.displayName || member.customId} gruptan çıkarılacak. Emin misiniz?`,
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Çıkar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await removeMember.mutateAsync({
-                groupId: selectedGroup.id,
-                userId: member.id,
-              });
-            } catch (error: any) {
-              const backendMessage = error?.response?.data?.message;
-              Alert.alert(
-                "Hata",
-                (Array.isArray(backendMessage)
-                  ? backendMessage[0]
-                  : backendMessage) || "Üye çıkarılamadı",
-              );
-            }
-          },
-        },
-      ],
+    openBottomSheet(
+      <ConfirmSheet
+        icon="person-remove-outline"
+        title="Üyeyi Çıkar"
+        message={`${name}, "${selectedGroup.name}" grubundan çıkarılacak. Tekrar katılmak için yeniden davet gerekir.`}
+        confirmLabel="Çıkar"
+        destructive
+        onCancel={closeBottomSheet}
+        onConfirm={async () => {
+          try {
+            await removeMember.mutateAsync({
+              groupId: selectedGroup.id,
+              userId: member.id,
+            });
+            closeBottomSheet();
+          } catch (error: any) {
+            closeBottomSheet();
+            const backendMessage = error?.response?.data?.message;
+            Alert.alert(
+              "Hata",
+              (Array.isArray(backendMessage)
+                ? backendMessage[0]
+                : backendMessage) || "Üye çıkarılamadı",
+            );
+          }
+        }}
+      />,
+      { snapPoints: [CONFIRM_SHEET_HEIGHT] },
     );
   };
 
@@ -113,39 +126,52 @@ export default function ManageMembersScreen() {
     if (!selectedGroup?.id) return;
 
     if (isOwner && otherMemberCount > 0) {
-      Alert.alert(
-        "Ayrılamazsınız",
-        "Grup yöneticisi olarak gruptan ayrılamazsınız. Önce tüm üyeleri gruptan çıkarmalısınız.",
+      openBottomSheet(
+        <ConfirmSheet
+          icon="information-circle-outline"
+          title="Önce üyeleri çıkar"
+          message="Grup yöneticisi olarak gruptan ayrılamazsın. Önce tüm üyeleri gruptan çıkarmalısın."
+          confirmLabel="Anladım"
+          cancelLabel="Kapat"
+          onCancel={closeBottomSheet}
+          onConfirm={closeBottomSheet}
+        />,
+        { snapPoints: [CONFIRM_SHEET_HEIGHT] },
       );
       return;
     }
 
-    Alert.alert(
-      isOwner ? "Grubu Sil" : "Gruptan Ayrıl",
-      isOwner
-        ? "Grupta başka üye yok — ayrıldığınızda grup kalıcı olarak silinecek. Emin misiniz?"
-        : "Gruptan ayrılmak istediğinize emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: isOwner ? "Grubu Sil" : "Ayrıl",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await leaveGroup.mutateAsync(selectedGroup.id);
-              router.replace("/(drawer)/home");
-            } catch (error: any) {
-              const backendMessage = error?.response?.data?.message;
-              Alert.alert(
-                "Hata",
-                (Array.isArray(backendMessage)
-                  ? backendMessage[0]
-                  : backendMessage) || "Gruptan ayrılamadınız",
-              );
-            }
-          },
-        },
-      ],
+    const deletesGroup = isOwner;
+    openBottomSheet(
+      <ConfirmSheet
+        icon={deletesGroup ? "trash-outline" : "exit-outline"}
+        title={deletesGroup ? "Grubu Sil" : "Gruptan Ayrıl"}
+        message={
+          deletesGroup
+            ? `Grupta başka üye yok — ayrıldığında "${selectedGroup.name}" kalıcı olarak silinecek.`
+            : `"${selectedGroup.name}" grubundan ayrılacaksın. Geri dönmek için yeniden davet gerekir.`
+        }
+        confirmLabel={deletesGroup ? "Grubu Sil" : "Ayrıl"}
+        destructive
+        onCancel={closeBottomSheet}
+        onConfirm={async () => {
+          try {
+            await leaveGroup.mutateAsync(selectedGroup.id);
+            closeBottomSheet();
+            router.replace("/(drawer)/home");
+          } catch (error: any) {
+            closeBottomSheet();
+            const backendMessage = error?.response?.data?.message;
+            Alert.alert(
+              "Hata",
+              (Array.isArray(backendMessage)
+                ? backendMessage[0]
+                : backendMessage) || "Gruptan ayrılamadınız",
+            );
+          }
+        }}
+      />,
+      { snapPoints: [CONFIRM_SHEET_HEIGHT] },
     );
   };
 
@@ -224,10 +250,11 @@ export default function ManageMembersScreen() {
         <View style={styles.memberHeader}>
           <View style={styles.memberLeft}>
             <View style={styles.avatarContainer}>
-              <Image
-                source={getAvatarSource(item.photoUrl)}
-                style={styles.avatarImage}
-                resizeMode="cover"
+              <Avatar
+                photoUrl={item.photoUrl}
+                name={item.displayName}
+                seed={item.id}
+                size={40}
               />
               {item.isOnline && (
                 <View
@@ -269,35 +296,25 @@ export default function ManageMembersScreen() {
             </View>
           </View>
           {isCurrentUser && (
-            <TouchableOpacity
-              onPress={() => setAvatarSelectorVisible(true)}
-              style={[
-                styles.avatarEditButton,
-                { backgroundColor: colors.passiveState },
-              ]}
-            >
-              <Ionicons name="camera" size={18} color={colors.primary} />
-            </TouchableOpacity>
+            <IconButton
+              icon="color-palette-outline"
+              variant="tonal"
+              size={36}
+              iconSize={18}
+              onPress={openAvatarPicker}
+            />
           )}
           {/* Admin, diğer üyeleri çıkarabilir */}
           {isOwner && !isCurrentUser && (
-            <TouchableOpacity
-              onPress={() => handleRemoveMember(item)}
+            <IconButton
+              icon="person-remove-outline"
+              variant="ghost"
+              size={36}
+              iconSize={18}
+              color={colors.error}
               disabled={removeMember.isPending}
-              style={[
-                styles.removeButton,
-                { backgroundColor: colors.cardBackground, borderColor: colors.error },
-              ]}
-            >
-              <Ionicons name="person-remove" size={14} color={colors.error} />
-              <Typography
-                variant="caption"
-                fontWeight="semibold"
-                style={{ color: colors.error, marginLeft: 4 }}
-              >
-                Çıkar
-              </Typography>
-            </TouchableOpacity>
+              onPress={() => handleRemoveMember(item)}
+            />
           )}
         </View>
       </View>
@@ -334,7 +351,7 @@ export default function ManageMembersScreen() {
             </View>
           }
           ListFooterComponent={
-            <TouchableOpacity
+            <BouncyButton
               onPress={handleLeaveGroup}
               style={[
                 styles.leaveButton,
@@ -362,15 +379,8 @@ export default function ManageMembersScreen() {
                   ? "Grubu Sil ve Ayrıl"
                   : "Gruptan Ayrıl"}
               </Typography>
-            </TouchableOpacity>
+            </BouncyButton>
           }
-        />
-
-        <AvatarSelector
-          visible={avatarSelectorVisible}
-          currentAvatar={user?.photoUrl}
-          onSelect={handleAvatarSelect}
-          onClose={() => setAvatarSelectorVisible(false)}
         />
       </View>
     </BaseLayout>
@@ -387,13 +397,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   listContent: {
-    padding: 16,
+    padding: layout.screenPadding,
     paddingBottom: 100,
   },
   memberCard: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
     borderWidth: 1,
   },
   memberHeader: {
@@ -409,13 +419,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    marginRight: spacing.md,
   },
   onlineDot: {
     position: "absolute",
@@ -425,21 +429,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     borderWidth: 2,
-  },
-  avatarEditButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  removeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 16,
-    borderWidth: 1,
   },
   memberInfo: {
     flex: 1,

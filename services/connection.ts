@@ -1,5 +1,6 @@
 import { disconnectSocket, initSocket } from "@/api/socket";
 import { loginOneSignal, logoutOneSignal } from "@/services/onesignal";
+import { logoutAdapty } from "@/services/purchase";
 
 /**
  * KULLANICI OTURUMUNA BAĞLI CANLI SERVİSLERİN TEK GİRİŞ NOKTASI.
@@ -31,4 +32,5 @@ export const connectUserServices = ({ userId, getToken }: UserConnectionParams) 
 export const disconnectUserServices = () => {
   disconnectSocket();
   logoutOneSignal();
+  void logoutAdapty();
 };

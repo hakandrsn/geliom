@@ -71,7 +71,11 @@ interface AuthSlice {
   token: string | null;
   isAuthenticated: boolean;
   isAuthInitialized: boolean;
-  hasCompletedOnboarding: boolean; // Local state
+  /**
+   * Yalnızca cihazda (AsyncStorage) tutulur — backend'de karşılığı yok.
+   * Yeniden kurulumda veya başka cihazda onboarding tekrar gösterilir.
+   */
+  hasCompletedOnboarding: boolean;
   setUser: (user: User | null) => void;
   setFirebaseUser: (user: any | null) => void;
   setToken: (token: string | null) => void;
@@ -102,6 +106,8 @@ interface GroupSlice {
   setPresence: (userId: string, online: boolean) => void;
   /** status:update ack'i sonrası kendi statümüzü optimistic işle. */
   setOwnStatus: (userId: string, status: StatusEntry) => void;
+  /** status:clear ack'i sonrası kendi statümüzü kaldır. */
+  clearOwnStatus: (userId: string) => void;
 }
 
 // UI Slice
@@ -132,7 +138,14 @@ export const useAppStore = create<AppStore>()(
       isAuthenticated: false,
       isAuthInitialized: false,
       hasCompletedOnboarding: false, // Default to false
-      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      // Premium'un tek doğruluk kaynağı backend'deki user.isPremium'dur
+      // (Adapty webhook ile güncellenir, premium:update ile canlı gelir).
+      setUser: (user) =>
+        set({
+          user,
+          isAuthenticated: !!user,
+          isSubscribed: user ? !!user.isPremium : false,
+        }),
       setFirebaseUser: (firebaseUser) => set({ firebaseUser }),
       setToken: (token) => set({ token }),
       setIsAuthInitialized: (isAuthInitialized) => set({ isAuthInitialized }),
@@ -230,6 +243,18 @@ export const useAppStore = create<AppStore>()(
                   [userId]: status,
                 },
               },
+            },
+          };
+        }),
+
+      clearOwnStatus: (userId) =>
+        set((state) => {
+          if (!state.session) return state;
+          const { [userId]: _removed, ...rest } = state.session.group.statuses;
+          return {
+            session: {
+              ...state.session,
+              group: { ...state.session.group, statuses: rest },
             },
           };
         }),

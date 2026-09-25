@@ -1,55 +1,49 @@
-import { groupKeys } from "@/api";
-import { Button, GeliomButton } from "@/components/shared";
+import { BouncyButton } from "@/components/anim/AnimatedComponents";
+import { Button, Typography } from "@/components/shared";
 import { EmptyState } from "@/components/ui";
-import { useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "@/contexts/ThemeContext";
+import { spacing } from "@/theme/tokens";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
+import { StyleSheet } from "react-native";
 
+/**
+ * Hiç grup yokken karşılama. Tek birincil aksiyon (grup oluştur) ve
+ * küçük bir ikincil yol (davet koduyla katıl) — üç eşit buton yerine.
+ * Grup listesi uygulama öne gelince zaten tazelenir; ayrı yenile butonu yok.
+ */
 export default function EmptyStateView() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      console.error("Gruplar yenilenirken hata oluştu:", errorMessage);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  const { colors } = useTheme();
 
   return (
     <EmptyState
       fullScreen
       icon="people-outline"
-      title="Hoş Geldin!"
-      description="Henüz bir grubun seçili değil veya bir gruba üye değilsin. Arkadaşlarınla ve ailenle bağlantıda kalmak için bir grup oluştur veya katıl."
+      title="İlk grubunu kur"
+      description="Arkadaşların ve ailenle anlık durumunuzu paylaşın. Grup kur, davet kodunu gönder, gerisi kendiliğinden akar."
     >
       <Button
         variant="gradient"
         title="Yeni Grup Oluştur"
         onPress={() => router.push("/create-group")}
       />
-      <Button
-        variant="outline"
-        title="Gruba Katıl"
-        onPress={() => router.push("/join-group")}
-      />
-      <GeliomButton
-        state={isRefreshing ? "loading" : "passive"}
-        size="medium"
-        layout="full-width"
-        icon="refresh"
-        onPress={handleRefresh}
-        disabled={isRefreshing}
-      >
-        Gruplarımı Kontrol Et
-      </GeliomButton>
+      <BouncyButton onPress={() => router.push("/join-group")} style={styles.link}>
+        <Typography variant="bodySmall" color={colors.secondaryText}>
+          Davet kodun mu var?{" "}
+          <Typography variant="bodySmall" fontWeight="semibold" color={colors.primary}>
+            Gruba katıl
+          </Typography>
+        </Typography>
+      </BouncyButton>
     </EmptyState>
   );
 }
+
+const styles = StyleSheet.create({
+  link: {
+    alignSelf: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+});

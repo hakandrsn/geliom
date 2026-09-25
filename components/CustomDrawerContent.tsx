@@ -1,44 +1,35 @@
-import { useUpdateUser } from "@/api/users";
-import { Typography } from "@/components/shared";
-// Removed Context
+import { useUpdateUser, useUpdateUserAvatar } from "@/api/users";
+import { BouncyButton } from "@/components/anim/AnimatedComponents";
+import { TextInputSheet } from "@/components/bottomsheets";
+import { AvatarSelector, Typography } from "@/components/shared";
+import { Avatar, IconButton } from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
-// import { supabase } from "@/lib/supabase"; // Removed Supabase
-import { useAppStore } from "@/store/useAppStore"; // Added Store
-import { getAvatarSource } from "@/utils/avatar";
-import auth from "@react-native-firebase/auth";
+import { useAppStore } from "@/store/useAppStore";
+import { spacing } from "@/theme/tokens";
+import { fonts } from "@/theme/typography";
+import { getAppVersionLabel } from "@/utils/app-info";
 import { openPrivacyPolicy, openTermsOfUse } from "@/utils/linking";
+import auth from "@react-native-firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import {
   DrawerContentComponentProps,
   DrawerContentScrollView,
   DrawerItem,
 } from "expo-router/drawer";
-import React, { useEffect, useState } from "react";
-import {
-  Alert,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Switch,
-  TextInput,
-  TouchableOpacity,
-  View,
-  type GestureResponderEvent,
-} from "react-native";
+import React, { useEffect } from "react";
+import { Alert, StyleSheet, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
   const { colors, toggleTheme, isDark } = useTheme();
-  const { user, setUser, clearState } = useAppStore(); // Use store
-  const { closeBottomSheet } = useBottomSheet();
+  const { user, clearState } = useAppStore();
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [editNameModalVisible, setEditNameModalVisible] = useState(false);
-  const [newDisplayName, setNewDisplayName] = useState("");
   const updateUserMutation = useUpdateUser();
+  const updateAvatar = useUpdateUserAvatar();
 
   const signOut = async () => {
     try {
@@ -82,32 +73,53 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
     openTermsOfUse();
   };
 
-  const handleEditName = () => {
-    setNewDisplayName(user?.displayName || "");
-    setEditNameModalVisible(true);
+  const handleEditAvatar = () => {
+    if (!user) return;
+    props.navigation.closeDrawer();
+    openBottomSheet(
+      <AvatarSelector
+        currentAvatar={user.photoUrl}
+        name={user.displayName}
+        seed={user.id}
+        onCancel={closeBottomSheet}
+        onSelect={async (avatar) => {
+          try {
+            await updateAvatar.mutateAsync(avatar);
+            closeBottomSheet();
+          } catch {
+            closeBottomSheet();
+            Alert.alert("Hata", "Avatar güncellenemedi");
+          }
+        }}
+      />,
+      { snapPoints: ["90%"], scrollable: true },
+    );
   };
 
-  const handleSaveDisplayName = () => {
-    if (!user?.id) return;
-    if (!newDisplayName.trim()) {
-      Alert.alert("Hata", "İsim boş olamaz");
-      return;
-    }
-
-    updateUserMutation.mutate(
-      { displayName: newDisplayName.trim() },
-      {
-        onSuccess: () => {
-          setEditNameModalVisible(false);
-          Alert.alert("Başarılı", "İsminiz güncellendi");
-        },
-        onError: (error) => {
-          Alert.alert("Hata", "İsim güncellenirken bir hata oluştu");
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          console.error("Display name update error:", errorMessage);
-        },
-      },
+  const handleEditName = () => {
+    props.navigation.closeDrawer();
+    openBottomSheet(
+      <TextInputSheet
+        title="İsmini Düzenle"
+        description="Grup arkadaşların seni bu isimle görür."
+        initialValue={user?.displayName || ""}
+        placeholder="İsmin"
+        maxLength={50}
+        onCancel={closeBottomSheet}
+        onSave={async (displayName) => {
+          try {
+            await updateUserMutation.mutateAsync({ displayName });
+            closeBottomSheet();
+          } catch (error) {
+            closeBottomSheet();
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            console.error("Display name update error:", errorMessage);
+            Alert.alert("Hata", "İsim güncellenirken bir hata oluştu");
+          }
+        }}
+      />,
+      { snapPoints: ["45%"] },
     );
   };
 
@@ -123,24 +135,37 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
           },
         ]}
       >
-        <Image
-          source={getAvatarSource(user?.photoUrl)}
-          style={styles.avatar}
-          contentFit="cover"
-        />
+        {/* Avatara dokununca karakter seçici açılır */}
+        <BouncyButton onPress={handleEditAvatar} style={styles.avatar}>
+          <Avatar photoUrl={user?.photoUrl} name={user?.displayName} seed={user?.id} size={56} />
+          <View style={[styles.avatarEdit, { backgroundColor: colors.primary, borderColor: colors.background }]}>
+            <Ionicons name="brush" size={10} color="#FFFFFF" />
+          </View>
+        </BouncyButton>
         <View style={styles.profileInfo}>
           <View style={styles.nameContainer}>
             <Typography
               variant="h5"
               color={colors.text}
+              numberOfLines={1}
               style={styles.profileName}
             >
-              {user?.displayName || "Geliom User"}
+              {user?.displayName || "Geliom Kullanıcısı"}
             </Typography>
-            <TouchableOpacity onPress={handleEditName} style={styles.editIcon}>
-              <Ionicons name="pencil" size={16} color={colors.secondaryText} />
-            </TouchableOpacity>
+            <IconButton
+              icon="pencil"
+              variant="ghost"
+              size={32}
+              iconSize={16}
+              color={colors.secondaryText}
+              onPress={handleEditName}
+            />
           </View>
+          {user?.customId && (
+            <Typography variant="caption" color={colors.lightText}>
+              @{user.customId}
+            </Typography>
+          )}
         </View>
       </View>
 
@@ -235,7 +260,10 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
 
       {/* Alt Bölüm */}
       <View
-        style={[styles.bottomSection, { paddingBottom: insets.bottom + 20 }]}
+        style={[
+          styles.bottomSection,
+          { paddingBottom: insets.bottom + 20, borderTopColor: colors.stroke },
+        ]}
       >
         <DrawerItem
           label="Çıkış Yap"
@@ -249,89 +277,12 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
         />
 
         <View style={[styles.appInfo, { borderTopColor: colors.stroke }]}>
-          <Typography
-            variant="caption"
-            color={colors.secondaryText}
-            style={styles.appVersion}
-          >
-            Geliom v1.0.0
-          </Typography>
-          <Typography variant="caption" color={colors.secondaryText}>
-            👥 Birlikte daha güçlü
+          <Typography variant="caption" color={colors.lightText}>
+            Sürüm {getAppVersionLabel()}
           </Typography>
         </View>
       </View>
 
-      {/* Edit Display Name Modal */}
-      <Modal
-        visible={editNameModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditNameModalVisible(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setEditNameModalVisible(false)}
-        >
-          <Pressable
-            style={[
-              styles.modalContent,
-              { backgroundColor: colors.cardBackground },
-            ]}
-            onPress={(e: GestureResponderEvent) => e.stopPropagation()}
-          >
-            <Typography
-              variant="h4"
-              color={colors.text}
-              style={styles.modalTitle}
-            >
-              İsminizi Düzenleyin
-            </Typography>
-
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  borderColor: colors.stroke,
-                },
-              ]}
-              value={newDisplayName}
-              onChangeText={setNewDisplayName}
-              placeholder="İsminiz"
-              placeholderTextColor={colors.secondaryText}
-              autoFocus
-              maxLength={50}
-            />
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={[styles.modalButton, { backgroundColor: colors.stroke }]}
-                onPress={() => setEditNameModalVisible(false)}
-              >
-                <Typography variant="body" color={colors.text}>
-                  İptal
-                </Typography>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={handleSaveDisplayName}
-                disabled={updateUserMutation.isPending}
-              >
-                <Typography variant="body" color={colors.white}>
-                  {updateUserMutation.isPending ? "Kaydediliyor..." : "Kaydet"}
-                </Typography>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 };
@@ -349,12 +300,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
+    marginRight: spacing.lg,
+  },
+  avatarEdit: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
     alignItems: "center",
-    marginRight: 16,
+    justifyContent: "center",
   },
   profileInfo: {
     flex: 1,
@@ -365,16 +322,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileName: {
-    marginBottom: 4,
-  },
-  editIcon: {
-    padding: 4,
+    flexShrink: 1,
   },
   scrollContent: {
     paddingTop: 0,
   },
   drawerLabel: {
-    fontFamily: "Comfortaa-Medium",
+    fontFamily: fonts.medium,
     fontSize: 16,
     marginLeft: 4,
   },
@@ -400,50 +354,11 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
   },
   appInfo: {
     paddingHorizontal: 20,
     paddingTop: 16,
     borderTopWidth: 1,
-    alignItems: "center",
-  },
-  appVersion: {
-    marginBottom: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    borderRadius: 20,
-    padding: 24,
-  },
-  modalTitle: {
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  textInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    fontFamily: "Comfortaa-Medium",
-    marginBottom: 20,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
     alignItems: "center",
   },
 });

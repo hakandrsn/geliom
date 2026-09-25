@@ -1,6 +1,7 @@
 import { useAppStore } from "@/store/useAppStore";
 import { useMemo } from "react";
-import { DEFAULT_MOODS } from "./constants";
+import { humanizeKey } from "@/utils/status-display";
+import { DEFAULT_MOODS, LEGACY_MOODS } from "./constants";
 
 export interface DashboardMember {
   userId: string;
@@ -30,15 +31,16 @@ export const useGroupDashboardData = (groupId: string) => {
   const mappedMembers: DashboardMember[] = useMemo(() => {
     if (!hasSession || !session) return [];
 
-    const { members, statuses, customMoods } = session.group;
+    const { members, statuses, moodOptions } = session.group;
     const online = new Set(session.onlineUserIds);
     // StatusEntry.mood bir key tutar ("happy" gibi) — görünen metin/emoji mood tanımından çözülür
-    const moodDefs = [...(customMoods ?? []), ...DEFAULT_MOODS];
+    // Grubun güncel listesi önce; silinmiş varsayılan/eski kayıtlar yine çözülsün
+    const moodDefs = [...(moodOptions ?? []), ...DEFAULT_MOODS, ...LEGACY_MOODS];
 
     return Object.entries(members).map(([userId, member]) => {
       const status = statuses[userId];
       const moodDef = status?.mood
-        ? moodDefs.find((m) => m.mood === status.mood)
+        ? moodDefs.find((m) => m.key === status.mood)
         : undefined;
 
       return {
@@ -47,10 +49,10 @@ export const useGroupDashboardData = (groupId: string) => {
         photoUrl: member.photoUrl ?? undefined,
         customId: member.customId,
 
-        statusText: status?.text,
+        statusText: status?.text ?? undefined,
         statusEmoji: status?.emoji ?? undefined,
         moodEmoji: moodDef?.emoji ?? status?.emoji ?? undefined,
-        moodText: moodDef?.text ?? status?.mood ?? undefined,
+        moodText: moodDef?.text ?? humanizeKey(status?.mood),
         updatedAt: status?.updatedAt,
 
         role: member.role,
@@ -66,9 +68,3 @@ export const useGroupDashboardData = (groupId: string) => {
     error: null,
   };
 };
-
-/**
- * Session yaşam döngüsü home ekranında `useGroupSession` ile yönetilir;
- * burada ikinci bir open/close yapılmaz. Store subscription canlı akışı sağlar.
- */
-export const useDashboardRealtime = (_groupId: string) => {};

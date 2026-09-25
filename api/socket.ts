@@ -1,5 +1,6 @@
 import { appConfig } from "@/config/app.config";
 import { useAppStore } from "@/store/useAppStore";
+import NetInfo from "@react-native-community/netinfo";
 import { AppState, type NativeEventSubscription } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { groupKeys } from "./keys";
@@ -34,6 +35,7 @@ let activeGroupId: string | null = null;
  */
 let sessionRefCount = 0;
 let appStateSubscription: NativeEventSubscription | null = null;
+let netInfoUnsubscribe: (() => void) | null = null;
 
 const emitSessionOpen = (groupId: string) => {
   if (!socket?.connected) return;
@@ -76,9 +78,11 @@ export const initSocket = (getToken: () => Promise<string>) => {
     transports: ["polling", "websocket"],
     autoConnect: true,
     reconnection: true,
-    reconnectionAttempts: 10,
+    // Sonlu deneme sayısı ~50 sn çevrimdışı kalan kullanıcıyı uygulama
+    // yeniden açılana kadar kalıcı kopuk bırakıyordu.
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
+    reconnectionDelayMax: 10000,
   });
 
   socket.on("connect", () => {
@@ -147,8 +151,22 @@ export const initSocket = (getToken: () => Promise<string>) => {
         useAppStore.getState().clearSession();
         if (activeGroupId) emitSessionOpen(activeGroupId);
         break;
+      case "paused":
+        // Grup duraklatıldı: son görüntü kalır, yeniden açınca salt-okunur
+        // anlık görüntü gelir (canlı akış yok)
+        if (activeGroupId) emitSessionOpen(activeGroupId);
+        break;
     }
   });
+
+  // Grubun duraklatılma durumu değişti (sahibin aboneliği bitti/yenilendi)
+  socket.on(
+    "group:plan-changed",
+    ({ groupId }: { groupId: string; isPaused: boolean }) => {
+      if (activeGroupId === groupId) emitSessionOpen(groupId);
+      queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+    },
+  );
 
   // Kendi premium durumun değiştiğinde (session gerekmez)
   socket.on("premium:update", ({ isPremium }: PremiumUpdatePayload) => {
@@ -167,8 +185,22 @@ export const initSocket = (getToken: () => Promise<string>) => {
           socket.emit("session:close", {}, () => {});
         }
       } else if (state === "active") {
-        if (activeGroupId) emitSessionOpen(activeGroupId);
+        if (!socket.connected) {
+          // Bağlantı koptuysa hemen dene; connect event'i session'ı yeniden açar
+          socket.connect();
+        } else if (activeGroupId) {
+          emitSessionOpen(activeGroupId);
+        }
         queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+      }
+    });
+  }
+
+  // Ağ geri geldiğinde socket.io'nun backoff süresini beklemeden bağlan
+  if (!netInfoUnsubscribe) {
+    netInfoUnsubscribe = NetInfo.addEventListener((netState) => {
+      if (netState.isConnected && socket && !socket.connected) {
+        socket.connect();
       }
     });
   }
@@ -217,11 +249,26 @@ export const updateStatus = (input: StatusUpdateInput): Promise<StatusEntry> =>
     );
   });
 
+/** Durumu tamamen kaldır — sunucu statuses.{uid} kaydını siler ve yayınlar. */
+export const clearStatus = (): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (!socket?.connected) {
+      reject(new Error("Socket bağlantısı yok"));
+      return;
+    }
+    socket.emit("status:clear", {}, (res: SocketAck) => {
+      if (res.ok) resolve();
+      else reject(new Error(res.error));
+    });
+  });
+
 export const disconnectSocket = () => {
   activeGroupId = null;
   sessionRefCount = 0;
   appStateSubscription?.remove();
   appStateSubscription = null;
+  netInfoUnsubscribe?.();
+  netInfoUnsubscribe = null;
   if (socket) {
     socket.disconnect();
     socket = null;

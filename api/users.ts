@@ -50,7 +50,8 @@ export const useUpdateUser = () => {
   return useMutation({
     mutationFn: async (updates: {
       displayName?: string;
-      photoUrl?: string;
+      photoUrl?: string | null;
+      pushEnabled?: boolean;
     }): Promise<User> => {
       const response = await apiClient.patch("/users/me", updates);
       return response.data;
@@ -66,8 +67,9 @@ export const useUpdateUserAvatar = () => {
   const updateUser = useUpdateUser();
   return {
     ...updateUser,
+    /** null: seçimi kaldır (otomatik karaktere döner) */
     mutateAsync: async (avatarUrl: string | null) => {
-      return updateUser.mutateAsync({ photoUrl: avatarUrl || undefined });
+      return updateUser.mutateAsync({ photoUrl: avatarUrl });
     },
   };
 };

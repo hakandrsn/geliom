@@ -1,18 +1,15 @@
 import {
-  useCreateCustomStatus,
-  useCreateMood,
   useGroupJoinRequests,
   useGroupSession,
-  useMuteGroup,
+  resolveNotificationPrefs,
   useUpdateGroup,
 } from "@/api";
-import {
-  ConfirmSheet,
-  GroupNameBottomSheet,
-  StatusMoodBottomSheet,
-} from "@/components/bottomsheets";
+import { fonts } from '@/theme/typography';
+import { GroupNameBottomSheet } from "@/components/bottomsheets";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
 import { ListItem } from "@/components/ui";
+import { PLAN_LIMITS, groupCapacity } from "@/constants/premium";
+import { usePremiumGate } from "@/hooks/usePremiumGate";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAppStore } from "@/store/useAppStore";
@@ -39,21 +36,41 @@ export default function GroupManagementScreen() {
 
   const updateGroup = useUpdateGroup();
 
-  const createMood = useCreateMood();
-  const createCustomStatus = useCreateCustomStatus();
-  const muteGroup = useMuteGroup();
 
   // Ekran açıkken session'ı canlı tut (mute durumu session'dan okunur)
   useGroupSession(selectedGroup?.id);
 
   const isOwner = selectedGroup?.ownerId === user?.id;
+  const { isPremium, openPaywall } = usePremiumGate();
+  const liveGroup =
+    session && session.group.id === selectedGroup?.id ? session.group : undefined;
+  const memberCount = liveGroup
+    ? Object.keys(liveGroup.members).length
+    : (selectedGroup?.memberCount ?? 0);
+  const capacity = groupCapacity(liveGroup?.ownerIsPremium ?? isPremium);
 
   // Kendi üyeliğimin mute durumu aktif session'dan okunur
   const myMembership =
     session && user && session.group.id === selectedGroup?.id
       ? session.group.members[user.id]
       : undefined;
-  const isGroupMuted = myMembership?.isMuted ?? false;
+  const notificationPrefs = resolveNotificationPrefs(myMembership);
+  const notificationSummary = !notificationPrefs.enabled
+    ? "Kapalı"
+    : [
+        notificationPrefs.statusUpdates && notificationPrefs.moodUpdates
+          ? "Durum ve ruh hali"
+          : notificationPrefs.statusUpdates
+            ? "Sadece durum"
+            : notificationPrefs.moodUpdates
+              ? "Sadece ruh hali"
+              : "Tür seçilmedi",
+        notificationPrefs.mutedUserIds.length > 0
+          ? `${notificationPrefs.mutedUserIds.length} kişi sessizde`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
   // Bekleyen istekler (sadece admin görebilir)
   const { data: joinRequests = [] } = useGroupJoinRequests(
@@ -145,102 +162,6 @@ export default function GroupManagementScreen() {
         onCancel={closeBottomSheet}
       />,
       { snapPoints: ["35%"] },
-    );
-  };
-
-  // Custom status'ler bu gruba özel, lokal tutulur (bkz. useCustomStatuses)
-  const handleCreateStatus = () => {
-    if (!user?.id) return;
-    openBottomSheet(
-      <StatusMoodBottomSheet
-        type="status"
-        onSave={async (text, emoji) => {
-          try {
-            await createCustomStatus.mutateAsync({
-              userId: user.id,
-              groupId: selectedGroup.id,
-              text,
-              emoji: emoji || undefined,
-            });
-            closeBottomSheet();
-            Alert.alert("Başarılı", "Özel durum eklendi");
-          } catch (e: any) {
-            Alert.alert("Hata", e.message || "Durum eklenemedi");
-          }
-        }}
-        onCancel={closeBottomSheet}
-      />,
-      { snapPoints: ["55%"] },
-    );
-  };
-
-  // Alert.prompt iOS-only olduğu için bottom sheet kullanılır (Android desteği)
-  const handleCreateMood = () => {
-    openBottomSheet(
-      <StatusMoodBottomSheet
-        type="mood"
-        onSave={async (text, emoji) => {
-          createMood.mutate(
-            {
-              groupId: selectedGroup.id,
-              data: {
-                text,
-                emoji: emoji || "✨",
-                mood: text.toLowerCase().replace(/\s/g, "_"),
-              },
-            },
-            {
-              onSuccess: () => Alert.alert("Başarılı", "Mood eklendi"),
-              onError: (e: any) => {
-                const backendMessage = e?.response?.data?.message;
-                Alert.alert(
-                  "Hata",
-                  (Array.isArray(backendMessage)
-                    ? backendMessage[0]
-                    : backendMessage) ||
-                    e.message ||
-                    "Mood eklenemedi",
-                );
-              },
-            },
-          );
-          closeBottomSheet();
-        }}
-        onCancel={closeBottomSheet}
-      />,
-      { snapPoints: ["50%"] },
-    );
-  };
-
-  // Alert yerine ortak onay sheet'i — grup adı bağlam olarak gösterilir
-  const handleMuteToggle = () => {
-    const next = !isGroupMuted;
-    openBottomSheet(
-      <ConfirmSheet
-        icon={next ? "notifications-off-outline" : "notifications-outline"}
-        title={next ? "Grubu Sessize Al" : "Sessize Almayı Kaldır"}
-        message={
-          next
-            ? `"${selectedGroup.name}" grubundan gelen bildirimler kapatılacak. Devam etmek istiyor musun?`
-            : `"${selectedGroup.name}" grubundan gelen bildirimler tekrar açılacak. Devam etmek istiyor musun?`
-        }
-        confirmLabel={next ? "Sessize Al" : "Bildirimleri Aç"}
-        destructive={next}
-        onConfirm={async () => {
-          try {
-            await muteGroup.mutateAsync({
-              groupId: selectedGroup.id,
-              isMuted: next,
-            });
-            closeBottomSheet();
-          } catch (e: any) {
-            closeBottomSheet();
-            Alert.alert("Hata", e.message || "İşlem başarısız oldu");
-          }
-        }}
-        onCancel={closeBottomSheet}
-      />,
-      { snapPoints: ["40%"] },
     );
   };
 
@@ -351,22 +272,17 @@ export default function GroupManagementScreen() {
               onPress={handleUpdateGroupName}
             />
 
-            {/* Özel Durum Ekle */}
+            {/* Durum ve ruh hali listesi — ekle, sil, sürükleyerek sırala */}
             <ListItem
-              icon="add-circle-outline"
-              title="Özel Durum Ekle"
-              subtitle="Gruba özel durum oluştur"
-              premium
-              onPress={handleCreateStatus}
-            />
-
-            {/* Özel Mood Ekle */}
-            <ListItem
-              icon="happy-outline"
-              title="Özel Mood Ekle"
-              subtitle="Gruba özel mood oluştur"
-              premium
-              onPress={handleCreateMood}
+              icon="list-outline"
+              title="Durum ve Ruh Halleri"
+              subtitle={
+                liveGroup
+                  ? `${liveGroup.statusOptions.length} durum · ${liveGroup.moodOptions.length} ruh hali`
+                  : "Grubun seçeneklerini düzenle"
+              }
+              premium={!isPremium}
+              onPress={() => router.push("/(drawer)/(group)/reorder-status-mood")}
             />
           </View>
         )}
@@ -381,25 +297,18 @@ export default function GroupManagementScreen() {
             Kişisel Ayarlar
           </Typography>
 
-          {/* Sıralama */}
-          <ListItem
-            icon="swap-vertical-outline"
-            title="Sıralama"
-            subtitle="Status ve mood sırasını düzenle"
-            onPress={() => router.push("/(drawer)/(group)/reorder-status-mood")}
-          />
-
-          {/* Grubu Sessize Al — herkes kendi bildirimini yönetir */}
+          {/* Grup Bildirimleri — herkes kendi tercihlerini yönetir */}
           <ListItem
             icon={
-              isGroupMuted
+              notificationPrefs.enabled
                 ? "notifications-outline"
                 : "notifications-off-outline"
             }
-            iconColor={colors.error}
-            title={isGroupMuted ? "Sessize Almayı Kaldır" : "Grubu Sessize Al"}
-            subtitle={isGroupMuted ? "Bildirimleri aç" : "Bildirimleri kapat"}
-            onPress={handleMuteToggle}
+            title="Grup Bildirimleri"
+            subtitle={notificationSummary}
+            onPress={() =>
+              router.push("/(drawer)/(group)/group-notifications")
+            }
           />
         </View>
 
@@ -417,9 +326,23 @@ export default function GroupManagementScreen() {
             <ListItem
               icon="people-outline"
               title="Üyeleri Yönet"
-              subtitle="Üyeleri görüntüle ve düzenle"
+              subtitle={`${memberCount}/${capacity} üye`}
               onPress={() => router.push("/(drawer)/(group)/manage-members")}
             />
+            {/* Ücretsiz grupta kapasite 5 — sahibi Premium ile 20'ye çıkarabilir */}
+            {!isPremium && (
+              <ListItem
+                icon="rocket-outline"
+                title={`Grubu ${PLAN_LIMITS.PREMIUM.MAX_GROUP_MEMBERS} kişiye çıkar`}
+                subtitle={
+                  memberCount >= capacity
+                    ? "Grup dolu — yeni üye katılamıyor"
+                    : `Şu an en fazla ${capacity} kişi katılabilir`
+                }
+                premium
+                onPress={() => openPaywall()}
+              />
+            )}
           </View>
         )}
       </ScrollView>
@@ -482,7 +405,7 @@ const styles = StyleSheet.create({
   },
   inviteCode: {
     letterSpacing: 2,
-    fontFamily: "Comfortaa-Bold",
+    fontFamily: fonts.bold,
   },
   actionsContainer: {
     gap: 12,

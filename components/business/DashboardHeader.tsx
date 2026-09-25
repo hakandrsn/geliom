@@ -13,23 +13,31 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 // Components
-import CurrentUserHeader from "@/components/dashboard/CurrentUserHeader";
-import MoodSelector from "@/components/dashboard/MoodSelector";
-import StatusSelector from "@/components/dashboard/StatusSelector";
+import type { PickerTab } from "@/components/dashboard/PickerDropdown";
+import PausedBanner from "@/components/dashboard/PausedBanner";
+import StatusComposer from "@/components/dashboard/StatusComposer";
 
 interface DashboardHeaderProps {
   myMemberData?: DashboardMember;
   group: GroupSummary;
   otherMemberLength: number;
+  /** Açık dropdown sekmesi — DashboardView yönetir */
+  activePickerTab: PickerTab | null;
+  onTogglePicker: (tab: PickerTab, anchorBottomY: number) => void;
 }
 
 export default function DashboardHeader({
   myMemberData,
   group,
   otherMemberLength,
+  activePickerTab,
+  onTogglePicker,
 }: DashboardHeaderProps) {
   const { colors } = useTheme();
   const user = useAppStore((state) => state.user);
+  const isPaused = useAppStore(
+    (state) => state.session?.group.id === group.id && !!state.session.group.isPaused,
+  );
 
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,79 +71,51 @@ export default function DashboardHeader({
 
   return (
     <View style={styles.headerContainer}>
-      {/* 1. Benim Kartım — en üstte */}
+      {/* 1. Composer: durumum + seçiciler tek kartta */}
       <View style={[styles.paddedSection, styles.selfSection]}>
-        <CurrentUserHeader member={selfMember} />
+        <StatusComposer
+          member={selfMember}
+          activeTab={activePickerTab}
+          onToggleTab={onTogglePicker}
+          disabled={isPaused}
+        />
       </View>
 
-      {/* 2. Grup adı + davet kodunu kopyala */}
-      <View style={styles.groupRow}>
-        <View style={styles.titleContainer}>
-          <Typography
-            variant="h4"
-            fontWeight="bold"
-            color={colors.text}
-            numberOfLines={1}
-          >
-            {group.name}
-          </Typography>
+      {/* 2. İnce bilgi satırı — grup adı zaten header'da; burada üye sayısı ve kod */}
+      <View style={styles.metaRow}>
+        <View style={styles.metaLeft}>
+          <Ionicons name="people-outline" size={14} color={colors.lightText} />
           <Typography variant="caption" color={colors.secondaryText}>
-            {otherMemberLength + 1} Üye
+            {otherMemberLength + 1} üye
           </Typography>
         </View>
 
-        <BouncyButton
-          onPress={handleCopyInviteCode}
-          style={[
-            styles.copyButton,
-            {
-              backgroundColor: copied
-                ? colors.success + "22"
-                : colors.passiveState,
-            },
-          ]}
-        >
-          <Ionicons
-            name={copied ? "checkmark" : "copy-outline"}
-            size={15}
-            color={copied ? colors.success : colors.primary}
-          />
+        <BouncyButton onPress={handleCopyInviteCode} style={styles.codeButton}>
+          <Typography variant="caption" color={colors.lightText}>
+            Davet kodu{" "}
+          </Typography>
           <Typography
             variant="caption"
             fontWeight="semibold"
-            color={copied ? colors.success : colors.primary}
+            color={copied ? colors.success : colors.text}
+            style={styles.code}
           >
-            {copied ? "Kopyalandı" : "Kopyala"}
+            {group.inviteCode}
           </Typography>
+          <Ionicons
+            name={copied ? "checkmark" : "copy-outline"}
+            size={13}
+            color={copied ? colors.success : colors.lightText}
+          />
         </BouncyButton>
       </View>
 
-      {/* 3. Status & Mood Selectors */}
-      <View style={styles.selectorsContainer}>
-        <View style={styles.paddedSection}>
-          <Typography
-            variant="label"
-            fontWeight="semibold"
-            color={colors.secondaryText}
-            style={styles.selectorLabel}
-          >
-            Aklında hangisi var?
-          </Typography>
+      {/* 3. Duraklatılmış grup: üye listesinin hemen üstünde, kırmızı */}
+      {isPaused && (
+        <View style={[styles.paddedSection, styles.pausedSection]}>
+          <PausedBanner isOwner={group.ownerId === user?.id} />
         </View>
-        <StatusSelector groupId={group.id} currentStatusId={undefined} />
-
-        <View style={styles.paddedSection}>
-          <Typography
-            variant="label"
-            fontWeight="semibold"
-            color={colors.secondaryText}
-            style={[styles.selectorLabel, styles.selectorLabelSecond]}
-          >
-            Neler hissediyorsun?
-          </Typography>
-        </View>
-        <MoodSelector groupId={group.id} currentMoodId={undefined} />
-      </View>
+      )}
 
       {/* 4. Üye Listesi Başlığı */}
       <View style={styles.paddedSection}>
@@ -156,36 +136,33 @@ const styles = StyleSheet.create({
   selfSection: {
     paddingTop: spacing.sm,
   },
-  groupRow: {
+  metaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: layout.screenPadding,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
   },
-  titleContainer: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  copyButton: {
+  metaLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs + 2,
-    height: 34,
-    paddingHorizontal: spacing.md,
+  },
+  codeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    minHeight: layout.touchTarget - spacing.md,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
+  },
+  code: {
+    letterSpacing: 1.5,
   },
   paddedSection: {
     paddingHorizontal: layout.screenPadding,
   },
-  selectorsContainer: {
-    marginTop: spacing.xl,
-  },
-  selectorLabel: {
-    letterSpacing: 0.2,
-    marginBottom: spacing.sm,
-  },
-  selectorLabelSecond: {
+  pausedSection: {
     marginTop: spacing.lg,
   },
   sectionTitle: {

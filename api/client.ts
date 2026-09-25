@@ -17,8 +17,9 @@ apiClient.interceptors.request.use(
     try {
       const currentUser = auth().currentUser;
       if (currentUser) {
-        // Force refresh token as requested to avoid expiry issues
-        const token = await currentUser.getIdToken(true);
+        // Zorla yenileme YOK: SDK süresi dolan token'ı kendisi yeniler.
+        // getIdToken(true) her istekte Firebase'e ek round-trip demekti.
+        const token = await currentUser.getIdToken();
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {

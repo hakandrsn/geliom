@@ -14,48 +14,49 @@ export {
 
 // Export Group Related Hooks
 export {
-  applySavedOrder,
   useApproveJoinRequest,
   // Core
   useCreateGroup,
   useCreateJoinRequest,
-  // Status & Moods
-  useCreateCustomStatus,
-  useCreateMood,
-  useCustomStatuses,
-  useDefaultStatuses,
-  useDeleteCustomStatus,
-  useDeleteMood,
   // Join Requests
   useGroupJoinRequests,
   // Session (Socket)
   useGroupSession,
   useJoinGroup,
   useLeaveGroup,
-  useMoodOrder,
-  useMoods,
   // Settings
   useMuteGroup,
-  useStatusOrder,
+  useUpdateGroupNotifications,
+  resolveNotificationPrefs,
+  DEFAULT_NOTIFICATION_PREFS,
   useRejectJoinRequest,
   useRemoveGroupMember,
   useRespondToJoinRequest,
   useSendJoinRequest,
   useSetUserStatus,
+  useGroupOptions,
+  useUpdateGroupOptions,
+  useClearUserStatus,
   useUpdateGroup,
   useUserGroups,
-  type MoodOption,
 } from "./groups";
+
+// Export Support
+export {
+  SUPPORT_CATEGORIES,
+  useSendSupportMessage,
+  type SupportCategory,
+} from "./support";
 
 // Export Dashboard Helpers
 export {
-  useDashboardRealtime,
   useGroupDashboardData,
   type DashboardMember,
 } from "./dashboard";
 
 // Export Socket API
 export {
+  clearStatus,
   closeSession,
   disconnectSocket,
   getSocket,

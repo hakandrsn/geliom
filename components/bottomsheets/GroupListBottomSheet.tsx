@@ -1,363 +1,249 @@
+import type { GroupSummary } from "@/api/types";
+import { BouncyButton } from "@/components/anim/AnimatedComponents";
+import { GeliomButton, Typography } from "@/components/shared";
+import { Avatar, EmptyState, Skeleton } from "@/components/ui";
+import { useBottomSheet } from "@/contexts/BottomSheetContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useAppStore } from "@/store/useAppStore";
+import { layout, radius, spacing } from "@/theme/tokens";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-  type GestureResponderEvent,
-} from "react-native";
-import { useBottomSheet } from "../../contexts/BottomSheetContext";
-// import { useGroupContext } from '../../contexts/GroupContext';
-import { useAppStore } from "@/store/useAppStore";
-import { useTheme } from "../../contexts/ThemeContext";
-import { BouncyButton } from "../anim/AnimatedComponents";
-import { Typography } from "../shared";
+import React, { useCallback } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 
+/**
+ * Header'daki grup adına dokununca açılan grup seçici.
+ * Satır: tonlu baş harf rozeti + ad + "5 üye · Yönetici" + (sessizdeyse) zil-kapalı;
+ * seçili satır tonlu zeminle ve onay işaretiyle vurgulanır.
+ */
 function GroupListBottomSheetComponent() {
-  // Context'ten gerçek verileri al
-  // const { selectedGroup, setSelectedGroup, groups, isLoading } = useGroupContext();
   const groups = useAppStore((state) => state.groups);
   const isLoading = useAppStore((state) => state.isLoading);
   const currentGroupId = useAppStore((state) => state.currentGroupId);
   const setCurrentGroup = useAppStore((state) => state.setCurrentGroup);
 
-  const selectedGroup = groups.find((g) => g.id === currentGroupId);
-
   const { closeBottomSheet } = useBottomSheet();
   const { colors } = useTheme();
   const router = useRouter();
-  const [actionModalVisible, setActionModalVisible] = useState(false);
 
   const handleGroupSelect = useCallback(
-    async (group: (typeof groups)[0]) => {
+    (group: GroupSummary) => {
       setCurrentGroup(group.id);
       closeBottomSheet();
     },
     [setCurrentGroup, closeBottomSheet],
   );
 
-  const handleCreateGroup = useCallback(() => {
-    setActionModalVisible(false);
-    closeBottomSheet();
-    // Bottom sheet tamamen kapandıktan sonra navigate et
-    setTimeout(() => {
-      router.push("/create-group");
-    }, 300);
-  }, [closeBottomSheet, router]);
+  // Sheet tamamen kapandıktan sonra navigate et (animasyon çakışmasın)
+  const navigateAfterClose = useCallback(
+    (path: "/create-group" | "/join-group") => {
+      closeBottomSheet();
+      setTimeout(() => router.push(path), 300);
+    },
+    [closeBottomSheet, router],
+  );
 
-  const handleJoinGroup = useCallback(() => {
-    setActionModalVisible(false);
-    closeBottomSheet();
-    // Bottom sheet tamamen kapandıktan sonra navigate et
-    setTimeout(() => {
-      router.push("/join-group");
-    }, 300);
-  }, [closeBottomSheet, router]);
+  const renderRow = (group: GroupSummary, index: number) => {
+    const isSelected = group.id === currentGroupId;
+    const muted = group.notifications && !group.notifications.enabled;
+    const meta = [
+      `${group.memberCount} üye`,
+      group.role === "ADMIN" ? "Yönetici" : "Üye",
+    ].join(" · ");
+    const paused = !!group.isPaused;
 
-  // Gruplar yüklenirken gösterilecek içerik
-  // NOT: Sheet yüzey rengi BottomSheetContext'ten gelir (sheetBackground) —
-  // içerikte ayrıca zemin boyama, yarı saydam rgba'lar sheet'i "bg'siz" gösteriyordu.
-  if (isLoading) {
     return (
-      <View
+      <BouncyButton
+        key={group.id}
+        onPress={() => handleGroupSelect(group)}
+        scaleTo={0.995}
         style={[
-          styles.container,
-          { justifyContent: "center", alignItems: "center" },
+          styles.row,
+          isSelected && { backgroundColor: colors.passiveState },
+          !isSelected &&
+            index < groups.length - 1 && {
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: colors.stroke,
+            },
         ]}
       >
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Typography
-          variant="caption"
-          color={colors.secondaryText}
-          style={{ marginTop: 12 }}
-        >
-          Gruplar yükleniyor...
-        </Typography>
-      </View>
+        {/* Grup rozeti: ada göre sabit ton, baş harfler */}
+        <Avatar name={group.name} seed={group.id} size={44} fallback="initials" />
+
+        <View style={styles.rowText}>
+          <Typography
+            variant="body"
+            fontWeight="semibold"
+            color={isSelected ? colors.primary : colors.text}
+            numberOfLines={1}
+          >
+            {group.name}
+          </Typography>
+          <View style={styles.metaRow}>
+            <Typography variant="caption" color={colors.secondaryText} numberOfLines={1}>
+              {meta}
+            </Typography>
+            {muted && (
+              <Ionicons name="notifications-off-outline" size={12} color={colors.lightText} />
+            )}
+            {paused && (
+              <Typography variant="caption" fontWeight="semibold" color={colors.error}>
+                · Duraklatıldı
+              </Typography>
+            )}
+          </View>
+        </View>
+
+        {isSelected ? (
+          <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={colors.lightText} />
+        )}
+      </BouncyButton>
     );
-  }
+  };
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { borderBottomColor: colors.stroke }]}>
-        <Typography variant="h4" color={colors.text} style={styles.headerTitle}>
+      <View style={styles.header}>
+        <Typography variant="h5" color={colors.text}>
           Gruplarım
         </Typography>
-        <TouchableOpacity
-          onPress={() => setActionModalVisible(true)}
-          style={[styles.addButton, { backgroundColor: colors.primary }]}
-        >
-          <Ionicons name="add" size={24} color={colors.white} />
-        </TouchableOpacity>
+        {groups.length > 0 && (
+          <View style={[styles.countBadge, { backgroundColor: colors.passiveState }]}>
+            <Typography variant="caption" fontWeight="semibold" color={colors.primary}>
+              {groups.length}
+            </Typography>
+          </View>
+        )}
       </View>
 
       <ScrollView
-        style={styles.scrollView}
+        style={styles.scroll}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        bounces={groups.length > 4}
       >
-        {groups.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons
-              name="people-outline"
-              size={48}
-              color={colors.secondaryText}
-            />
-            <Typography
-              variant="body"
-              color={colors.secondaryText}
-              style={styles.emptyText}
-            >
-              Henüz bir grupta değilsin.
-            </Typography>
+        {isLoading ? (
+          <View style={styles.skeletons}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={styles.skeletonRow}>
+                <Skeleton width={44} height={44} radius={radius.full} />
+                <View style={styles.skeletonText}>
+                  <Skeleton width={140} height={14} radius={radius.sm} />
+                  <Skeleton width={90} height={10} radius={radius.sm} />
+                </View>
+              </View>
+            ))}
           </View>
+        ) : groups.length === 0 ? (
+          <EmptyState
+            icon="people-outline"
+            title="Henüz grubun yok"
+            description="Bir grup kur ya da davet koduyla katıl; arkadaşların burada görünecek."
+            style={styles.empty}
+          />
         ) : (
-          <View style={styles.groupsList}>
-            {groups.map((group) => {
-              const isSelected = selectedGroup?.id === group.id;
-              return (
-                <BouncyButton
-                  key={group.id}
-                  onPress={() => handleGroupSelect(group)}
-                  style={[
-                    styles.groupItem,
-                    {
-                      backgroundColor: isSelected
-                        ? colors.passiveState
-                        : colors.cardBackground,
-                      borderColor: isSelected ? colors.primary : colors.stroke,
-                    },
-                  ]}
-                >
-                  <View style={styles.groupItemContent}>
-                    <View
-                      style={[
-                        styles.iconBadge,
-                        {
-                          backgroundColor: isSelected
-                            ? colors.primary
-                            : colors.cardBackground,
-                          borderColor: colors.stroke,
-                          borderWidth: isSelected ? 0 : 1,
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="people"
-                        size={20}
-                        color={isSelected ? "white" : colors.secondaryText}
-                      />
-                    </View>
-                    <View style={styles.groupInfo}>
-                      <Typography
-                        variant="h5"
-                        color={colors.text}
-                        style={styles.groupName}
-                        numberOfLines={1}
-                      >
-                        {group.name}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color={colors.secondaryText}
-                        style={styles.groupType}
-                      >
-                        {group.memberCount
-                          ? `${group.memberCount} Üye`
-                          : "Grup"}{" "}
-                        • {group.role === "ADMIN" ? "Yönetici" : "Üye"}
-                      </Typography>
-                    </View>
-                    {isSelected && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color={colors.primary}
-                      />
-                    )}
-                  </View>
-                </BouncyButton>
-              );
-            })}
-          </View>
+          groups.map(renderRow)
         )}
-
-        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Action Modal */}
-      <Modal
-        visible={actionModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActionModalVisible(false)}
-        statusBarTranslucent
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setActionModalVisible(false)}
+      <View style={[styles.actions, { borderTopColor: colors.stroke }]}>
+        <GeliomButton
+          state="active"
+          size="medium"
+          layout="icon-left"
+          icon="add"
+          onPress={() => navigateAfterClose("/create-group")}
+          style={styles.actionButton}
         >
-          <Pressable
-            style={[
-              styles.modalContent,
-              { backgroundColor: colors.cardBackground },
-            ]}
-            onPress={(e: GestureResponderEvent) => e.stopPropagation()}
-          >
-            <Pressable
-              style={[styles.modalOption, { borderBottomColor: colors.stroke }]}
-              onPress={handleCreateGroup}
-            >
-              <Ionicons name="add-circle" size={24} color={colors.primary} />
-              <Typography
-                variant="h5"
-                color={colors.text}
-                style={{ marginLeft: 12 }}
-              >
-                Yeni Grup Oluştur
-              </Typography>
-            </Pressable>
-
-            <Pressable style={styles.modalOption} onPress={handleJoinGroup}>
-              <Ionicons name="person-add" size={24} color={colors.success} />
-              <Typography
-                variant="h5"
-                color={colors.text}
-                style={{ marginLeft: 12 }}
-              >
-                Gruba Katıl
-              </Typography>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          Yeni Grup
+        </GeliomButton>
+        <GeliomButton
+          state="passive"
+          size="medium"
+          layout="icon-left"
+          icon="key-outline"
+          onPress={() => navigateAfterClose("/join-group")}
+          style={styles.actionButton}
+        >
+          Koda Katıl
+        </GeliomButton>
+      </View>
     </View>
   );
 }
 
-// React.memo kaldırıldı - her açılışta yeni key ile render ediliyor
-// Bu sayede context güncellemeleri her zaman yansır
+// React.memo yok: her açılışta yeni key ile render edilir, store güncellemeleri yansır
 export default GroupListBottomSheetComponent;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: 10,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
   },
-  headerTitle: {
-    fontWeight: "bold",
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  countBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    alignItems: "center",
     justifyContent: "center",
-    alignItems: "center",
   },
-  scrollView: {
+  scroll: {
     flex: 1,
   },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+  list: {
+    paddingBottom: spacing.md,
   },
-  emptyText: {
-    marginTop: 16,
-    textAlign: "center",
-  },
-  groupsList: {
-    padding: 16,
-    gap: 12,
-  },
-  groupItem: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    padding: 16,
-  },
-  groupItemContent: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.md,
+    minHeight: layout.touchTarget + spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
   },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  avatarContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 16,
-    overflow: "hidden",
-  },
-  avatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  groupInfo: {
+  rowText: {
     flex: 1,
-    marginRight: 12,
+    gap: 2,
   },
-  groupName: {
-    marginBottom: 2,
-    fontWeight: "600",
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs + 2,
   },
-  groupType: {
-    textTransform: "capitalize",
-    opacity: 0.8,
+  skeletons: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
   },
-  bottomButtons: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 12,
+  skeletonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  skeletonText: {
+    gap: spacing.sm,
+  },
+  empty: {
+    paddingVertical: spacing.xl,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    gap: 8,
-  },
-  actionButtonText: {
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    width: "80%",
-    maxWidth: 300,
-    borderRadius: 20,
-    overflow: "hidden",
-  },
-  modalOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
   },
 });

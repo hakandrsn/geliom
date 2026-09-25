@@ -18,8 +18,8 @@ interface NetworkToastContextType {
 const NetworkToastContext = createContext<NetworkToastContextType | undefined>(undefined);
 
 const DEFAULT_MESSAGES = {
-  weak: "Face not recognized in the photo. Please upload a clearer photo.",
-  offline: "No social media profile found for this person. Please try another photo.",
+  weak: "Bağlantın zayıf görünüyor. Güncellemeler gecikebilir.",
+  offline: "İnternet bağlantısı yok. Bağlantı gelince otomatik devam edeceğiz.",
 };
 
 export function NetworkToastProvider({ children }: { children: React.ReactNode }) {

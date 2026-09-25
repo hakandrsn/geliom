@@ -1,92 +1,100 @@
+import { useUpdateUser } from "@/api";
+import { useAppStore } from "@/store/useAppStore";
 import * as Notifications from "expo-notifications";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, Linking } from "react-native";
 import { OneSignal } from "react-native-onesignal";
 
+/**
+ * Genel bildirim ayarı.
+ *
+ * İki katman var:
+ *  1) Sistem izni (iOS/Android) — kapalıysa hiçbir şey teslim edilemez.
+ *  2) Uygulama içi tercih — SUNUCUDA tutulur (user.pushEnabled). Kapalıyken
+ *     sunucu durum/istek bildirimlerini göndermez; ama abonelik hatırlatması
+ *     gibi işlemsel bildirimler yine gider.
+ *
+ * Bu yüzden OneSignal aboneliği artık kapatılmaz (optOut edilmez): sistem
+ * izni varken cihaz her zaman ulaşılabilir kalır, filtre sunucudadır.
+ */
 export const useNotificationSettings = () => {
-  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
+  const user = useAppStore((state) => state.user);
+  const updateUser = useUpdateUser();
+  const [isSystemEnabled, setIsSystemEnabled] = useState(true);
   const appState = useRef(AppState.currentState);
+  const migrated = useRef(false);
 
-  const checkNotificationStatus = async () => {
-    // Check System Permissions first
-    const settings = await Notifications.getPermissionsAsync();
-    const isSystemEnabled = settings.granted || settings.status === "granted";
+  const pushEnabled = user?.pushEnabled !== false;
+  const isNotificationsEnabled = isSystemEnabled && pushEnabled;
 
-    // Check OneSignal Subscription
-    const isSubscribed = OneSignal.User.pushSubscription.getOptedIn();
+  // İzin sonucunu uygular — effect içinden promise callback'i olarak çağrılır
+  const applyPermission = useCallback(
+    (settings: Notifications.NotificationPermissionsStatus) => {
+      const granted = settings.granted || settings.status === "granted";
+      setIsSystemEnabled(granted);
 
-    // We consider notifications enabled if both System is ON and OneSignal is Opted IN
-    setIsNotificationsEnabled(isSystemEnabled && isSubscribed);
-  };
+      if (granted && !OneSignal.User.pushSubscription.getOptedIn()) {
+        // Eski sürüm tercihi OneSignal optOut ile tutuyordu: aboneliği geri aç,
+        // kullanıcının "kapalı" tercihini sunucuya taşı (bir kez)
+        OneSignal.User.pushSubscription.optIn();
+        if (!migrated.current && user && user.pushEnabled === undefined) {
+          migrated.current = true;
+          updateUser.mutate({ pushEnabled: false });
+        }
+      }
+    },
+    [user, updateUser],
+  );
 
   useEffect(() => {
-    checkNotificationStatus();
-
-    // Re-check when app comes to foreground (e.g. user returns from Settings)
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === "active"
-      ) {
-        checkNotificationStatus();
+    Notifications.getPermissionsAsync().then(applyPermission);
+    // Ayarlardan dönünce sistem iznini tekrar kontrol et
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (appState.current.match(/inactive|background/) && next === "active") {
+        Notifications.getPermissionsAsync().then(applyPermission);
       }
-      appState.current = nextAppState;
+      appState.current = next;
     });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+    return () => subscription.remove();
+  }, [applyPermission]);
 
   const openSettings = () => {
     Linking.openSettings();
   };
 
+  const askForSettings = () =>
+    Alert.alert(
+      "Bildirim izni",
+      "Bildirimleri açmak için telefonunun ayarlarından Geliom'a izin vermen gerekiyor.",
+      [
+        { text: "İptal", style: "cancel" },
+        { text: "Ayarlar", onPress: openSettings },
+      ],
+    );
+
   const toggleNotifications = async (value: boolean) => {
     if (value) {
-      // User turning ON
-      // 1. Check/Request System Permissions
       const settings = await Notifications.getPermissionsAsync();
-      if (!settings.granted && settings.canAskAgain) {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status !== "granted") {
-          // Permission denied, guide to settings
-          Alert.alert(
-            "Bildirim İzni",
-            "Bildirimleri açmak için cihaz ayarlarından izin vermeniz gerekmektedir.",
-            [
-              { text: "İptal", style: "cancel" },
-              { text: "Ayarlar", onPress: openSettings },
-            ]
-          );
+      if (!settings.granted) {
+        if (!settings.canAskAgain) {
+          askForSettings();
           return;
         }
-      } else if (!settings.granted && !settings.canAskAgain) {
-        // Permanently denied, must go to settings
-        Alert.alert(
-          "Bildirim İzni",
-          "Bildirimleri açmak için cihaz ayarlarından izin vermeniz gerekmektedir.",
-          [
-            { text: "İptal", style: "cancel" },
-            { text: "Ayarlar", onPress: openSettings },
-          ]
-        );
-        return;
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== "granted") {
+          askForSettings();
+          return;
+        }
       }
-
-      // 2. Opt In to OneSignal
       OneSignal.User.pushSubscription.optIn();
-      setIsNotificationsEnabled(true);
-    } else {
-      // User turning OFF
-      // We explicitly Opt Out from OneSignal.
-      OneSignal.User.pushSubscription.optOut();
-      setIsNotificationsEnabled(false);
+      setIsSystemEnabled(true);
     }
+    updateUser.mutate({ pushEnabled: value });
   };
 
   return {
     isNotificationsEnabled,
+    isSystemEnabled,
     toggleNotifications,
     openSettings,
   };

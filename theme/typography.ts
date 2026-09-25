@@ -41,13 +41,15 @@ export type TypographyKeys = {
     groupName: TypographyVariant; // Grup isimleri
 };
 
-// Comfortaa font ailesi - Geliom'un doğal ve samimi hissi için
+// Figtree — geometrik ama yumuşak; gövde metninde Comfortaa'dan çok daha
+// okunaklı, başlıklarda marka sıcaklığını koruyor. Statik ağırlık dosyaları
+// kullanılır (iOS sentetik kalınlık üretmesin diye fontWeight değil fontFamily).
 export const fonts: Fonts = {
-    light: 'Comfortaa-Light',
-    regular: 'Comfortaa-Regular',
-    medium: 'Comfortaa-Medium',
-    semibold: 'Comfortaa-SemiBold',
-    bold: 'Comfortaa-Bold',
+    light: 'Figtree-Light',
+    regular: 'Figtree-Regular',
+    medium: 'Figtree-Medium',
+    semibold: 'Figtree-SemiBold',
+    bold: 'Figtree-Bold',
 };
 
 export const typography: TypographyKeys = {

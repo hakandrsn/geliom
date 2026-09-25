@@ -10,7 +10,7 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
 
 ### Renkler
 - **Asla hard-coded renk yazma.** Tüm renkler `useTheme()` üzerinden gelir: `const { colors, shadows, isDark } = useTheme()`.
-- Renk paleti [theme/colors.ts](theme/colors.ts) dosyasında tanımlı; light ve dark her zaman birlikte güncellenir. `ThemeColors` interface'ine alan eklemeden yeni renk kullanma.
+- Renk paleti [theme/colors.ts](theme/colors.ts) dosyasında tanımlı (marka: terracotta `primary` + şeftali `secondary`, krem zemin); light ve dark her zaman birlikte güncellenir. `ThemeColors` interface'ine alan eklemeden yeni renk kullanma.
 - Tonlu (soluk) zeminler için `colors.passiveState` kullan; `colors.primary + '20'` gibi hex+alpha birleştirmelerinden kaçın.
 - Gradient/primary zeminlerin üstünde metin her zaman beyaz (`#FFFFFF`).
 
@@ -22,7 +22,7 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
   - Gölge: `shadows.card` (kartlar) / `shadows.floating` (modal, popover) — `useTheme()`'den al, elle shadow yazma
 
 ### Tipografi
-- Metin için sadece `Typography` (veya `CustomText`) bileşenini kullan; asla çıplak `<Text>` kullanma. Font ailesi Comfortaa'dır ve bu bileşenler üzerinden uygulanır.
+- Metin için sadece `Typography` (veya `CustomText`) bileşenini kullan; asla çıplak `<Text>` kullanma. Font ailesi **Figtree**'dir (statik ağırlık dosyaları, `fonts.*` token'ları) ve bu bileşenler üzerinden uygulanır. `fontFamily` string'i elle yazma; gerekiyorsa `fonts.medium` gibi token kullan.
 - Variant'lar [theme/typography.ts](theme/typography.ts) dosyasında: `h1–h6`, `body`, `bodyLarge`, `bodySmall`, `caption`, `button`, `label`, `status`, `nickname`, `groupName`.
 - `fontSize`/`fontFamily` override etme; doğru variant'ı seç. Vurgu gerekiyorsa `fontWeight` prop'unu kullan.
 
@@ -32,16 +32,17 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
 
 - [components/ui/](components/ui/) — tasarım sistemi primitive'leri (domain bilgisi İÇERMEZ):
   - `Card` — tüm kart yüzeyleri (kenarlık + gölge + radius). `highlighted` prop'u vurgulu kart yapar.
-  - `Chip` — seçilebilir hap; status/mood seçiciler bununla yapılır. `dashed` = "ekle" chip'i.
+  - `Chip` — seçilebilir seçenek. `variant="pill"` (durumlar; seçiliyken `filled` ile dolu primary) ve `variant="tile"` (ruh halleri; büyük emoji üstte, 4 sütun ızgara). `dashed` = "ekle". Ana ekranda `StatusComposer` kompakt bir karttır: üstte `MoodHero` (embedded), altta `SegmentedControl` ile Durum / Ruh hali sekmeleri. Seçenekler içeriği itmez; sekmenin altında yüzen `PickerDropdown` panelinde açılır (DashboardView yönetir, dışına dokununca/kaydırınca/seçince kapanır). Durum metni ve ruh hali bağımsızdır; her sekmenin kendi "Kaldır"/"Yok" seçeneği listede yer alır.
+  - `Emoji` — emoji metni için TEK yol. Marka fontu uygulanmaz, sistem fontu kullanılır; `Typography`/`CustomText` içine emoji koyma.
   - `IconButton` — dairesel ikon butonu (`surface`/`tonal`/`ghost`).
-  - `Avatar` — avatar; `ring` (vurgu halkası) ve `badge` (mood emojisi) destekler.
+  - `Avatar` — avatar; fotoğraf yoksa palete uyumlu tonlu zemin + baş harfler gösterir (`name` ve `seed` ver). `photoUrl` biçimleri: `avatar:<key>` (gömülü karakter, [constants/avatars.ts](constants/avatars.ts) — anahtarlar kalıcıdır, yeniden adlandırma), `https://…`, `tint:n`. Seçim yoksa kişilere seed'e göre sabit karakter, gruplara `fallback="initials"` ile baş harf. `ring` ve `badge` (mood emojisi) destekler. Avatar için doğrudan `Image` kullanma.
   - `SectionHeader` — bölüm başlığı (büyük harf + sayı rozeti).
   - `EmptyState` — boş durum (ikon halkası + başlık + açıklama + aksiyonlar).
   - `Skeleton` — yüklenme iskeleti (nabız animasyonlu blok).
   - `ListItem` — ayar/menü satırı: **zeminsiz** (kart yok), 28pt ikon + başlık + alt başlık, sağda Switch/chevron. Ayarlar ve grup yönetimi tipi listelerde satırlara kart zemini VERME.
 - [components/shared/](components/shared/) — `Typography`, `Button` (büyük CTA: gradient/outline), `GeliomButton` (ikincil aksiyonlar), `BaseLayout`.
 - [components/dashboard/](components/dashboard/), [components/business/](components/business/) — ekran/domain'e özel bileşenler.
-- [components/bottomsheets/](components/bottomsheets/) — bottom sheet içerikleri. Onay akışları için `ConfirmSheet` (Alert.alert YERİNE), status/mood ekleme için `StatusMoodBottomSheet` kullan. Sheet'ler `useBottomSheet().openBottomSheet` ile açılır; sheet yüzeyi `colors.sheetBackground`'dan gelir (opak olmalı — rgba kart renkleri sheet'te görünmez). Sheet içindeki input'lar `BottomSheetTextInput` olmalı; klavye, gorhom `keyboardBehavior="interactive"` + `react-native-keyboard-controller` (root'ta `KeyboardProvider`) ile yönetilir.
+- [components/bottomsheets/](components/bottomsheets/) — bottom sheet içerikleri. Onay akışları için `ConfirmSheet` (Alert.alert YERİNE; snapPoints `[340]` civarı), tek alanlı metin düzenleme için `TextInputSheet` (isim, grup adı — `Modal` YERİNE), avatar için `AvatarSelector`, status/mood ekleme için `StatusMoodBottomSheet` kullan. `Alert.alert` yalnızca beklenmeyen hata mesajları için kabul edilebilir. Sheet'ler `useBottomSheet().openBottomSheet` ile açılır (altta tek bir gorhom `BottomSheetModal`, ref ile `present`/`dismiss`; açma/kapama zamanlayıcısı KULLANMA — kapanırken gelen açma isteği `onDismiss`'te yeniden present edilir); sheet yüzeyi `colors.sheetBackground`'dan gelir (opak olmalı — rgba kart renkleri sheet'te görünmez). Sheet içindeki input'lar `BottomSheetTextInput` olmalı; klavye, gorhom `keyboardBehavior="interactive"` + `react-native-keyboard-controller` (root'ta `KeyboardProvider`) ile yönetilir.
 - Dokunulabilir yüzeylerde `TouchableOpacity` yerine `BouncyButton` ([components/anim/AnimatedComponents.tsx](components/anim/AnimatedComponents.tsx)) tercih et — haptic + scale animasyonu standarttır.
 
 ### Buton hiyerarşisi
@@ -57,11 +58,15 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
 - Durum göstergesi: aktif durum için `colors.success` nokta, durum yoksa `colors.lightText`.
 - Boş durumlar asla düz metin olmasın — `EmptyState` kullan. Boş durumun EN ÖNEMLİ aksiyonu ekranın ortasında, birincil buton olarak dursun (örn. boş grupta "Davet Et").
 - **Loading = Skeleton.** Veri beklenen her yerde spinner değil `Skeleton` kullan ve gerçek yerleşimi taklit et (bkz. `DashboardSkeleton`). `ActivityIndicator` sadece buton içi loading için kabul edilebilir.
-- Ekran hiyerarşisi: başlık ve "benim kartım" gibi sabit alanlar kompakt tutulur; ekranın asıl alanı ana içeriğe (grup üyeleri) ayrılır.
+- Ekran hiyerarşisi: ana ekranda tek renkli/odak yüzey `MoodHero`'dur (kullanıcının kendi durumu, gradient zemin); geri kalan her şey nötr kalır. Başka ekranlarda da ekran başına en fazla bir gradient yüzey olsun. Ekranın asıl alanı ana içeriğe (grup üyeleri) ayrılır.
 - Her UI değişikliğini hem light hem dark temada düşün; tek temaya göre renk seçme.
-- Kullanıcıya görünen tüm metinler Türkçe.
+- Kullanıcıya görünen tüm metinler Türkçe ve samimi ("sen" dili). Ekran başlıkları form etiketi gibi değil, soru gibi yazılır; ana ekran seçici başlıkları [constants/prompts.ts](constants/prompts.ts) havuzundan rastgele gelir. Ham anahtar (`kahve_molasi`, `ADMIN`) asla ekrana düşmez; `humanizeKey` veya açık eşleme kullan.
 
 ## Monetization
+
+- Premium'un TEK kapısı `usePremiumGate().requirePremium`. Limitler [constants/premium.ts](constants/premium.ts) içinde, API ile birebir aynı tutulur. API limit hataları 409 + `code` döner (`MEMBERSHIP_LIMIT`, `GROUP_CAPACITY`, `OPTIONS_PREMIUM`, `GROUP_PAUSED`…); mobil kararı metne değil koda göre verir (`getPremiumLimitCode`).
+- Grubun durum/ruh hali listesi SUNUCUDA, gruba özeldir (`group.statusOptions` / `group.moodOptions`); yalnızca premium grup sahibi düzenler (ekle / sil / sürükleyerek sırala) — [reorder-status-mood](app/(drawer)/(group)/reorder-status-mood.tsx). Sıralama için `components/ui/DraggableList` kullanılır.
+- Sahibin aboneliği biterse ücretsiz hak dışındaki grupları `isPaused` olur: session salt-okunur anlık görüntüdür, status paylaşılamaz, bildirim gitmez; üye listesinin üstünde `PausedBanner` görünür.
 
 - Premium gerektiren her aksiyon (custom status/mood ekleme vb.) `useManageStatusMood().checkSubscriptionAndProceed` kapısından geçer: abone değilse **Alert değil Adapty paywall** açılır (`showPaywall`, placement: `FIRST_SUBSCRIPTION_PLACEMENT`), satın alma başarılıysa aksiyon otomatik devam eder.
 - Abonelik durumu `useAppStore().isSubscribed`'dan okunur; `services/purchase.ts` dışında Adapty SDK'sını doğrudan çağırma.
@@ -69,7 +74,7 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
 ## Mimari Kurallar
 
 - Veri çekme: TanStack Query hook'ları [api/](api/) altında (`useGroupDashboardData` gibi). Component içinde doğrudan axios/fetch çağrısı yapma.
-- Global state: Zustand ([store/useAppStore.ts](store/useAppStore.ts)). Real-time güncellemeler socket hook'larıyla (`useDashboardRealtime` vb.) gelir.
+- Global state: Zustand ([store/useAppStore.ts](store/useAppStore.ts)). Real-time güncellemeler `useGroupSession` ile açılan socket session'ından store'a (`session`) akar; component'ler `useGroupDashboardData` gibi selector hook'larıyla okur.
 - Kullanıcı eylemlerinde optimistic update esastır: önce local state'i güncelle, sonra mutation'ı tetikle.
 - Yeni ekranlar `app/` altında expo-router dosya yapısıyla açılır; ekran bileşeni ince kalır, UI parçaları `components/` altına gider.
 - Import'larda `@/` alias'ını kullan.
@@ -77,8 +82,8 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
 ## Build / Çalıştırma
 
 - iOS build notları için hafızadaki kurala bak: Firebase config dosyaları gitignore'da, `ios/` CNG ile üretiliyor.
-- `react-native-draggable-flatlist` KULLANMA — Reanimated 4 ile uyumsuz (sürükleme tetiklenmiyor); sıralama UI'ları ok butonlarıyla yapılır (bkz. reorder-status-mood).
-- Tip kontrolü: `npx tsc --noEmit` (repo'da devam eden API refactor'undan kalan bilinen hatalar var; yeni hata ekleme).
+- `react-native-draggable-flatlist` KULLANMA — Reanimated 4 ile uyumsuz. Sürükleyerek sıralama için `components/ui/DraggableList` (Gesture Handler + Reanimated, shared value'larda `get()/set()`).
+- Tip kontrolü: `npx tsc --noEmit` — sıfır hata ile geçmelidir; yeni hata ekleme.
 
 ---
 *Bu dosya zamanla güncellenecek — kurallar değiştikçe buraya eklenir.*

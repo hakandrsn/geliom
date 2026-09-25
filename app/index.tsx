@@ -1,15 +1,16 @@
-import Typography from "@/components/shared/Typography";
+import { Button, Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
+import { signOut } from "@/services/auth";
 import { useAppStore } from "@/store/useAppStore";
-import { spacing } from "@/theme/tokens";
+import { layout, spacing } from "@/theme/tokens";
 import { ActivityIndicator, View } from "react-native";
 
 export default function Index() {
   const { colors } = useTheme();
-  const { firebaseUser, user, isLoading } = useAppStore();
+  const { firebaseUser, user, isLoading, error } = useAppStore();
 
-  // Firebase girişi var ama backend user henüz gelmedi — sync ağ hatasında
-  // _layout otomatik yeniden dener; kullanıcıya beklediğini söyle.
+  // Firebase girişi var ama backend user henüz gelmedi — _layout 5 sn'de bir
+  // yeniden dener. Kullanıcı burada kilitli kalmasın diye çıkış seçeneği var.
   const waitingForBackend = !!firebaseUser && !user && !isLoading;
 
   return (
@@ -19,14 +20,29 @@ export default function Index() {
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: colors.background,
+        paddingHorizontal: layout.screenPadding,
         gap: spacing.lg,
       }}
     >
       <ActivityIndicator size="large" color={colors.primary} />
       {waitingForBackend && (
-        <Typography variant="caption" style={{ color: colors.lightText }}>
-          Sunucuya bağlanılıyor, lütfen bekleyin…
-        </Typography>
+        <>
+          <Typography
+            variant="caption"
+            style={{ color: colors.lightText, textAlign: "center" }}
+          >
+            {error ?? "Sunucuya bağlanılıyor, lütfen bekleyin…"}
+          </Typography>
+          {error && (
+            <Button
+              variant="outline"
+              title="Çıkış yap"
+              onPress={() => {
+                signOut().catch(() => {});
+              }}
+            />
+          )}
+        </>
       )}
     </View>
   );

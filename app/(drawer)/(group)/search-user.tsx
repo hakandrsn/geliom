@@ -1,4 +1,5 @@
 import { useUserByCustomId } from "@/api/users";
+import { fonts } from "@/theme/typography";
 import KeyboardAwareView from "@/components/KeyboardAwareView";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -334,7 +335,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 18,
-    fontFamily: "Comfortaa-Medium",
+    fontFamily: fonts.medium,
   },
   userCard: {
     borderRadius: 16,

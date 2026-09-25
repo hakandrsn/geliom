@@ -16,8 +16,20 @@ export interface User {
   isPremium: boolean;
   subscriptionStatus: string | null;
   groupIds: string[];
+  /** Uygulama içi genel bildirim tercihi (varsayılan açık) */
+  pushEnabled?: boolean;
   createdAt: string; // ISO Date
   updatedAt: string; // ISO Date
+}
+
+/** Üyenin bu grup için çözümlenmiş bildirim tercihleri. */
+export interface GroupNotificationPrefs {
+  /** Bu gruptan bildirim al (kapalıysa hiçbir şey gelmez) */
+  enabled: boolean;
+  statusUpdates: boolean;
+  moodUpdates: boolean;
+  /** Değişiklikleri bildirilmeyecek üyeler */
+  mutedUserIds: string[];
 }
 
 export interface GroupMemberEntry {
@@ -26,16 +38,37 @@ export interface GroupMemberEntry {
   photoUrl: string | null;
   customId: string;
   isMuted: boolean;
+  notificationPrefs?: {
+    statusUpdates: boolean;
+    moodUpdates: boolean;
+    mutedUserIds: string[];
+  };
   joinedAt: string;
 }
 
 export interface StatusEntry {
-  text: string;
-  emoji: string | null;
-  mood: string | null;
+  /** Durum metni — ruh hali tek başına paylaşılabildiği için opsiyonel */
+  text?: string | null;
+  emoji?: string | null;
+  mood?: string | null;
   updatedAt: string;
 }
 
+/** Grubun durum seçeneği (sahibi düzenler; herkes aynı listeyi görür). */
+export interface GroupOption {
+  id: string;
+  text: string;
+  emoji?: string | null;
+  /** Uygulamanın hazır seçeneği (metni değiştirilemez, silinebilir) */
+  isDefault: boolean;
+}
+
+/** Ruh hali seçeneği — status kaydında `key` saklanır. */
+export interface GroupMoodOption extends GroupOption {
+  key: string;
+}
+
+/** @deprecated Eski model; sunucu moodOptions'a taşır. */
 export interface CustomMood {
   id: string;
   text: string;
@@ -57,7 +90,10 @@ export interface Group {
   members: Record<string, GroupMemberEntry>;
   /** userId ile key'lenmiş map — dizi değil! */
   statuses: Record<string, StatusEntry>;
-  customMoods: CustomMood[];
+  statusOptions: GroupOption[];
+  moodOptions: GroupMoodOption[];
+  /** Sahibinin aboneliği bitti: canlı akış kapalı, grup salt okunur */
+  isPaused?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,6 +106,10 @@ export interface GroupSummary {
   inviteCode: string;
   ownerId: string;
   role: "ADMIN" | "MEMBER";
+  isPaused?: boolean;
+  ownerIsPremium?: boolean;
+  /** Benim bu grup için bildirim tercihlerim */
+  notifications: GroupNotificationPrefs;
   memberCount: number;
   joinedAt: string;
 }
@@ -119,8 +159,11 @@ export type UpdateGroupResponse = Group;
 /** GET /groups/:id/requests (Admin) */
 export type GetGroupRequestsResponse = JoinRequest[];
 
-/** POST /groups/:id/moods (Admin + Premium) */
-export type AddGroupMoodResponse = CustomMood;
+/** PUT /groups/:id/options (Sahip + Premium) */
+export interface UpdateGroupOptionsResponse {
+  statusOptions: GroupOption[];
+  moodOptions: GroupMoodOption[];
+}
 
 // ==========================================
 // 3. SOCKET (SESSION) TİPLERİ
@@ -140,11 +183,14 @@ export interface SessionState {
 
 export type SessionUpdateEventType =
   | "status.updated"
+  | "status.cleared"
   | "member.joined"
   | "member.left"
   | "group.updated"
   | "mood.added"
   | "mood.removed"
+  | "options.updated"
+  | "plan.changed"
   | "premium.changed";
 
 /** `session:update` payload'ı — patch deep-partial merge, removed silinecek path listesi */
@@ -160,7 +206,7 @@ export interface PresenceUpdatePayload {
   online: boolean;
 }
 
-export type SessionClosedReason = "removed" | "deleted" | "switched" | "server";
+export type SessionClosedReason = "removed" | "deleted" | "switched" | "server" | "paused";
 
 export interface SessionClosedPayload {
   reason: SessionClosedReason;
@@ -172,7 +218,7 @@ export interface PremiumUpdatePayload {
 
 /** `status:update` emit payload'ı — aktif session'a işlenir, groupId gönderilmez */
 export interface StatusUpdateInput {
-  text: string; // zorunlu, 1-200 kr
+  text?: string; // ≤200 kr — text veya mood'dan en az biri zorunlu
   emoji?: string; // ≤16 kr
   mood?: string; // ≤50 kr
 }

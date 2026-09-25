@@ -1,194 +1,190 @@
 import { useDeleteUser } from "@/api";
+import { ConfirmSheet } from "@/components/bottomsheets";
 import { BaseLayout, Typography } from "@/components/shared";
 import { ListItem } from "@/components/ui";
+import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotificationSettings } from "@/hooks/useNotificationSettings";
 import { useAppStore } from "@/store/useAppStore";
 import { layout, radius, spacing } from "@/theme/tokens";
+import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import auth from "@react-native-firebase/auth";
 import { useRouter } from "expo-router";
-import { Alert, StyleSheet, Switch, View } from "react-native";
-import { ScrollView } from "react-native-gesture-handler";
+import React from "react";
+import { Alert, ScrollView, StyleSheet, Switch, View } from "react-native";
+
+const CONFIRM_SHEET_HEIGHT = 380;
 
 export default function SettingsScreen() {
   const { colors, toggleTheme, isDark } = useTheme();
-  const { user } = useAppStore();
+  const { user, groups } = useAppStore();
   const router = useRouter();
   const deleteUser = useDeleteUser();
+  const queryClient = useQueryClient();
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
+  const { isNotificationsEnabled } = useNotificationSettings();
 
-  // Notification Hook
-  const { isNotificationsEnabled, toggleNotifications } =
-    useNotificationSettings();
+  const mutedCount = groups.filter((g) => g.notifications && !g.notifications.enabled).length;
+  const notificationsSubtitle = !isNotificationsEnabled
+    ? "Kapalı"
+    : mutedCount > 0
+      ? `Açık · ${mutedCount} grup sessizde`
+      : "Açık";
 
-  // App Store 5.1.1(v): hesap oluşturulabilen uygulamada uygulama içi hesap silme zorunlu
+  const ownedGroupCount = groups.filter((g) => g.ownerId === user?.id).length;
+
+  const performDelete = async () => {
+    try {
+      await deleteUser.mutateAsync();
+      closeBottomSheet();
+      // Backend Firebase Auth kaydını da sildi — lokal oturumu kapat
+      await auth().signOut().catch(() => {});
+      router.replace("/(auth)/login");
+    } catch (error: any) {
+      closeBottomSheet();
+      const backendMessage = error?.response?.data?.message;
+      Alert.alert(
+        "Hata",
+        (Array.isArray(backendMessage) ? backendMessage[0] : backendMessage) ||
+          "Hesap silinemedi. Lütfen tekrar deneyin.",
+      );
+    }
+  };
+
+  // App Store 5.1.1(v): uygulama içi hesap silme zorunlu. İki adım:
+  // 1) ne olacağını anlatan bilgilendirme, 2) geri dönülmez son onay.
   const handleDeleteAccount = () => {
-    Alert.alert(
-      "Hesabı Sil",
-      "Hesabınız kalıcı olarak silinecek. Sahibi olduğunuz gruplar tamamen silinir, üyesi olduklarınızdan çıkarılırsınız. Bu işlem geri alınamaz.",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Devam Et",
-          style: "destructive",
-          onPress: () => {
-            Alert.alert(
-              "Emin misiniz?",
-              "Tüm verileriniz kalıcı olarak silinecek.",
-              [
-                { text: "Vazgeç", style: "cancel" },
-                {
-                  text: "Hesabımı Sil",
-                  style: "destructive",
-                  onPress: async () => {
-                    try {
-                      await deleteUser.mutateAsync();
-                      // Backend Firebase Auth kaydını da sildi — lokal oturumu kapat
-                      await auth().signOut().catch(() => {});
-                      router.replace("/(auth)/login");
-                    } catch (error: any) {
-                      const backendMessage = error?.response?.data?.message;
-                      Alert.alert(
-                        "Hata",
-                        (Array.isArray(backendMessage)
-                          ? backendMessage[0]
-                          : backendMessage) ||
-                          "Hesap silinemedi. Lütfen tekrar deneyin.",
-                      );
-                    }
-                  },
-                },
-              ],
-            );
-          },
-        },
-      ],
+    openBottomSheet(
+      <ConfirmSheet
+        icon="warning-outline"
+        title="Hesabını silmek üzeresin"
+        message={
+          ownedGroupCount > 0
+            ? `Yöneticisi olduğun ${ownedGroupCount} grup tamamen silinir ve üyeleri gruba erişemez. Üyesi olduğun diğer gruplardan çıkarılırsın; durum kayıtların ve profilin kalıcı olarak silinir.`
+            : "Üyesi olduğun gruplardan çıkarılırsın; durum kayıtların ve profilin kalıcı olarak silinir. Aynı hesapla tekrar giriş yaparsan sıfırdan başlarsın."
+        }
+        confirmLabel="Devam Et"
+        cancelLabel="Vazgeç"
+        onCancel={closeBottomSheet}
+        onConfirm={() => {
+          openBottomSheet(
+            <ConfirmSheet
+              icon="trash-outline"
+              title="Son onay"
+              message="Bu işlem geri alınamaz. Hesabını ve tüm verilerini kalıcı olarak silmek istediğine emin misin?"
+              confirmLabel="Hesabımı Sil"
+              cancelLabel="Vazgeç"
+              destructive
+              onCancel={closeBottomSheet}
+              onConfirm={performDelete}
+            />,
+            { snapPoints: [CONFIRM_SHEET_HEIGHT] },
+          );
+        }}
+      />,
+      { snapPoints: [CONFIRM_SHEET_HEIGHT] },
     );
   };
 
-  const handlePrivacySettings = () => {
-    Alert.alert("Gizlilik", "Gizlilik ayarları yakında eklenecek");
-  };
-
-  const handleLanguageSettings = () => {
-    Alert.alert("Dil", "Dil ayarları yakında eklenecek");
-  };
-
   const handleClearCache = () => {
-    Alert.alert("Önbelleği Temizle", "Önbelleğiniz temizlensin mi?", [
-      { text: "İptal", style: "cancel" },
-      {
-        text: "Temizle",
-        onPress: () => Alert.alert("Başarılı", "Önbellek temizlendi"),
-      },
-    ]);
+    openBottomSheet(
+      <ConfirmSheet
+        icon="refresh-outline"
+        title="Önbelleği Temizle"
+        message="Önbelleğe alınmış veriler silinir; gruplar ve durumlar sunucudan yeniden yüklenir. Oturumun açık kalır."
+        confirmLabel="Temizle"
+        onCancel={closeBottomSheet}
+        onConfirm={() => {
+          queryClient.clear();
+          closeBottomSheet();
+        }}
+      />,
+      { snapPoints: [CONFIRM_SHEET_HEIGHT - 40] },
+    );
   };
 
   return (
     <BaseLayout headerShow={false} backgroundColor={colors.background}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {/* Genel Ayarlar */}
-          <Typography
-            variant="label"
-            fontWeight="semibold"
-            color={colors.secondaryText}
-            style={styles.sectionTitle}
-          >
-            GENEL
-          </Typography>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Genel */}
+        <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.sectionTitle}>
+          GENEL
+        </Typography>
+        <ListItem
+          icon={isDark ? "moon" : "sunny"}
+          iconColor={colors.text}
+          title="Koyu Tema"
+          right={
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.stroke, true: colors.passiveState }}
+              thumbColor={isDark ? colors.primary : colors.white}
+            />
+          }
+        />
+        <ListItem
+          icon="notifications-outline"
+          iconColor={colors.text}
+          title="Bildirimler"
+          subtitle={notificationsSubtitle}
+          onPress={() => router.push("/(drawer)/notifications")}
+        />
+        <ListItem
+          icon="refresh-outline"
+          iconColor={colors.text}
+          title="Önbelleği Temizle"
+          subtitle="Veriler sunucudan yeniden yüklenir"
+          onPress={handleClearCache}
+        />
 
+        {/* Gizlilik */}
+        <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.sectionTitle}>
+          GİZLİLİK
+        </Typography>
+        <ListItem
+          icon="shield-checkmark-outline"
+          iconColor={colors.text}
+          title="Gizlilik ve Veriler"
+          subtitle="Neleri sakladığımız, hata raporları, belgeler"
+          onPress={() => router.push("/(drawer)/privacy")}
+        />
+
+        {/* Destek */}
+        <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.sectionTitle}>
+          DESTEK
+        </Typography>
+        <ListItem
+          icon="help-circle-outline"
+          iconColor={colors.text}
+          title="Yardım & Destek"
+          subtitle="SSS, bize yaz, e-posta"
+          onPress={() => router.push("/(drawer)/help-support")}
+        />
+
+        {/* Tehlikeli bölge — en altta, görsel olarak ayrılmış */}
+        <View style={[styles.dangerZone, { borderColor: colors.error + "55" }]}>
+          <View style={styles.dangerHeader}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
+            <Typography variant="label" fontWeight="semibold" color={colors.error} style={styles.dangerTitle}>
+              TEHLİKELİ BÖLGE
+            </Typography>
+          </View>
           <ListItem
-            icon={isDark ? "moon" : "sunny"}
-            iconColor={colors.text}
-            title="Koyu Tema"
-            right={
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: colors.stroke, true: colors.passiveState }}
-                thumbColor={isDark ? colors.primary : colors.white}
-              />
-            }
-          />
-
-          <ListItem
-            icon="notifications"
-            iconColor={colors.text}
-            title="Bildirimler"
-            right={
-              <Switch
-                value={isNotificationsEnabled}
-                onValueChange={toggleNotifications}
-                trackColor={{ false: colors.stroke, true: colors.passiveState }}
-                thumbColor={
-                  isNotificationsEnabled ? colors.primary : colors.white
-                }
-              />
-            }
-          />
-
-          <ListItem
-            icon="language"
-            iconColor={colors.text}
-            title="Dil"
-            subtitle="Türkçe"
-            onPress={handleLanguageSettings}
-          />
-
-          {/* Gizlilik & Güvenlik */}
-          <Typography
-            variant="label"
-            fontWeight="semibold"
-            color={colors.secondaryText}
-            style={styles.sectionTitle}
-          >
-            GİZLİLİK & GÜVENLİK
-          </Typography>
-
-          <ListItem
-            icon="shield-checkmark"
-            iconColor={colors.text}
-            title="Gizlilik Ayarları"
-            onPress={handlePrivacySettings}
-          />
-
-          {/* Diğer */}
-          <Typography
-            variant="label"
-            fontWeight="semibold"
-            color={colors.secondaryText}
-            style={styles.sectionTitle}
-          >
-            DİĞER
-          </Typography>
-
-          <ListItem
-            icon="trash"
-            title="Önbelleği Temizle"
-            destructive
-            onPress={handleClearCache}
-          />
-
-          <ListItem
-            icon="person-remove"
+            icon="person-remove-outline"
             title="Hesabı Sil"
-            subtitle="Tüm verileriniz kalıcı olarak silinir"
+            subtitle="Tüm verilerin kalıcı olarak silinir. Geri alınamaz."
             destructive
             onPress={handleDeleteAccount}
           />
-
-          {/* Kullanıcı Bilgileri */}
-          <View
-            style={[
-              styles.userInfo,
-              { backgroundColor: colors.secondaryBackground },
-            ]}
-          >
-            <Typography variant="caption" color={colors.secondaryText}>
-              Oturum açan: {user?.customId}
-            </Typography>
-          </View>
         </View>
+
+        {user?.customId && (
+          <Typography variant="caption" color={colors.lightText} style={styles.accountInfo}>
+            Hesap: @{user.customId}
+          </Typography>
+        )}
       </ScrollView>
     </BaseLayout>
   );
@@ -200,16 +196,33 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: layout.screenPadding,
+    paddingBottom: spacing.xxxl,
   },
   sectionTitle: {
-    marginTop: spacing.xxl,
+    marginTop: spacing.xl,
     marginBottom: spacing.xs,
     letterSpacing: 1,
   },
-  userInfo: {
+  dangerZone: {
     marginTop: spacing.xxxl,
-    padding: spacing.lg,
-    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  dangerHeader: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  dangerTitle: {
+    letterSpacing: 1,
+  },
+  accountInfo: {
+    textAlign: "center",
+    marginTop: spacing.xxl,
   },
 });

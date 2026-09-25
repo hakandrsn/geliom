@@ -1,8 +1,12 @@
 import { useCreateGroup } from "@/api/groups";
+import { fonts } from "@/theme/typography";
 import KeyboardAwareView from "@/components/KeyboardAwareView";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
+import { GROUP_NAME_RULES, PLAN_LIMITS, membershipLimit } from "@/constants/premium";
+import { usePremiumGate } from "@/hooks/usePremiumGate";
 import { useAppStore } from "@/store/useAppStore";
+import { getApiErrorMessage, getPremiumLimitCode } from "@/utils/api-error";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -42,41 +46,59 @@ export default function CreateGroupScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
 
-  const handleCreateGroup = async () => {
-    if (!name.trim() || name.trim().length < 3) {
-      setNameError("En az 3 karakter gerekli");
-      return;
-    }
-    if (!user?.id) return;
+  const groups = useAppStore((state) => state.groups);
+  const { isPremium, requirePremium, openPaywall } = usePremiumGate();
+  const limit = membershipLimit(isPremium);
+  const atLimit = groups.length >= limit;
 
+  const submit = async () => {
     try {
       setIsSubmitting(true);
-
-      // API sadece name kabul eder (bilinmeyen alanlar 400 döner);
-      // grup tipi yalnızca UI'da kalan görsel bir seçimdir.
-      await createGroupMutation.mutateAsync({
-        name: name.trim(),
-      });
-
-      // Backend automatically adds creator as admin, but store needs update
-      // Mutation onSuccess handles store update
-
+      // API sadece name kabul eder; grup tipi yalnızca UI'da görsel bir seçim
+      await createGroupMutation.mutateAsync({ name: name.trim() });
       router.replace("/(drawer)/home");
     } catch (error: any) {
-      console.error("Grup oluşturma hatası:", error);
-
-      // Handle 409 Conflict (Limit reached)
-      if (error.response?.status === 409) {
-        Alert.alert(
-          "Limit Aşıldı",
-          "Maksimum grup limitine ulaştınız. Yeni grup oluşturmak için Premium'a geçin veya mevcut bir gruptan çıkın.",
-        );
+      const code = getPremiumLimitCode(error);
+      if (code === "MEMBERSHIP_LIMIT" && !isPremium) {
+        // Sunucu limit dedi (liste eskiyse): satın alınırsa tekrar dene
+        openPaywall(() => void submit());
       } else {
-        Alert.alert("Hata", error.message || "Grup oluşturulamadı");
+        Alert.alert(
+          code ? "Limit doldu" : "Hata",
+          getApiErrorMessage(error, "Grup oluşturulamadı"),
+        );
       }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleCreateGroup = () => {
+    const trimmed = name.trim();
+    if (trimmed.length < GROUP_NAME_RULES.MIN_LENGTH) {
+      setNameError(`En az ${GROUP_NAME_RULES.MIN_LENGTH} karakter gerekli`);
+      return;
+    }
+    if (trimmed.length > GROUP_NAME_RULES.MAX_LENGTH) {
+      setNameError(`En fazla ${GROUP_NAME_RULES.MAX_LENGTH} karakter olabilir`);
+      return;
+    }
+    if (!user?.id) return;
+
+    if (atLimit) {
+      if (isPremium) {
+        Alert.alert(
+          "Grup limitine ulaştın",
+          `Premium ile en fazla ${limit} gruba üye olabilirsin. Yeni grup için önce bir gruptan ayrıl.`,
+        );
+        return;
+      }
+      // Ücretsiz planda limit dolu: paywall, satın alınırsa oluşturmaya devam
+      requirePremium(() => void submit());
+      return;
+    }
+
+    void submit();
   };
 
   return (
@@ -141,8 +163,21 @@ export default function CreateGroupScreen() {
                 setName(t);
                 setNameError(null);
               }}
-              maxLength={30}
+              maxLength={GROUP_NAME_RULES.MAX_LENGTH}
             />
+            <View style={styles.inputMeta}>
+              <Typography variant="caption" color={nameError ? colors.error : colors.lightText}>
+                {nameError ?? " "}
+              </Typography>
+              <Typography variant="caption" color={colors.lightText}>
+                {name.length}/{GROUP_NAME_RULES.MAX_LENGTH}
+              </Typography>
+            </View>
+            {atLimit && !isPremium && (
+              <Typography variant="caption" color={colors.secondaryText} style={styles.planHint}>
+                Ücretsiz planda {PLAN_LIMITS.FREE.MAX_MEMBERSHIPS} gruba üye olabilirsin. Yeni grup için Premium gerekir.
+              </Typography>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -220,6 +255,14 @@ export default function CreateGroupScreen() {
 }
 
 const styles = StyleSheet.create({
+  inputMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  planHint: {
+    marginTop: 6,
+  },
   contentContainer: { padding: 24, paddingBottom: 100 },
   headerSection: {
     alignItems: "center",
@@ -234,7 +277,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 18,
-    fontFamily: "Comfortaa-Medium",
+    fontFamily: fonts.medium,
   },
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   typeCard: {

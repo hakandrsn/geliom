@@ -1,4 +1,5 @@
 import { GeliomButton, Typography } from '@/components/shared';
+import { fonts } from '@/theme/typography';
 import { useTheme } from '@/contexts/ThemeContext';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import React, { useEffect, useState } from 'react';
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 16,
-    fontFamily: 'Comfortaa-Regular',
+    fontFamily: fonts.regular,
   },
   switchContainer: {
     flexDirection: 'row',

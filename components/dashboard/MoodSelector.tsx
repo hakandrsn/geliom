@@ -1,158 +1,149 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import React, { useCallback } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 
-// Hooks & Contexts
-import {
-  applySavedOrder,
-  useMoodOrder,
-  useMoods,
-  useSetUserStatus,
-} from "@/api";
-import { useManageStatusMood } from "@/hooks/useManageStatusMood";
+import { useClearUserStatus, useGroupOptions, useSetUserStatus } from "@/api";
+import { Chip, OptionRow } from "@/components/ui";
 import { useAppStore } from "@/store/useAppStore";
-import { layout, radius, spacing } from "@/theme/tokens";
-
-// Components
-import { StatusMoodBottomSheet } from "@/components/bottomsheets";
-import { Chip, Skeleton } from "@/components/ui";
-import { useBottomSheet } from "@/contexts/BottomSheetContext";
+import { layout, spacing } from "@/theme/tokens";
+import { useRouter } from "expo-router";
+import SelectorHeader from "./SelectorHeader";
 
 interface MoodSelectorProps {
   groupId: string;
-  currentMoodId?: string | number;
-  onAddPress?: () => void;
+  /** Başlık sorusu (rastgele prompt); compact modda gösterilmez */
+  title?: string;
+  /** Composer/dropdown içinde: başlık yok, kenar boşluğu dışarıdan */
+  compact?: boolean;
+  /** Karo genişliği hesabı için kullanılabilir genişlik */
+  availableWidth?: number;
+  /** Dropdown: karo yerine kompakt satır listesi */
+  layout?: "tiles" | "list";
+  onSelect?: () => void;
+  onWillOpenSheet?: () => void;
 }
 
+const COLUMNS = 4;
+
+/** Grubun ruh hali seçenekleri — sahibin belirlediği liste ve sıra. */
 function MoodSelector({
   groupId,
-  currentMoodId,
-  onAddPress,
+  title,
+  compact = false,
+  availableWidth,
+  layout: layoutMode = "tiles",
+  onSelect,
+  onWillOpenSheet,
 }: MoodSelectorProps) {
+  const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const usable = availableWidth ?? screenWidth - layout.screenPadding * 2;
+  const tileWidth = Math.floor((usable - spacing.sm * (COLUMNS - 1)) / COLUMNS);
+
   const user = useAppStore((state) => state.user);
-  // Custom mood ekleme API'de admin (grup sahibi) + premium gerektirir —
-  // "Ekle" chip'i yalnızca grup sahibine gösterilir
   const isOwner = useAppStore(
-    (state) =>
-      state.groups.find((g) => g.id === groupId)?.ownerId === state.user?.id,
+    (state) => state.groups.find((g) => g.id === groupId)?.ownerId === state.user?.id,
   );
-  // Kendi mevcut status kaydım — status metnini ezmemek için seçimde korunur
   const myStatus = useAppStore((state) =>
     user ? state.session?.group.statuses[user.id] : undefined,
   );
-  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
+  const { moodOptions } = useGroupOptions(groupId);
+  const setStatus = useSetUserStatus();
+  const clearStatus = useClearUserStatus();
 
-  // LOCAL STATE: Anında UI tepkisi için
-  const [activeId, setActiveId] = useState<string | number | undefined>(
-    currentMoodId,
-  );
-
-  useEffect(() => {
-    setActiveId(currentMoodId);
-  }, [currentMoodId]);
-
-  // Hook'lar
-  const { handleAddMood, checkSubscriptionAndProceed } =
-    useManageStatusMood(groupId);
-  const { data: allMoods = [], isLoading } = useMoods(groupId);
-  const { data: moodOrder = [] } = useMoodOrder(user?.id, groupId);
-  const setStatusMutation = useSetUserStatus();
-
-  const handleMoodSelect = useCallback(
-    (mood: any) => {
-      if (!user) return;
-
-      setActiveId(mood.id);
-
-      // Socket üzerinden paylaş — mevcut status metni korunur,
-      // status yoksa text alanına mood adı yazılır (text zorunlu alan)
-      setStatusMutation.mutate({
-        text: myStatus?.text || mood.text,
-        emoji: mood.emoji ?? undefined,
-        mood: mood.mood,
+  const select = useCallback(
+    (option: (typeof moodOptions)[number]) => {
+      // Durum metni korunur, ruh hali bağımsız
+      setStatus.mutate({
+        text: myStatus?.text ?? undefined,
+        emoji: option.emoji ?? undefined,
+        mood: option.key,
       });
+      onSelect?.();
     },
-    [user, setStatusMutation, myStatus],
+    [setStatus, myStatus, onSelect],
   );
 
-  // Kullanıcının kaydettiği sıralama uygulanır; sıralama yoksa
-  // custom'lar önce, sonra alfabetik
-  const sortedMoods = useMemo(() => {
-    const sorted = [...allMoods].sort((a, b) => {
-      if (a.isCustom && !b.isCustom) return -1;
-      if (!a.isCustom && b.isCustom) return 1;
-      return a.text.localeCompare(b.text);
-    });
-    return applySavedOrder(sorted, moodOrder);
-  }, [allMoods, moodOrder]);
+  // Yalnızca ruh halini kaldır; durum metni varsa korunur, yoksa kayıt silinir
+  const clear = useCallback(() => {
+    if (myStatus?.text) {
+      setStatus.mutate({ text: myStatus.text });
+    } else {
+      clearStatus.mutate();
+    }
+    onSelect?.();
+  }, [myStatus, setStatus, clearStatus, onSelect]);
 
-  if (isLoading) {
+  const openEditor = () => {
+    onWillOpenSheet?.();
+    router.push("/(drawer)/(group)/reorder-status-mood?tab=mood");
+  };
+
+  const isSelected = (key: string) => key === myStatus?.mood;
+
+  if (layoutMode === "list") {
     return (
-      <View style={styles.skeletonRow}>
-        {[96, 88, 104, 80].map((w, i) => (
-          <Skeleton key={i} width={w} height={40} radius={radius.full} />
+      <View>
+        {myStatus?.mood && (
+          <OptionRow icon="close-circle-outline" label="Ruh halini kaldır" muted onPress={clear} />
+        )}
+        {moodOptions.map((option, index) => (
+          <OptionRow
+            key={option.id}
+            label={option.text}
+            emoji={option.emoji ?? undefined}
+            selected={isSelected(option.key)}
+            last={!isOwner && index === moodOptions.length - 1}
+            onPress={() => select(option)}
+          />
         ))}
+        {isOwner && (
+          <OptionRow icon="create-outline" label="Listeyi düzenle" accent last onPress={openEditor} />
+        )}
       </View>
     );
   }
 
   return (
     <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      >
-        {sortedMoods.map((item) => (
+      {!compact && title && (
+        <SelectorHeader title={title} onClear={myStatus?.mood ? clear : undefined} />
+      )}
+      <View style={[styles.grid, compact && styles.gridCompact]}>
+        {moodOptions.map((option) => (
           <Chip
-            key={item.id.toString()}
-            label={item.text}
-            emoji={item.emoji ?? undefined}
-            // Yerel seçim yoksa store'daki mevcut mood key'iyle eşleştir
-            selected={
-              activeId !== undefined
-                ? activeId === item.id
-                : item.mood === myStatus?.mood
-            }
-            onPress={() => handleMoodSelect(item)}
+            key={option.id}
+            variant="tile"
+            label={option.text}
+            emoji={option.emoji ?? undefined}
+            selected={isSelected(option.key)}
+            onPress={() => select(option)}
+            style={{ width: tileWidth }}
           />
         ))}
-
         {isOwner && (
           <Chip
+            variant="tile"
             dashed
-            icon="add"
-            label="Ekle"
-            onPress={() =>
-              checkSubscriptionAndProceed(() =>
-                openBottomSheet(
-                  <StatusMoodBottomSheet
-                    type="mood"
-                    onSave={async (text, emoji) => {
-                      await handleAddMood(text, emoji);
-                      closeBottomSheet();
-                    }}
-                    onCancel={closeBottomSheet}
-                  />,
-                  { snapPoints: ["50%"] },
-                ),
-              )
-            }
+            icon="create-outline"
+            label="Düzenle"
+            onPress={openEditor}
+            style={{ width: tileWidth }}
           />
         )}
-      </ScrollView>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  listContent: {
-    paddingHorizontal: layout.screenPadding,
-    gap: spacing.sm,
-  },
-  skeletonRow: {
+  grid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
     paddingHorizontal: layout.screenPadding,
+  },
+  gridCompact: {
+    paddingHorizontal: 0,
   },
 });
 

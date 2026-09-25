@@ -1,8 +1,12 @@
 import { useJoinGroup } from "@/api/groups";
+import { fonts } from "@/theme/typography";
 import KeyboardAwareView from "@/components/KeyboardAwareView";
 import { BaseLayout, GeliomButton, Typography } from "@/components/shared";
 import { useTheme } from "@/contexts/ThemeContext";
+import { PLAN_LIMITS, membershipLimit } from "@/constants/premium";
+import { usePremiumGate } from "@/hooks/usePremiumGate";
 import { useAppStore } from "@/store/useAppStore";
+import { getApiErrorMessage, getPremiumLimitCode } from "@/utils/api-error";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -26,17 +30,11 @@ export default function JoinGroupScreen() {
 
   const isCodeComplete = inviteCode.trim().length === INVITE_CODE_LENGTH;
 
-  const handleJoin = async () => {
-    if (!isCodeComplete) {
-      setCodeError(`${INVITE_CODE_LENGTH} haneli davet kodu gerekli`);
-      return;
-    }
+  const groups = useAppStore((state) => state.groups);
+  const { isPremium, requirePremium, openPaywall } = usePremiumGate();
+  const atLimit = groups.length >= membershipLimit(isPremium);
 
-    if (!user?.id) {
-      Alert.alert("Hata", "Kullanıcı bilgisi bulunamadı");
-      return;
-    }
-
+  const submit = async () => {
     try {
       setIsSubmitting(true);
       setCodeError(null);
@@ -45,28 +43,48 @@ export default function JoinGroupScreen() {
         inviteCode: inviteCode.trim().toUpperCase(),
       });
 
-      Alert.alert("Gruba Katıldınız", `${group.name} grubuna katıldınız.`, [
-        {
-          text: "Tamam",
-          onPress: () => router.replace("/(drawer)/home"),
-        },
+      Alert.alert("Gruba katıldın", `${group.name} grubuna katıldın.`, [
+        { text: "Tamam", onPress: () => router.replace("/(drawer)/home") },
       ]);
     } catch (error: any) {
       const status = error?.response?.status;
-      const backendMessage = error?.response?.data?.message;
+      const code = getPremiumLimitCode(error);
       if (status === 404) {
         setCodeError("Geçersiz davet kodu");
-      } else if (status === 409) {
+      } else if (code === "MEMBERSHIP_LIMIT" && !isPremium) {
+        openPaywall(() => void submit());
+      } else if (code === "GROUP_CAPACITY") {
+        // Katılan kişi premium alsa da açılmaz — yalnızca grup sahibi açabilir
         setCodeError(
-          (Array.isArray(backendMessage) ? backendMessage[0] : backendMessage) ||
-            "Gruba katılamadınız (zaten üye olabilirsiniz veya limit dolu)",
+          "Bu grup dolu. Grubun yöneticisi Premium'a geçerse kapasite 20 kişiye çıkar.",
         );
       } else {
-        setCodeError(error.message || "Gruba katılamadınız");
+        setCodeError(getApiErrorMessage(error, "Gruba katılamadın"));
       }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleJoin = () => {
+    if (!isCodeComplete) {
+      setCodeError(`${INVITE_CODE_LENGTH} haneli davet kodu gerekli`);
+      return;
+    }
+    if (!user?.id) return;
+
+    if (atLimit) {
+      if (isPremium) {
+        setCodeError(
+          `Premium ile en fazla ${PLAN_LIMITS.PREMIUM.MAX_MEMBERSHIPS} gruba üye olabilirsin. Önce bir gruptan ayrıl.`,
+        );
+        return;
+      }
+      requirePremium(() => void submit());
+      return;
+    }
+
+    void submit();
   };
 
   const handleCodeChange = (text: string) => {
@@ -210,7 +228,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     fontSize: 20,
-    fontFamily: "Comfortaa-Bold",
+    fontFamily: fonts.bold,
     letterSpacing: 2,
     textAlign: "center",
   },

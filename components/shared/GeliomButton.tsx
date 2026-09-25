@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '@/theme/typography';
 import React, { ReactNode, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -213,7 +214,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 
 const styles = StyleSheet.create({
   text: {
-    fontFamily: 'Comfortaa-SemiBold',
+    fontFamily: fonts.semibold,
     textAlign: 'center',
     fontWeight: '600',
   },

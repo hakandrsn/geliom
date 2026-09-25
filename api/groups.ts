@@ -1,23 +1,24 @@
 import { useAppStore } from "@/store/useAppStore";
-import { getMoodOrder, getStatusOrder } from "@/utils/storage";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { apiClient } from "./client";
 import { DEFAULT_MOODS, DEFAULT_STATUSES } from "./constants";
-import { groupKeys, statusKeys } from "./keys";
-import { closeSession, openSession, updateStatus } from "./socket";
+import { groupKeys } from "./keys";
+import { clearStatus, closeSession, openSession, updateStatus } from "./socket";
 import {
-  AddGroupMoodResponse,
   CreateGroupResponse,
   GetGroupRequestsResponse,
   GetMyGroupsResponse,
   Group,
+  GroupMemberEntry,
+  GroupMoodOption,
+  GroupNotificationPrefs,
+  GroupOption,
   GroupSummary,
   JoinRequest,
   StatusEntry,
-  StatusOption,
   StatusUpdateInput,
+  UpdateGroupOptionsResponse,
   UpdateGroupResponse,
 } from "./types";
 
@@ -27,6 +28,23 @@ export { groupKeys };
 // GROUPS (Core — REST)
 // ==========================================
 
+export const DEFAULT_NOTIFICATION_PREFS: GroupNotificationPrefs = {
+  enabled: true,
+  statusUpdates: true,
+  moodUpdates: true,
+  mutedUserIds: [],
+};
+
+/** Session'daki üyelik kaydından tercihleri çözümler (sunucu ile aynı varsayılanlar). */
+export const resolveNotificationPrefs = (
+  member?: GroupMemberEntry | null,
+): GroupNotificationPrefs => ({
+  enabled: member ? !member.isMuted : true,
+  statusUpdates: member?.notificationPrefs?.statusUpdates ?? true,
+  moodUpdates: member?.notificationPrefs?.moodUpdates ?? true,
+  mutedUserIds: member?.notificationPrefs?.mutedUserIds ?? [],
+});
+
 const toGroupSummary = (group: Group, role: "ADMIN" | "MEMBER"): GroupSummary => ({
   id: group.id,
   name: group.name,
@@ -34,6 +52,7 @@ const toGroupSummary = (group: Group, role: "ADMIN" | "MEMBER"): GroupSummary =>
   inviteCode: group.inviteCode,
   ownerId: group.ownerId,
   role,
+  notifications: DEFAULT_NOTIFICATION_PREFS,
   memberCount: Object.keys(group.members ?? {}).length,
   joinedAt: group.createdAt,
 });
@@ -269,251 +288,115 @@ export const useSetUserStatus = () => {
   });
 };
 
-export interface MoodOption {
-  id: string;
-  text: string;
-  emoji: string | null;
-  mood: string;
-  isCustom: boolean;
-}
-
-/** Varsayılan mood'lar + aktif session'daki grubun custom mood'ları. */
-export const useMoods = (groupId?: string) => {
-  const session = useAppStore((state) => state.session);
-
-  const customMoods: MoodOption[] =
-    session && (!groupId || session.group.id === groupId)
-      ? (session.group.customMoods ?? []).map((m) => ({
-          id: m.id,
-          text: m.text,
-          emoji: m.emoji,
-          mood: m.mood,
-          isCustom: true,
-        }))
-      : [];
-
-  const data: MoodOption[] = [
-    ...customMoods,
-    ...DEFAULT_MOODS.map((m) => ({ ...m, isCustom: false })),
-  ];
-
-  return { data, isLoading: false, error: null };
-};
-
-/** Admin + Premium: gruba custom mood ekle (canlı yayınlanır — mood.added). */
-export const useCreateMood = () => {
-  return useMutation({
-    mutationFn: async ({
-      groupId,
-      data,
-    }: {
-      groupId: string;
-      data: { text: string; emoji?: string; mood: string };
-    }): Promise<AddGroupMoodResponse> => {
-      const response = await apiClient.post(`/groups/${groupId}/moods`, data);
-      return response.data;
-    },
-    // Session patch'i (mood.added) store'u zaten güncelleyecek
-  });
-};
-
-/** Admin: gruptan custom mood sil (canlı yayınlanır — mood.removed). */
-export const useDeleteMood = () => {
-  return useMutation({
-    mutationFn: async ({
-      groupId,
-      moodId,
-    }: {
-      groupId: string;
-      moodId: string;
-    }): Promise<void> => {
-      await apiClient.delete(`/groups/${groupId}/moods/${moodId}`);
-    },
-    // Session patch'i (mood.removed) store'u zaten güncelleyecek
-  });
-};
-
-// ------------------------------------------------------------------
-// Custom status'ler — API'de karşılığı yok; GRUBA ÖZEL olarak
-// kullanıcı + grup başına lokal (AsyncStorage) tutulur.
-// Paylaşım anı yine socket status:update'tir.
-// ------------------------------------------------------------------
-
-const customStatusStorageKey = (userId: string, groupId: string) =>
-  `geliom:custom-statuses:${userId}:${groupId}`;
-
-const readCustomStatuses = async (
-  userId: string,
-  groupId: string,
-): Promise<StatusOption[]> => {
-  try {
-    const raw = await AsyncStorage.getItem(
-      customStatusStorageKey(userId, groupId),
-    );
-    return raw ? (JSON.parse(raw) as StatusOption[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeCustomStatuses = async (
-  userId: string,
-  groupId: string,
-  statuses: StatusOption[],
-): Promise<void> => {
-  await AsyncStorage.setItem(
-    customStatusStorageKey(userId, groupId),
-    JSON.stringify(statuses),
-  );
-};
-
-export const useCustomStatuses = (groupId?: string, userId?: string) => {
-  return useQuery({
-    queryKey: statusKeys.custom(groupId, userId),
-    queryFn: async (): Promise<StatusOption[]> => {
-      if (!userId || !groupId) return [];
-      return readCustomStatuses(userId, groupId);
-    },
-    enabled: !!userId && !!groupId,
-    initialData: [],
-  });
-};
-
-export const useCreateCustomStatus = () => {
-  const queryClient = useQueryClient();
+/** Durumu tamamen kaldırır (metin + mood). Session patch'i herkese yansır. */
+export const useClearUserStatus = () => {
+  const clearOwnStatus = useAppStore((state) => state.clearOwnStatus);
+  const user = useAppStore((state) => state.user);
 
   return useMutation({
-    mutationFn: async ({
-      userId,
-      groupId,
-      text,
-      emoji,
-    }: {
-      userId: string;
-      groupId: string;
-      text: string;
-      emoji?: string;
-    }): Promise<StatusOption> => {
-      const statuses = await readCustomStatuses(userId, groupId);
-      const status: StatusOption = {
-        id: `custom-${Date.now()}`,
-        text,
-        emoji,
-        is_custom: true,
-      };
-      await writeCustomStatuses(userId, groupId, [status, ...statuses]);
-      return status;
-    },
-    onSuccess: (_, { userId, groupId }) => {
-      queryClient.invalidateQueries({
-        queryKey: statusKeys.custom(groupId, userId),
-      });
+    mutationFn: async (): Promise<void> => clearStatus(),
+    onSuccess: () => {
+      if (user?.id) clearOwnStatus(user.id);
     },
   });
 };
-
-export const useDeleteCustomStatus = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      userId,
-      groupId,
-      statusId,
-    }: {
-      userId: string;
-      groupId: string;
-      statusId: string;
-    }): Promise<void> => {
-      const statuses = await readCustomStatuses(userId, groupId);
-      await writeCustomStatuses(
-        userId,
-        groupId,
-        statuses.filter((s) => s.id !== statusId),
-      );
-    },
-    onSuccess: (_, { userId, groupId }) => {
-      queryClient.invalidateQueries({
-        queryKey: statusKeys.custom(groupId, userId),
-      });
-    },
-  });
-};
-
-// ------------------------------------------------------------------
-// Sıralama — kullanıcı + grup başına lokal tutulur ve seçicilerde uygulanır.
-// ------------------------------------------------------------------
 
 /**
- * Kaydedilmiş sıralamayı bir listeye uygular: sıralamada olanlar o sırayla
- * öne gelir, olmayanlar mevcut sıralarıyla sona eklenir.
+ * Grubun seçenek listeleri — aktif session'dan. Session henüz yoksa
+ * varsayılanlar (yükleme anında boş görünmesin diye).
  */
-export const applySavedOrder = <T extends { id: string | number }>(
-  items: T[],
-  order: string[],
-): T[] => {
-  if (!order.length) return items;
-  const ordered: T[] = [];
-  for (const id of order) {
-    const item = items.find((i) => String(i.id) === id);
-    if (item) ordered.push(item);
-  }
-  const rest = items.filter((i) => !order.includes(String(i.id)));
-  return [...ordered, ...rest];
+export const useGroupOptions = (groupId?: string) => {
+  const session = useAppStore((state) => state.session);
+  const live = session && (!groupId || session.group.id === groupId) ? session.group : null;
+  return {
+    statusOptions: (live?.statusOptions ?? DEFAULT_STATUSES) as GroupOption[],
+    moodOptions: (live?.moodOptions ?? DEFAULT_MOODS) as GroupMoodOption[],
+    isLoaded: !!live,
+    isPaused: !!live?.isPaused,
+  };
 };
 
-export const useStatusOrder = (userId?: string, groupId?: string) => {
-  return useQuery({
-    queryKey: statusKeys.order("status", userId, groupId),
-    queryFn: async (): Promise<string[]> => {
-      if (!userId || !groupId) return [];
-      return getStatusOrder(userId, groupId);
+/**
+ * PUT /groups/:id/options — sahip + premium. Listeler sırasıyla ve tamamen
+ * değiştirilir; yeni seçeneklerde id gönderilmez. Session'a options.updated
+ * patch'i olarak canlı yansır.
+ */
+export const useUpdateGroupOptions = () =>
+  useMutation({
+    mutationFn: async ({
+      groupId,
+      statusOptions,
+      moodOptions,
+    }: {
+      groupId: string;
+      statusOptions?: { id?: string; text: string; emoji?: string }[];
+      moodOptions?: { id?: string; text: string; emoji?: string }[];
+    }): Promise<UpdateGroupOptionsResponse> => {
+      const response = await apiClient.put(`/groups/${groupId}/options`, {
+        statusOptions,
+        moodOptions,
+      });
+      return response.data;
     },
-    enabled: !!userId && !!groupId,
-    initialData: [],
   });
-};
-
-export const useMoodOrder = (userId?: string, groupId?: string) => {
-  return useQuery({
-    queryKey: statusKeys.order("mood", userId, groupId),
-    queryFn: async (): Promise<string[]> => {
-      if (!userId || !groupId) return [];
-      return getMoodOrder(userId, groupId);
-    },
-    enabled: !!userId && !!groupId,
-    initialData: [],
-  });
-};
-
-export const useDefaultStatuses = () => {
-  return useQuery({
-    queryKey: statusKeys.default,
-    queryFn: async (): Promise<StatusOption[]> => DEFAULT_STATUSES,
-    staleTime: Infinity,
-  });
-};
 
 // ==========================================
 // NOTIFICATIONS (Settings)
 // ==========================================
 
-/** Bu grubun push bildirimlerini benim için aç/kapat. */
-export const useMuteGroup = () => {
+/**
+ * PATCH /groups/:id/notifications — yalnızca gönderilen alanlar değişir.
+ * Sonuç hem grup listesine (optimistic) hem session patch'iyle üyeliğe yansır.
+ */
+export const useUpdateGroupNotifications = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       groupId,
-      isMuted,
+      ...changes
     }: {
       groupId: string;
-      isMuted: boolean;
-    }): Promise<void> => {
-      await apiClient.post(`/groups/${groupId}/mute`, { isMuted });
+      enabled?: boolean;
+      statusUpdates?: boolean;
+      moodUpdates?: boolean;
+      mutedUserIds?: string[];
+    }): Promise<{ groupId: string; notifications: GroupNotificationPrefs }> => {
+      const response = await apiClient.patch(
+        `/groups/${groupId}/notifications`,
+        changes,
+      );
+      return response.data;
     },
-    onSuccess: () => {
+    onMutate: ({ groupId, ...changes }) => {
+      const { groups, setGroups } = useAppStore.getState();
+      const previous = groups;
+      setGroups(
+        groups.map((g) =>
+          g.id === groupId
+            ? { ...g, notifications: { ...g.notifications, ...changes } }
+            : g,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) useAppStore.getState().setGroups(context.previous);
+    },
+    onSuccess: ({ groupId, notifications }) => {
+      const { groups, setGroups } = useAppStore.getState();
+      setGroups(groups.map((g) => (g.id === groupId ? { ...g, notifications } : g)));
       queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
     },
   });
+};
+
+/** Geriye dönük kısayol: grubun bildirimlerini tamamen aç/kapat. */
+export const useMuteGroup = () => {
+  const update = useUpdateGroupNotifications();
+  return {
+    ...update,
+    mutateAsync: ({ groupId, isMuted }: { groupId: string; isMuted: boolean }) =>
+      update.mutateAsync({ groupId, enabled: !isMuted }),
+  };
 };

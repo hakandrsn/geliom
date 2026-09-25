@@ -32,7 +32,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "monochromeImage": "./assets/images/ios-tinted.png",
-        "backgroundColor": "#E6F4FE"
+        "backgroundColor": "#FBEFE4"
       },
       "googleServicesFile": "./google-services.json",
       "package": "com.eoist.geliom"
@@ -82,11 +82,11 @@
         "expo-font",
         {
           "fonts": [
-            "./assets/fonts/Comfortaa-Light.ttf",
-            "./assets/fonts/Comfortaa-Regular.ttf",
-            "./assets/fonts/Comfortaa-Medium.ttf",
-            "./assets/fonts/Comfortaa-SemiBold.ttf",
-            "./assets/fonts/Comfortaa-Bold.ttf"
+            "./assets/fonts/Figtree-Light.ttf",
+            "./assets/fonts/Figtree-Regular.ttf",
+            "./assets/fonts/Figtree-Medium.ttf",
+            "./assets/fonts/Figtree-SemiBold.ttf",
+            "./assets/fonts/Figtree-Bold.ttf"
           ]
         }
       ],
@@ -95,7 +95,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/ios-tinted.png",
-          "color": "#2E7D32"
+          "color": "#D9622B"
         }
       ],
       [

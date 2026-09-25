@@ -58,6 +58,8 @@ function MemberCard({ member, isMe, onPress }: MemberCardProps) {
         <Animated.View style={animatedMoodStyle}>
           <Avatar
             photoUrl={member.photoUrl}
+            name={member.displayName}
+            seed={member.userId}
             size={52}
             badge={member.moodEmoji ?? undefined}
           />

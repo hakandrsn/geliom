@@ -12,26 +12,37 @@ export const apiUtils = {
   },
 };
 
+/**
+ * Sunucudaki varsayılanların aynası (api/src/common/group-options.ts).
+ * Asıl liste grubun `statusOptions` / `moodOptions` alanlarıdır; bunlar
+ * yalnızca session gelmeden önce ve eski kayıtları çözümlemek için kullanılır.
+ */
 export const DEFAULT_STATUSES = [
-  { id: "default-0", text: "Müsait", is_custom: false },
-  { id: "default-1", text: "Meşgul", is_custom: false },
-  { id: "default-2", text: "Toplantıda", is_custom: false },
-  { id: "default-3", text: "Okulda", is_custom: false },
-  { id: "default-4", text: "İşte", is_custom: false },
-  { id: "default-5", text: "Uykuda", is_custom: false },
-  { id: "default-6", text: "Spor yapıyor", is_custom: false },
+  { id: "default-0", text: "Müsait", emoji: "🟢", isDefault: true },
+  { id: "default-1", text: "Meşgul", emoji: "⛔", isDefault: true },
+  { id: "default-4", text: "İşte", emoji: "💼", isDefault: true },
+  { id: "default-3", text: "Okulda", emoji: "📚", isDefault: true },
+  { id: "default-2", text: "Toplantıda", emoji: "🗓️", isDefault: true },
+  { id: "default-7", text: "Yolda", emoji: "🚗", isDefault: true },
+  { id: "default-6", text: "Spor yapıyor", emoji: "🏃", isDefault: true },
+  { id: "default-5", text: "Uykuda", emoji: "😴", isDefault: true },
+];
+
+export const DEFAULT_MOODS = [
+  { id: "mood-default-0", key: "happy", text: "Mutlu", emoji: "😊", isDefault: true },
+  { id: "mood-default-2", key: "relaxed", text: "Rahat", emoji: "😌", isDefault: true },
+  { id: "mood-default-4", key: "energetic", text: "Enerjik", emoji: "⚡", isDefault: true },
+  { id: "mood-default-6", key: "excited", text: "Heyecanlı", emoji: "🤩", isDefault: true },
+  { id: "mood-default-3", key: "tired", text: "Yorgun", emoji: "🥱", isDefault: true },
+  { id: "mood-default-7", key: "stressed", text: "Stresli", emoji: "😣", isDefault: true },
+  { id: "mood-default-5", key: "sad", text: "Üzgün", emoji: "😔", isDefault: true },
+  { id: "mood-default-8", key: "bored", text: "Sıkkın", emoji: "😐", isDefault: true },
 ];
 
 /**
- * Client tarafı varsayılan mood listesi.
- * API yalnızca grup başına custom mood tutar (Group.customMoods);
- * varsayılanlar uygulamada sabittir.
+ * Artık seçilemeyen ama eski kayıtlarda bulunabilen mood'lar — yalnızca
+ * görüntüleme çözümlemesinde kullanılır ("Meşgul" bir duygu değil, durumdu).
  */
-export const DEFAULT_MOODS = [
-  { id: "mood-default-0", text: "Mutlu", emoji: "😊", mood: "happy" },
-  { id: "mood-default-1", text: "Meşgul", emoji: "💻", mood: "busy" },
-  { id: "mood-default-2", text: "Rahat", emoji: "😌", mood: "relaxed" },
-  { id: "mood-default-3", text: "Yorgun", emoji: "🥱", mood: "tired" },
-  { id: "mood-default-4", text: "Enerjik", emoji: "⚡", mood: "energetic" },
-  { id: "mood-default-5", text: "Üzgün", emoji: "😔", mood: "sad" },
+export const LEGACY_MOODS = [
+  { id: "mood-legacy-busy", key: "busy", text: "Meşgul", emoji: "💻", isDefault: true },
 ];

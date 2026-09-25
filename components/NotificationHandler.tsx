@@ -76,6 +76,12 @@ export function NotificationHandler() {
       const additionalData = event.notification.additionalData;
       const groupId = additionalData?.groupId as string | undefined;
 
+      // Abonelik hatırlatması: ana ekrana dön — kırmızı uyarı yenileme yolunu gösterir
+      if (additionalData?.type === "premium_lapsed") {
+        router.push("/(drawer)/home");
+        return;
+      }
+
       if (!groupId) {
         console.warn("⚠️ Bildirimde groupId bulunamadı");
         return;

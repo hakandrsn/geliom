@@ -1,159 +1,173 @@
+import { GeliomButton, Typography } from '@/components/shared';
+import { Avatar } from '@/components/ui';
+import { CHARACTER_AVATARS, toAvatarValue } from '@/constants/avatars';
 import { useTheme } from '@/contexts/ThemeContext';
-import { getAvailableAvatars, getAvatarSource } from '@/utils/avatar';
+import { radius, spacing } from '@/theme/tokens';
+import { AVATAR_TINT_COUNT, makeTintAvatar } from '@/utils/avatar';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, View, type GestureResponderEvent } from 'react-native';
-import GeliomButton from './GeliomButton';
-import Typography from './Typography';
+import { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import React, { useState } from 'react';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { BouncyButton } from '../anim/AnimatedComponents';
 
 interface AvatarSelectorProps {
-  visible: boolean;
+  /** Mevcut değer: "avatar:<key>", "tint:n", URL veya null */
   currentAvatar: string | null | undefined;
-  onSelect: (avatar: string | null) => void;
-  onClose: () => void;
+  /** Baş harf seçenekleri ve önizleme için kullanıcının adı */
+  name?: string | null;
+  /** Otomatik karakter için kullanıcı kimliği */
+  seed?: string | null;
+  onSelect: (avatar: string | null) => void | Promise<void>;
+  onCancel: () => void;
 }
 
-export default function AvatarSelector({ visible, currentAvatar, onSelect, onClose }: AvatarSelectorProps) {
-  const { colors } = useTheme();
-  const avatars = getAvailableAvatars();
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(currentAvatar || null);
+const COLUMNS = 4;
+const GAP = spacing.md;
+const TINT_INDICES = Array.from({ length: AVATAR_TINT_COUNT }, (_, i) => i);
 
-  // Modal açıldığında currentAvatar'ı selectedAvatar'a set et
-  useEffect(() => {
-    if (visible) {
-      setSelectedAvatar(currentAvatar || null);
+/**
+ * Avatar seçici (bottom sheet içeriği): önce karakterler, altta baş harf
+ * tonları. Seçim anahtar olarak kaydedilir; görsel cihazdan gelir.
+ */
+export default function AvatarSelector({
+  currentAvatar,
+  name,
+  seed,
+  onSelect,
+  onCancel,
+}: AvatarSelectorProps) {
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const [selected, setSelected] = useState<string | null>(currentAvatar ?? null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Sheet iç boşluğu (16) düşülerek eşit sütunlar
+  const cell = Math.floor((width - spacing.lg * 2 - GAP * (COLUMNS - 1)) / COLUMNS);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSelect(selected);
+    } finally {
+      setIsSaving(false);
     }
-  }, [visible, currentAvatar]);
+  };
+
+  const renderOption = (value: string, child: React.ReactNode) => {
+    const active = selected === value;
+    return (
+      <BouncyButton key={value} onPress={() => setSelected(value)} style={{ width: cell, height: cell }}>
+        <View
+          style={[
+            styles.ring,
+            { borderColor: active ? colors.primary : 'transparent', borderRadius: radius.full },
+          ]}
+        >
+          {child}
+        </View>
+        {active && (
+          <View style={[styles.check, { backgroundColor: colors.primary, borderColor: colors.sheetBackground }]}>
+            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+          </View>
+        )}
+      </BouncyButton>
+    );
+  };
+
+  const unchanged = selected === (currentAvatar ?? null);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <Pressable
-        style={styles.modalOverlay}
-        onPress={onClose}
-      >
-        <Pressable
-          onPress={(e: GestureResponderEvent) => e.stopPropagation()}
-          style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}
+    <View style={styles.container}>
+      {/* Başlık: solda önizleme + başlık, sağ üstte Kaydet. İptal = aşağı kaydır */}
+      <View style={styles.header}>
+        <Avatar photoUrl={selected} name={name} seed={seed} size={44} />
+        <View style={styles.headerText}>
+          <Typography variant="h5" color={colors.text}>
+            Avatarını Seç
+          </Typography>
+          <Typography variant="caption" color={colors.lightText}>
+            Grubundaki herkes bunu görür
+          </Typography>
+        </View>
+        <GeliomButton
+          state={isSaving ? 'loading' : unchanged ? 'passive' : 'active'}
+          size="small"
+          onPress={handleSave}
+          disabled={isSaving || unchanged}
         >
-          <View style={styles.header}>
-            <Typography variant="h5" color={colors.text}>
-              Avatar Seç
-            </Typography>
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </Pressable>
-          </View>
+          Kaydet
+        </GeliomButton>
+      </View>
 
-          <ScrollView
-            contentContainerStyle={styles.avatarGrid}
-            showsVerticalScrollIndicator={false}
-          >
-            {avatars.map((avatar) => {
-              const isSelected = selectedAvatar === avatar;
-              return (
-                <Pressable
-                  key={avatar}
-                  onPress={() => setSelectedAvatar(avatar)}
-                  style={[
-                    styles.avatarItem,
-               
-                  ]}
-                >
-                  <Image
-                    source={getAvatarSource(avatar)}
-                    style={styles.avatarImage}
-                    resizeMode="cover"
-                  />
-                  {isSelected && (
-                    <View style={[styles.checkmark, { backgroundColor: colors.primary }]}>
-                      <Ionicons name="checkmark" size={16} color={colors.white} />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+      <BottomSheetScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.grid}>
+          {CHARACTER_AVATARS.map((a) =>
+            renderOption(toAvatarValue(a.key), <Avatar photoUrl={toAvatarValue(a.key)} size={cell - 8} />),
+          )}
+        </View>
 
-          {/* Kaydet Butonu */}
-          <View style={styles.footer}>
-            <GeliomButton
-              state="active"
-              size="large"
-              layout="full-width"
-              onPress={() => {
-                onSelect(selectedAvatar);
-                onClose();
-              }}
-            >
-              Kaydet
-            </GeliomButton>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.section}>
+          Baş harflerin
+        </Typography>
+        <View style={styles.grid}>
+          {TINT_INDICES.map((i) =>
+            renderOption(makeTintAvatar(i), <Avatar photoUrl={makeTintAvatar(i)} name={name} size={cell - 8} />),
+          )}
+        </View>
+      </BottomSheetScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  modalContent: {
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-    borderRadius: 20,
-    padding: 20,
+  flex: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    gap: spacing.md,
+    paddingBottom: spacing.md,
   },
-  closeButton: {
-    padding: 4,
+  headerText: {
+    flex: 1,
+    gap: 2,
   },
-  avatarGrid: {
+  scroll: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxxl,
+  },
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    paddingBottom: 16,
+    gap: GAP,
   },
-  avatarItem: {
-    width: '30%',
-    aspectRatio: 1,
-    overflow: 'hidden',
-    position: 'relative',
+  section: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  checkmark: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
+  ring: {
+    flex: 1,
+    borderWidth: 2,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  footer: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.1)',
-    marginTop: 8,
+  check: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 20,
+    height: 20,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-

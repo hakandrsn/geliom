@@ -18,6 +18,7 @@ export default function GroupStackLayout() {
       <Stack.Screen name="search-user" />
       <Stack.Screen name="manage-members" />
       <Stack.Screen name="group-management" />
+      <Stack.Screen name="group-notifications" />
     </Stack>
   );
 }

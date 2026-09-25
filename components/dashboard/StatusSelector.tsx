@@ -1,157 +1,136 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import React, { useCallback } from "react";
+import { StyleSheet, View } from "react-native";
 
-// Hooks & Contexts
-import {
-  applySavedOrder,
-  useCustomStatuses,
-  useDefaultStatuses,
-  useSetUserStatus,
-  useStatusOrder,
-} from "@/api";
-import { useManageStatusMood } from "@/hooks/useManageStatusMood";
+import { useClearUserStatus, useGroupOptions, useSetUserStatus } from "@/api";
+import { Chip, OptionRow } from "@/components/ui";
 import { useAppStore } from "@/store/useAppStore";
-import { layout, radius, spacing } from "@/theme/tokens";
-
-// Components
-import { StatusMoodBottomSheet } from "@/components/bottomsheets";
-import { Chip, Skeleton } from "@/components/ui";
-import { useBottomSheet } from "@/contexts/BottomSheetContext";
+import { layout, spacing } from "@/theme/tokens";
+import { useRouter } from "expo-router";
+import SelectorHeader from "./SelectorHeader";
 
 interface StatusSelectorProps {
   groupId: string;
-  currentStatusId?: string | number;
-  onAddPress?: () => void;
+  /** Başlık sorusu (rastgele prompt); compact modda gösterilmez */
+  title?: string;
+  /** Composer/dropdown içinde: başlık yok, kenar boşluğu dışarıdan */
+  compact?: boolean;
+  /** Dropdown: chip yerine kompakt satır listesi */
+  layout?: "chips" | "list";
+  /** Bir seçim/kaldırma yapıldığında (dropdown kapatmak için) */
+  onSelect?: () => void;
+  /** Başka ekrana/sheet'e geçmeden hemen önce (dropdown kapatmak için) */
+  onWillOpenSheet?: () => void;
 }
 
+/**
+ * Grubun durum seçenekleri — liste grubun sahibi tarafından belirlenir,
+ * herkes aynı sırayı görür. Durum ve ruh hali bağımsızdır.
+ */
 function StatusSelector({
   groupId,
-  currentStatusId,
-  onAddPress,
+  title,
+  compact = false,
+  layout: layoutMode = "chips",
+  onSelect,
+  onWillOpenSheet,
 }: StatusSelectorProps) {
+  const router = useRouter();
   const user = useAppStore((state) => state.user);
-  // Kendi mevcut status kaydım — mood'u ezmemek için seçimde korunur
+  const isOwner = useAppStore(
+    (state) => state.groups.find((g) => g.id === groupId)?.ownerId === state.user?.id,
+  );
   const myStatus = useAppStore((state) =>
     user ? state.session?.group.statuses[user.id] : undefined,
   );
-  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
+  const { statusOptions } = useGroupOptions(groupId);
+  const setStatus = useSetUserStatus();
+  const clearStatus = useClearUserStatus();
 
-  // LOCAL STATE: Anında UI tepkisi için
-  const [activeId, setActiveId] = useState<string | number | undefined>(
-    currentStatusId,
-  );
-
-  // Prop (Veritabanı) değişirse local state'i senkronize et
-  useEffect(() => {
-    setActiveId(currentStatusId);
-  }, [currentStatusId]);
-
-  // Hook'lar
-  const { handleAddStatus, checkSubscriptionAndProceed } =
-    useManageStatusMood(groupId);
-  const { data: defaultStatuses = [], isLoading: isLoadingDefault } =
-    useDefaultStatuses();
-  const { data: customStatuses = [], isLoading: isLoadingCustom } =
-    useCustomStatuses(groupId, user?.id);
-  const { data: statusOrder = [] } = useStatusOrder(user?.id, groupId);
-  const setStatusMutation = useSetUserStatus();
-
-  const handleStatusSelect = useCallback(
-    (status: any) => {
-      if (!user) return;
-
-      // 1. UI'ı ANINDA güncelle
-      setActiveId(status.id);
-
-      // 2. Socket üzerinden paylaş — mevcut mood (ve emojisi) korunur
-      setStatusMutation.mutate({
-        text: status.text,
-        emoji: status.emoji ?? myStatus?.emoji ?? undefined,
+  const select = useCallback(
+    (option: (typeof statusOptions)[number]) => {
+      // Ruh hali korunur; durum emojisi yalnızca ruh hali yoksa kullanılır
+      setStatus.mutate({
+        text: option.text,
+        emoji: myStatus?.mood ? (myStatus.emoji ?? undefined) : (option.emoji ?? undefined),
         mood: myStatus?.mood ?? undefined,
       });
+      onSelect?.();
     },
-    [user, setStatusMutation, myStatus],
+    [setStatus, myStatus, onSelect],
   );
 
-  const isLoading = isLoadingDefault || isLoadingCustom;
+  // Yalnızca durum metnini kaldır; ruh hali varsa korunur, yoksa kayıt silinir
+  const clear = useCallback(() => {
+    if (myStatus?.mood) {
+      setStatus.mutate({ mood: myStatus.mood, emoji: myStatus.emoji ?? undefined });
+    } else {
+      clearStatus.mutate();
+    }
+    onSelect?.();
+  }, [myStatus, setStatus, clearStatus, onSelect]);
 
-  // Kullanıcının kaydettiği sıralama uygulanır; sıralama yoksa
-  // custom'lar önce, sonra alfabetik
-  const allStatuses = useMemo(() => {
-    const sorted = [...customStatuses, ...defaultStatuses].sort((a, b) => {
-      if (a.is_custom && !b.is_custom) return -1;
-      if (!a.is_custom && b.is_custom) return 1;
-      return a.text.localeCompare(b.text);
-    });
-    return applySavedOrder(sorted, statusOrder);
-  }, [customStatuses, defaultStatuses, statusOrder]);
+  const openEditor = () => {
+    onWillOpenSheet?.();
+    router.push("/(drawer)/(group)/reorder-status-mood?tab=status");
+  };
 
-  if (isLoading) {
+  const isSelected = (text: string) => text === myStatus?.text;
+
+  if (layoutMode === "list") {
     return (
-      <View style={styles.skeletonRow}>
-        {[110, 90, 100, 84].map((w, i) => (
-          <Skeleton key={i} width={w} height={40} radius={radius.full} />
+      <View>
+        {myStatus?.text && (
+          <OptionRow icon="close-circle-outline" label="Durumu kaldır" muted onPress={clear} />
+        )}
+        {statusOptions.map((option, index) => (
+          <OptionRow
+            key={option.id}
+            label={option.text}
+            emoji={option.emoji ?? undefined}
+            icon={option.emoji ? undefined : "ellipse-outline"}
+            selected={isSelected(option.text)}
+            last={!isOwner && index === statusOptions.length - 1}
+            onPress={() => select(option)}
+          />
         ))}
+        {isOwner && (
+          <OptionRow icon="create-outline" label="Listeyi düzenle" accent last onPress={openEditor} />
+        )}
       </View>
     );
   }
 
   return (
     <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      >
-        {allStatuses.map((item) => (
+      {!compact && title && (
+        <SelectorHeader title={title} onClear={myStatus?.text ? clear : undefined} />
+      )}
+      <View style={[styles.wrap, compact && styles.wrapCompact]}>
+        {statusOptions.map((option) => (
           <Chip
-            key={item.id.toString()}
-            label={item.text}
-            emoji={item.emoji}
-            // Yerel seçim yoksa store'daki mevcut status metniyle eşleştir
-            selected={
-              activeId !== undefined
-                ? activeId === item.id
-                : item.text === myStatus?.text
-            }
-            onPress={() => handleStatusSelect(item)}
+            key={option.id}
+            label={option.text}
+            emoji={option.emoji ?? undefined}
+            filled
+            selected={isSelected(option.text)}
+            onPress={() => select(option)}
           />
         ))}
-
-        <Chip
-          dashed
-          icon="add"
-          label="Ekle"
-          onPress={() =>
-            checkSubscriptionAndProceed(() =>
-              openBottomSheet(
-                <StatusMoodBottomSheet
-                  type="status"
-                  onSave={async (text, emoji) => {
-                    await handleAddStatus(text, emoji);
-                    closeBottomSheet();
-                  }}
-                  onCancel={closeBottomSheet}
-                />,
-                { snapPoints: ["55%"] },
-              ),
-            )
-          }
-        />
-      </ScrollView>
+        {isOwner && <Chip dashed icon="create-outline" label="Düzenle" onPress={openEditor} />}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  listContent: {
-    paddingHorizontal: layout.screenPadding,
-    gap: spacing.sm,
-  },
-  skeletonRow: {
+  wrap: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
     paddingHorizontal: layout.screenPadding,
+  },
+  wrapCompact: {
+    paddingHorizontal: 0,
   },
 });
 

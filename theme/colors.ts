@@ -48,106 +48,137 @@ export interface ThemeColors {
   // Katmanlar
   overlay: string;
   blurBackground: string;
+
+  /**
+   * Baş harf avatarları için palete uyumlu zeminler. Kullanıcı birini seçer
+   * ("tint:3") ya da isim hash'i ile otomatik atanır. Üzerindeki metin her
+   * iki temada da beyazdır — tonlar buna göre doygun tutulur.
+   */
+  avatarTints: string[];
 }
 
 /**
- * Light Theme — Geliom (Okyanus Mavisi & Fıstık Yeşili)
- * Marka: #0474B4 (mavi) + #D2E6B3 (soft yeşil)
+ * Light Theme — Geliom (Terracotta & Şeftali)
+ * Marka: #D9622B (terracotta) + #F8D5BC (şeftali). Zemin krem, metin sıcak kahve.
  */
 export const lightColors: ThemeColors = {
   // Marka
-  primary: '#0474B4',        // Okyanus mavisi
-  secondary: '#D2E6B3',      // Fıstık yeşili (soft accent)
-  tertiary: '#3E9BD6',       // Açık mavi
+  primary: '#D9622B',        // Terracotta
+  secondary: '#F8D5BC',      // Şeftali (soft accent)
+  tertiary: '#F0946A',       // Açık mercan
 
   // Component Durumları
-  activeState: '#03608F',         // Koyu mavi (Aktif/Güçlü)
-  passiveState: 'rgba(4, 116, 180, 0.10)', // Mavi @ 10% (Pasif/Hafif)
-  loadingState: '#0587CF',           // Canlı mavi (Yükleniyor)
+  activeState: '#B94E1F',                 // Koyu terracotta (Aktif/Güçlü)
+  passiveState: 'rgba(217, 98, 43, 0.10)', // Terracotta @ 10% (Pasif/Hafif)
+  loadingState: '#E8783F',                // Canlı turuncu (Yükleniyor)
 
-  linearGradient: ['#0474B4', '#2FA3E0'], // Koyu maviden açık maviye
+  linearGradient: ['#D9622B', '#F09A5A'], // Terracotta'dan kayısıya
 
-  // Tipografi — koyu petrol tonları
-  text: '#10242F',
-  secondaryText: '#47616F',
-  lightText: '#8CA3AF',
+  // Tipografi — sıcak kahve tonları
+  text: '#2A1F1A',
+  secondaryText: '#6B5A50',
+  lightText: '#A6968C',
 
-  // Arkaplanlar — box zeminleri rgba, soft katman hissi
-  background: '#F5F9FC',
-  secondaryBackground: 'rgba(4, 116, 180, 0.05)',
+  // Arkaplanlar — krem zemin, rgba kart katmanları
+  background: '#FBF6F1',
+  secondaryBackground: 'rgba(217, 98, 43, 0.05)',
   cardBackground: 'rgba(255, 255, 255, 0.92)',
   sheetBackground: '#FFFFFF',
 
   // Durumlar
-  success: '#8FBF5A',        // Marka yeşilinin doygun hali
-  warning: '#F59E0B',
-  error: '#EF4444',
-  info: '#0587CF',
+  success: '#5FA86A',
+  warning: '#E0A428',
+  error: '#D64545',
+  info: '#3E8FD0',
 
   // Nötrler
-  black: '#0A161D',
+  black: '#1B1411',
   white: '#FFFFFF',
-  gray: '#64798A',
-  lightGray: '#DFE9EF',
+  gray: '#8A7A70',
+  lightGray: '#EBE1D9',
 
   // Etkileşim
-  disabled: '#C3D2DB',
-  stroke: 'rgba(13, 59, 84, 0.10)',
-  passiveButton: 'rgba(57, 62, 70, 0.3)',
+  disabled: '#DACFC6',
+  stroke: 'rgba(74, 44, 28, 0.10)',
+  passiveButton: 'rgba(74, 44, 28, 0.3)',
 
   // Katmanlar
-  overlay: 'rgba(10, 25, 35, 0.55)',
-  blurBackground: 'rgba(255, 255, 255, 0.85)',
+  overlay: 'rgba(30, 20, 15, 0.55)',
+  blurBackground: 'rgba(255, 252, 248, 0.85)',
+
+  // Avatar tonları — terracotta, kayısı, hardal, zeytin, adaçayı, deniz, erik, gül
+  avatarTints: [
+    '#D9622B',
+    '#E5893F',
+    '#B8912A',
+    '#7E9A4A',
+    '#5F9A7C',
+    '#3E8F92',
+    '#9A5B8C',
+    '#C95A6B',
+  ],
 };
 
 /**
- * Dark Theme — Soft Gece (koyu petrol zemin, yumuşak rgba katmanlar)
- * Simsiyah değil; mavi-gri, göz yormayan bir karanlık.
+ * Dark Theme — Sıcak Gece (kahve-gri zemin, yumuşak rgba katmanlar)
+ * Simsiyah değil; hafif sıcak, göz yormayan bir karanlık.
  */
 export const darkColors: ThemeColors = {
   // Marka — karanlıkta görünürlük için açık tonlar
-  primary: '#4FA9DC',
-  secondary: '#D2E6B3',
-  tertiary: '#7FC0E5',
+  primary: '#F08A55',
+  secondary: '#F8D5BC',
+  tertiary: '#F5A97E',
 
   // Component Durumları
-  activeState: '#0474B4',
-  passiveState: 'rgba(79, 169, 220, 0.16)',
-  loadingState: '#2F89BE',
+  activeState: '#D9622B',
+  passiveState: 'rgba(240, 138, 85, 0.16)',
+  loadingState: '#E8783F',
 
-  linearGradient: ['#2F89BE', '#4FA9DC'],
+  linearGradient: ['#D9622B', '#F08A55'],
 
   // Tipografi
-  text: '#EEF4F8',
-  secondaryText: '#B9C7D1',
-  lightText: '#7C8E9A',
+  text: '#F6EEE8',
+  secondaryText: '#CDBFB5',
+  lightText: '#8E7F75',
 
-  // Arkaplanlar — box zeminleri rgba beyaz katman: soft derinlik
-  background: '#16202A',
+  // Arkaplanlar — sıcak koyu zemin, rgba beyaz katmanlar
+  background: '#1E1916',
   secondaryBackground: 'rgba(255, 255, 255, 0.05)',
   cardBackground: 'rgba(255, 255, 255, 0.07)',
-  sheetBackground: '#20303F',
+  sheetBackground: '#2A231F',
 
   // Durumlar
-  success: '#A9CF7C',
-  warning: '#FBBF24',
-  error: '#F87171',
-  info: '#60A5FA',
+  success: '#8CC98A',
+  warning: '#F2B84B',
+  error: '#F07A7A',
+  info: '#7FB4E8',
 
   // Nötrler
   black: '#000000',
-  white: '#F5F9FC',
-  gray: '#93A6B2',
+  white: '#FBF6F1',
+  gray: '#A89A90',
   lightGray: 'rgba(255, 255, 255, 0.12)',
 
   // Etkileşim
   disabled: 'rgba(255, 255, 255, 0.16)',
   stroke: 'rgba(255, 255, 255, 0.09)',
-  passiveButton: '#DBE2EF',
+  passiveButton: '#E8DDD4',
 
   // Katmanlar
   overlay: 'rgba(0, 0, 0, 0.6)',
-  blurBackground: 'rgba(22, 32, 42, 0.85)',
+  blurBackground: 'rgba(30, 25, 22, 0.85)',
+
+  // Avatar tonları — karanlık zeminde bir tık daha açık, beyaz metin korunur
+  avatarTints: [
+    '#E9784A',
+    '#EC9A55',
+    '#CDA63A',
+    '#93AE5C',
+    '#72AE8E',
+    '#4FA3A6',
+    '#AE72A0',
+    '#D97284',
+  ],
 };
 
 // Styled-components veya hook'larda kullanım için export

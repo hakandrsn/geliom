@@ -1,4 +1,7 @@
+import { BouncyButton } from "@/components/anim/AnimatedComponents";
+import LoginPreview from "@/components/auth/LoginPreview";
 import { Typography } from "@/components/shared";
+import { radius, spacing } from "@/theme/tokens";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   configureGoogleSignIn,
@@ -14,7 +17,6 @@ import {
   Image,
   Platform,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -95,22 +97,29 @@ export default function Login() {
     >
       {/* Main content area, centered and balanced */}
       <View style={styles.contentContainer}>
-        <View />
         <View style={styles.topSection}>
-          {/* Nature-themed icon */}
-          <Image
-            source={require("@/assets/images/ios-light.png")}
-            style={styles.logoIcon}
-          />
-          <Typography variant="h2" color={colors.text} style={styles.appName}>
-            Geliom
+          <View style={styles.brandRow}>
+            <Image
+              source={require("@/assets/images/ios-light.png")}
+              style={styles.logoIcon}
+            />
+            <Typography variant="h3" color={colors.text}>
+              Geliom
+            </Typography>
+          </View>
+
+          {/* Ürünü anlatan canlı sahne — logo yerine ana görsel budur */}
+          <LoginPreview />
+
+          <Typography variant="h4" color={colors.text} style={styles.headline}>
+            Sevdiklerin ne yapıyor, anında gör
           </Typography>
           <Typography
-            variant="bodyLarge"
+            variant="body"
             color={colors.secondaryText}
             style={styles.description}
           >
-            Arkadaşlarınla ve ailenle anlık bağlantı kur
+            Durumunu ve ruh halini paylaş; grubun mesaj atmadan haberdar olsun.
           </Typography>
         </View>
 
@@ -118,18 +127,16 @@ export default function Login() {
         <View style={styles.bottomSection}>
           <View style={styles.buttonContainer}>
             {/* Google Login Button */}
-            <TouchableOpacity
+            <BouncyButton
               style={[
                 styles.loginButton,
                 {
-                  // Use cardBackground for better dark mode compatibility
-                  backgroundColor: colors.cardBackground,
+                  backgroundColor: colors.sheetBackground,
                   borderColor: colors.stroke,
                 },
               ]}
               onPress={handleGoogleLogin}
               disabled={isLoading}
-              activeOpacity={0.8}
             >
               {isLoadingGoogle ? (
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -145,7 +152,7 @@ export default function Login() {
               </Typography>
               {/* Spacer view to keep text centered */}
               <View style={styles.buttonIconSpacer} />
-            </TouchableOpacity>
+            </BouncyButton>
 
             {/* Apple Login - Only show on iOS */}
             {Platform.OS === "ios" && (
@@ -167,8 +174,6 @@ export default function Login() {
             )}
           </View>
         </View>
-        <View />
-        <View />
       </View>
       {/* Terms and privacy */}
       <Typography
@@ -190,27 +195,33 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    justifyContent: "space-around", // Balances top and bottom sections
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
   topSection: {
     alignItems: "center",
-    borderRadius: 12,
+    gap: spacing.lg,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   logoIcon: {
-    width: 80,
-    height: 80,
-    marginBottom: 16,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
   },
-  appName: {
+  headline: {
     textAlign: "center",
-    marginBottom: 8,
+    marginTop: spacing.sm,
   },
   description: {
     textAlign: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   bottomSection: {
     width: "100%",

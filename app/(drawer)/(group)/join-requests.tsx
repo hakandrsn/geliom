@@ -3,7 +3,11 @@ import {
   useGroupJoinRequests,
   useRejectJoinRequest,
 } from "@/api/groups";
+import { ConfirmSheet } from "@/components/bottomsheets";
 import { BaseLayout, Typography } from "@/components/shared";
+import { useBottomSheet } from "@/contexts/BottomSheetContext";
+import { usePremiumGate } from "@/hooks/usePremiumGate";
+import { getApiErrorMessage, getPremiumLimitCode } from "@/utils/api-error";
 // Removed Context imports
 import { useTheme } from "@/contexts/ThemeContext";
 // import type { GroupJoinRequestWithDetails } from '@/types/database'; // Removed old type
@@ -19,15 +23,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const CONFIRM_SHEET_HEIGHT = 340;
 
 export default function JoinRequestsScreen() {
   const { user, currentGroupId, groups } = useAppStore();
   const selectedGroup = groups.find((g) => g.id === currentGroupId);
   const { colors } = useTheme();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const headerHeight = 56 + insets.top;
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -43,6 +46,8 @@ export default function JoinRequestsScreen() {
 
   const approveRequest = useApproveJoinRequest();
   const rejectRequest = useRejectJoinRequest();
+  const { openBottomSheet, closeBottomSheet } = useBottomSheet();
+  const { isPremium, openPaywall } = usePremiumGate();
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -50,51 +55,65 @@ export default function JoinRequestsScreen() {
     setRefreshing(false);
   };
 
-  const handleApprove = async (request: any) => {
-    Alert.alert(
-      "İsteği Onayla",
-      `${request.displayName || "Kullanıcı"} gruba katılacak. Onaylıyor musunuz?`,
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Onayla",
-          onPress: async () => {
-            try {
-              await approveRequest.mutateAsync({
-                requestId: request.id,
-                groupId,
-              });
-              Alert.alert("Başarılı", "Kullanıcı gruba eklendi");
-            } catch (error: any) {
-              Alert.alert("Hata", error.message || "İstek onaylanamadı");
+  const requesterName = (request: any) => request.displayName || "Kullanıcı";
+
+  const handleApprove = (request: any) => {
+    openBottomSheet(
+      <ConfirmSheet
+        icon="person-add-outline"
+        title="İsteği Onayla"
+        message={`${requesterName(request)} "${selectedGroup?.name}" grubuna katılacak.`}
+        confirmLabel="Onayla"
+        onCancel={closeBottomSheet}
+        onConfirm={async () => {
+          try {
+            await approveRequest.mutateAsync({
+              requestId: request.id,
+              groupId,
+            });
+            closeBottomSheet();
+          } catch (error: any) {
+            closeBottomSheet();
+            const code = getPremiumLimitCode(error);
+            if (code === "GROUP_CAPACITY" && !isPremium) {
+              // Grup dolu ve sahibi (sen) ücretsizde: Premium ile 20 kişiye çık
+              openPaywall();
+              return;
             }
-          },
-        },
-      ],
+            Alert.alert(
+              code ? "Onaylanamadı" : "Hata",
+              getApiErrorMessage(error, "İstek onaylanamadı"),
+            );
+          }
+        }}
+      />,
+      { snapPoints: [CONFIRM_SHEET_HEIGHT] },
     );
   };
 
-  const handleReject = async (request: any) => {
-    Alert.alert(
-      "İsteği Reddet",
-      `${request.displayName || "Kullanıcı"}nın isteğini reddetmek istediğinize emin misiniz?`,
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Reddet",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await rejectRequest.mutateAsync({
-                requestId: request.id,
-                groupId,
-              });
-            } catch (error: any) {
-              Alert.alert("Hata", error.message || "İstek reddedilemedi");
-            }
-          },
-        },
-      ],
+  const handleReject = (request: any) => {
+    openBottomSheet(
+      <ConfirmSheet
+        icon="person-remove-outline"
+        title="İsteği Reddet"
+        message={`${requesterName(request)} adlı kullanıcının katılım isteği reddedilecek.`}
+        confirmLabel="Reddet"
+        destructive
+        onCancel={closeBottomSheet}
+        onConfirm={async () => {
+          try {
+            await rejectRequest.mutateAsync({
+              requestId: request.id,
+              groupId,
+            });
+            closeBottomSheet();
+          } catch (error: any) {
+            closeBottomSheet();
+            Alert.alert("Hata", error.message || "İstek reddedilemedi");
+          }
+        }}
+      />,
+      { snapPoints: [CONFIRM_SHEET_HEIGHT] },
     );
   };
 

@@ -1,11 +1,13 @@
 import { apiClient } from "@/api/client";
+import type { User } from "@/api/types";
 import { useUserGroups } from "@/api/groups";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   connectUserServices,
   disconnectUserServices,
 } from "@/services/connection";
-import { checkSubscription } from "@/services/purchase";
+import { applyCrashReportsEnabled, loadCrashReportsEnabled } from "@/services/privacy";
+import { checkSubscription, identifyAdapty } from "@/services/purchase";
 import { useAppStore } from "@/store/useAppStore";
 import auth from "@react-native-firebase/auth";
 import { useFonts } from "expo-font";
@@ -23,25 +25,36 @@ import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
   dsn: 'https://7bd324fc8f5518b0a53f4553d12624b6@o4511013855887360.ingest.de.sentry.io/4511709727359056',
+  // Geliştirmede Sentry'ye event gönderme
+  enabled: !__DEV__,
 
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
-  sendDefaultPii: true,
+  // IP, e-posta gibi kişisel verileri otomatik ekleme
+  sendDefaultPii: false,
 
-  // Enable Logs
-  enableLogs: true,
+  // console.* çıktıları Sentry'ye log olarak GİTMEZ — auth akışında token ve
+  // e-posta içeren loglar vardı. Hata raporları ve breadcrumb'lar yeterli.
+  enableLogs: false,
 
-  // Configure Session Replay
+  // Configure Session Replay — metin ve görseller maskelenir
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1,
-  integrations: [Sentry.mobileReplayIntegration()],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
+  integrations: [
+    Sentry.mobileReplayIntegration({
+      maskAllText: true,
+      maskAllImages: true,
+      maskAllVectors: true,
+    }),
+  ],
 });
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+interface SyncUser {
+  uid: string;
+  displayName?: string | null;
+  getIdToken: () => Promise<string>;
+}
 
 function RootLayoutContent() {
   const { isDark, colors } = useTheme();
@@ -54,6 +67,7 @@ function RootLayoutContent() {
     setFirebaseUser,
     setUser,
     setLoading,
+    setError,
   } = useAppStore();
 
   // Fetch groups once authenticated
@@ -63,60 +77,90 @@ function RootLayoutContent() {
   const rootNavigationState = useRootNavigationState();
   const isSyncing = useRef(false);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Yeniden deneme zamanlayıcısı fonksiyonun güncel haline ref üzerinden ulaşır
+  const syncRef = useRef<((u: SyncUser) => Promise<void>) | null>(null);
   // Firebase ilk auth cevabını verip backend sync denemesi tamamlanana kadar
   // yönlendirme yapılmaz — aksi halde girişli kullanıcı bir anlığına login görür.
   const [authResolved, setAuthResolved] = useState(false);
 
   const [fontsLoaded] = useFonts({
-    "Comfortaa-Light": require("@/assets/fonts/Comfortaa-Light.ttf"),
-    "Comfortaa-Regular": require("@/assets/fonts/Comfortaa-Regular.ttf"),
-    "Comfortaa-Medium": require("@/assets/fonts/Comfortaa-Medium.ttf"),
-    "Comfortaa-SemiBold": require("@/assets/fonts/Comfortaa-SemiBold.ttf"),
-    "Comfortaa-Bold": require("@/assets/fonts/Comfortaa-Bold.ttf"),
+    "Figtree-Light": require("@/assets/fonts/Figtree-Light.ttf"),
+    "Figtree-Regular": require("@/assets/fonts/Figtree-Regular.ttf"),
+    "Figtree-Medium": require("@/assets/fonts/Figtree-Medium.ttf"),
+    "Figtree-SemiBold": require("@/assets/fonts/Figtree-SemiBold.ttf"),
+    "Figtree-Bold": require("@/assets/fonts/Figtree-Bold.ttf"),
   });
 
   // Backend Sync: Lazy Sync pattern — ilk doğrulanmış istekte kullanıcı
   // backend'de otomatik oluşturulur. Ağ hatasında 5 sn aralıkla yeniden dener;
   // kullanıcı bu sırada login DEĞİL, index (bağlanıyor) ekranında bekler.
   const syncWithBackend = useCallback(
-    async (currentUser: { uid: string; getIdToken: () => Promise<string> }) => {
+    async (currentUser: SyncUser) => {
       if (isSyncing.current) return;
       isSyncing.current = true;
       try {
-        console.log("🔄 Syncing with backend (GET /users/me)...");
-        const response = await apiClient.get("/users/me");
-        console.log("✅ Backend user synced:", response.data);
-        setUser(response.data);
+        const response = await apiClient.get<User>("/users/me");
+        let backendUser = response.data;
 
-        console.log("📂 Fetching groups...");
+        // Apple girişinde ad token'da gelmez; Firebase profilinde varsa taşı
+        if (!backendUser.displayName && currentUser.displayName) {
+          try {
+            const patched = await apiClient.patch<User>("/users/me", {
+              displayName: currentUser.displayName,
+            });
+            backendUser = patched.data;
+          } catch {
+            // Ad senkronu kritik değil — bir sonraki açılışta tekrar denenir
+          }
+        }
+
+        setUser(backendUser);
+        setError(null);
+
         await refetchGroups();
 
+        // Adapty profilini bu kullanıcıya bağla (webhook customer_user_id),
+        // sonra Adapty ile backend'i karşılaştır; webhook gecikmişse yokla
+        await identifyAdapty(currentUser.uid);
         await checkSubscription();
 
         // Socket + push: kullanıcı oturumuna bağlı canlı servisler tek noktadan
-        console.log("🔌 Connecting user services (socket + push)...");
         connectUserServices({
           userId: currentUser.uid,
           getToken: () => currentUser.getIdToken(),
         });
-      } catch (error) {
-        console.error("❌ Backend sync başarısız, 5 sn sonra denenecek:", error);
-        retryTimer.current = setTimeout(() => syncWithBackend(currentUser), 5000);
+      } catch (error: any) {
+        // Sunucu cevap verdiyse (4xx/5xx) kullanıcıya nedenini göster;
+        // ağ hatasında genel mesaj. Her durumda 5 sn sonra yeniden denenir,
+        // index ekranı bu sırada "Çıkış yap" seçeneği sunar.
+        const status = error?.response?.status as number | undefined;
+        setError(
+          status
+            ? `Sunucu hatası (${status}). Yeniden deneniyor…`
+            : "Sunucuya ulaşılamıyor. Yeniden deneniyor…",
+        );
+        retryTimer.current = setTimeout(() => {
+          void syncRef.current?.(currentUser);
+        }, 5000);
       } finally {
         isSyncing.current = false;
       }
     },
-    [setUser, refetchGroups],
+    [setUser, setError, refetchGroups],
   );
+
+  useEffect(() => {
+    syncRef.current = syncWithBackend;
+  }, [syncWithBackend]);
+
+  // Gizlilik tercihi: kullanıcı hata raporlarını kapattıysa Sentry sussun
+  useEffect(() => {
+    loadCrashReportsEnabled().then(applyCrashReportsEnabled);
+  }, []);
 
   // Auth Listener
   useEffect(() => {
-    console.log("🔐 Setting up Firebase auth listener...");
     const unsubscribe = auth().onAuthStateChanged(async (currentUser) => {
-      console.log(
-        "🔐 Firebase auth state changed:",
-        currentUser ? `User: ${currentUser.email}` : "No user",
-      );
       if (retryTimer.current) {
         clearTimeout(retryTimer.current);
         retryTimer.current = null;
@@ -127,6 +171,7 @@ function RootLayoutContent() {
         await syncWithBackend(currentUser);
       } else {
         setUser(null);
+        setError(null);
         disconnectUserServices();
       }
 
@@ -138,9 +183,9 @@ function RootLayoutContent() {
       unsubscribe();
       if (retryTimer.current) clearTimeout(retryTimer.current);
     };
-  }, [setFirebaseUser, setUser, setLoading, syncWithBackend]);
+  }, [setFirebaseUser, setUser, setLoading, setError, syncWithBackend]);
 
-  // Onboarding status is now part of the user object from backend
+  // Onboarding durumu sadece cihazda tutulur (store persist) — bkz. useAppStore
 
   // authResolved: Firebase'in "girişli mi?" cevabı gelmeden yönlendirme yapma —
   // store'daki isLoading false başladığı için tek başına güvenilir değil.

@@ -1,20 +1,25 @@
 import { GroupListBottomSheet } from "@/components/bottomsheets";
+import { IconButton } from "@/components/ui";
+import { fonts } from "@/theme/typography";
 import { useAppStore } from "@/store/useAppStore"; // Added Store
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import React, { useCallback } from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Dimensions, StyleSheet, View } from "react-native";
 import { CustomDrawerContent } from "../../components";
 import { GroupHeader } from "../../components/shared";
 // Removed Contexts
 import { useBottomSheet } from "../../contexts/BottomSheetContext";
 import { useTheme } from "../../contexts/ThemeContext";
+
+/** Grup seçici sheet yüksekliği: içerik kadar, ekranın %70'ini geçmez. */
+const groupSheetHeight = (groupCount: number) => {
+  const chrome = 24 + 56 + 76 + 48; // tutamaç + başlık + aksiyonlar + alt boşluk (home bar)
+  const rows = Math.max(groupCount, 1) * 72;
+  const emptyState = groupCount === 0 ? 220 : 0;
+  return Math.min(Math.round(Dimensions.get("window").height * 0.7), chrome + rows + emptyState);
+};
 
 export default function DrawerLayout() {
   const { user, currentGroupId, groups } = useAppStore();
@@ -34,9 +39,10 @@ export default function DrawerLayout() {
           return;
         }
 
-        // Her açılışta yeni key ile render et - context güncellemelerini almak için
+        // Her açılışta yeni key ile render et - context güncellemelerini almak için.
+        // Yükseklik içeriğe göre: başlık + satırlar + aksiyonlar; en fazla %70
         openBottomSheet(<GroupListBottomSheet key={Date.now()} />, {
-          snapPoints: ["60%"],
+          snapPoints: [groupSheetHeight(groups.length)],
           enablePanDownToClose: true,
         });
       };
@@ -47,12 +53,6 @@ export default function DrawerLayout() {
   const handleGroupManagementPress = () => {
     if (selectedGroup) {
       router.push("/(drawer)/(group)/group-management");
-    }
-  };
-
-  const handleJoinRequestsPress = () => {
-    if (selectedGroup) {
-      router.push("/(drawer)/(group)/join-requests");
     }
   };
 
@@ -83,7 +83,7 @@ export default function DrawerLayout() {
         },
         headerTintColor: colors.text,
         headerTitleStyle: {
-          fontFamily: "Comfortaa-SemiBold",
+          fontFamily: fonts.semibold,
         },
         headerTitleAlign: "center", // Başlığı ortala
         drawerStyle: {
@@ -92,7 +92,7 @@ export default function DrawerLayout() {
         drawerActiveTintColor: colors.primary,
         drawerInactiveTintColor: colors.secondaryText,
         drawerLabelStyle: {
-          fontFamily: "Comfortaa-Medium",
+          fontFamily: fonts.medium,
           fontSize: 16,
         },
       }}
@@ -109,22 +109,12 @@ export default function DrawerLayout() {
           headerRight: () => (
             <View style={styles.headerRight}>
               {selectedGroup && (
-                <TouchableOpacity
+                <IconButton
+                  icon="settings-outline"
+                  size={36}
+                  iconSize={18}
                   onPress={handleGroupManagementPress}
-                  style={[
-                    styles.actionButton,
-                    {
-                      backgroundColor: colors.cardBackground + "80",
-                      borderColor: colors.stroke,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="settings-outline"
-                    size={18}
-                    color={colors.text}
-                  />
-                </TouchableOpacity>
+                />
               )}
             </View>
           ),
@@ -137,12 +127,6 @@ export default function DrawerLayout() {
       {/* Diğer ekranları gizliyoruz, single page hissi için */}
       <Drawer.Screen
         name="showroom"
-        options={{
-          drawerItemStyle: { display: "none" },
-        }}
-      />
-      <Drawer.Screen
-        name="api-test"
         options={{
           drawerItemStyle: { display: "none" },
         }}
@@ -163,12 +147,28 @@ export default function DrawerLayout() {
       <Drawer.Screen
         name="help-support"
         options={{
+          title: "Yardım & Destek",
           drawerItemStyle: { display: "none" },
         }}
       />
       <Drawer.Screen
         name="settings"
         options={{
+          title: "Ayarlar",
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
+        name="notifications"
+        options={{
+          title: "Bildirimler",
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
+        name="privacy"
+        options={{
+          title: "Gizlilik",
           drawerItemStyle: { display: "none" },
         }}
       />
@@ -182,29 +182,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingRight: 16,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-  badge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: "bold",
   },
 });
