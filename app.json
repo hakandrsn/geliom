@@ -69,7 +69,8 @@
       [
         "onesignal-expo-plugin",
         {
-          "mode": "production"
+          "mode": "production",
+          "iPhoneDeploymentTarget": "16.4"
         }
       ],
       [
@@ -77,6 +78,7 @@
         {
           "ios": {
             "deploymentTarget": "16.4",
+            "enableSceneSupport": true,
             "useFrameworks": "static",
             "buildReactNativeFromSource": true
           }

@@ -18,24 +18,9 @@ export default function DashboardMemberItem({
   const router = useRouter();
 
   const handleMemberPress = useCallback(() => {
-    // Edit sayfasına giderken legacy format gerekli (çünkü o sayfa eski yapıda)
-    // Dönüşümü sadece ihtiyaç anında yapıyoruz
-    const legacyMemberData = {
-      group_id: group.id,
-      user_id: item.userId,
-      user: {
-        id: item.userId,
-        display_name: item.displayName,
-        custom_user_id: item.customId,
-        avatar: item.photoUrl,
-      },
-    };
-
     router.push({
       pathname: "/(drawer)/(group)/edit-member",
-      params: {
-        memberData: JSON.stringify(legacyMemberData),
-      },
+      params: { groupId: group.id, userId: item.userId },
     });
   }, [router, item, group.id]);
 
