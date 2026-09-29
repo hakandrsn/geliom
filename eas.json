@@ -10,13 +10,16 @@
       "autoIncrement": true
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_ADAPTY_PUBLIC_SDK_KEY": "public_live_J0dGY5Fb.5J2JuJpyBtyu3wF91JU2"
-      },
       "distribution": "store",
       "android": {
         "image": "latest"

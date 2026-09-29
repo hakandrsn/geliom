@@ -174,7 +174,7 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
     if (state === 'loading') return null;
 
     return (
-      <Text style={textStyleMemo}>
+      <Text style={textStyleMemo} numberOfLines={1}>
         {children}
       </Text>
     );
@@ -214,9 +214,10 @@ const GeliomButton: React.FC<GeliomButtonProps> = ({
 
 const styles = StyleSheet.create({
   text: {
+    // Ağırlık fontFamily'den gelir; fontWeight eklemek statik Figtree dosyasını
+    // sistem fontuna/sentetik kalınlığa düşürür.
     fontFamily: fonts.semibold,
     textAlign: 'center',
-    fontWeight: '600',
   },
   loadingContainer: {
     flexDirection: 'row',

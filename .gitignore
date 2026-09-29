@@ -55,7 +55,5 @@ app-example
 *repomix*
 
 .env
-google-services.json
-GoogleService-Info.plist
 
 .env.local

@@ -28,7 +28,11 @@ export const signInWithGoogle = async () => {
     throw new Error("Google Sign-In failed: No ID token found in result");
   }
 
-  const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+  // RNFB 25.x Android'de yalnız idToken verilince accessToken yerine "" iletir;
+  // Firebase SDK boş string'i reddeder ("accessToken cannot be empty").
+  // Gerçek accessToken'ı da vererek bu yoldan kaçınıyoruz.
+  const { accessToken } = await GoogleSignin.getTokens();
+  const googleCredential = auth.GoogleAuthProvider.credential(idToken, accessToken);
   return auth().signInWithCredential(googleCredential);
 };
 

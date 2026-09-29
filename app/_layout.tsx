@@ -117,18 +117,26 @@ function RootLayoutContent() {
         setUser(backendUser);
         setError(null);
 
+        // Kendi API'miz (axios 10 sn timeout); boş-grup ekranı yanıp sönmesin diye beklenir
         await refetchGroups();
-
-        // Adapty profilini bu kullanıcıya bağla (webhook customer_user_id),
-        // sonra Adapty ile backend'i karşılaştır; webhook gecikmişse yokla
-        await identifyAdapty(currentUser.uid);
-        await checkSubscription();
 
         // Socket + push: kullanıcı oturumuna bağlı canlı servisler tek noktadan
         connectUserServices({
           userId: currentUser.uid,
           getToken: () => currentUser.getIdToken(),
         });
+
+        // Adapty'nin timeout'u yok — açılışı (splash) ASLA bekletmez, arka planda
+        // çalışır. Profili kullanıcıya bağla (webhook customer_user_id), sonra
+        // Adapty ile backend'i karşılaştır; webhook gecikmişse yokla.
+        void (async () => {
+          try {
+            await identifyAdapty(currentUser.uid);
+            await checkSubscription();
+          } catch (e) {
+            console.warn("Adapty senkronu başarısız", e);
+          }
+        })();
       } catch (error: any) {
         // Sunucu cevap verdiyse (4xx/5xx) kullanıcıya nedenini göster;
         // ağ hatasında genel mesaj. Her durumda 5 sn sonra yeniden denenir,
@@ -152,6 +160,15 @@ function RootLayoutContent() {
   useEffect(() => {
     syncRef.current = syncWithBackend;
   }, [syncWithBackend]);
+
+  // Güvenlik ağı: auth/font/navigasyon zinciri beklenmedik şekilde takılırsa
+  // splash yine de kapanır — kullanıcı sonsuza kadar logoda kalmaz.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 10000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Gizlilik tercihi: kullanıcı hata raporlarını kapattıysa Sentry sussun
   useEffect(() => {

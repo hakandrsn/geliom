@@ -4,11 +4,16 @@
     "slug": "geliom",
     "version": "0.0.1",
     "orientation": "portrait",
-    "icon": "./assets/images/ios-light.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "geliom",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
+      "icon": {
+        "light": "./assets/images/ios-light.png",
+        "dark": "./assets/images/ios-dark.png",
+        "tinted": "./assets/images/ios-tinted.png"
+      },
       "bundleIdentifier": "com.eoist.geliom",
       "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
@@ -31,8 +36,8 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "monochromeImage": "./assets/images/ios-tinted.png",
-        "backgroundColor": "#FBEFE4"
+        "monochromeImage": "./assets/images/android-monochrome.png",
+        "backgroundColor": "#0F203E"
       },
       "googleServicesFile": "./google-services.json",
       "package": "com.eoist.geliom"
@@ -94,7 +99,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/ios-tinted.png",
+          "icon": "./assets/images/notification-icon.png",
           "color": "#D9622B"
         }
       ],
@@ -117,7 +122,9 @@
     },
     "extra": {
       "router": {},
+      "apiBaseUrl": "https://geliom-api.tecktick.com",
       "oneSignalAppId": "c3a9e24a-d8ef-42cb-8278-f171d2056a4d",
+      "adaptySdkKey": "public_live_J0dGY5Fb.5J2JuJpyBtyu3wF91JU2",
       "eas": {
         "projectId": "f2d7bad9-aa20-473b-ba30-acbdf499245c"
       }

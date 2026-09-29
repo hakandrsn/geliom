@@ -149,26 +149,30 @@ function GroupListBottomSheetComponent() {
       </ScrollView>
 
       <View style={[styles.actions, { borderTopColor: colors.stroke }]}>
-        <GeliomButton
-          state="active"
-          size="medium"
-          layout="icon-left"
-          icon="add"
-          onPress={() => navigateAfterClose("/create-group")}
-          style={styles.actionButton}
-        >
-          Yeni Grup
-        </GeliomButton>
-        <GeliomButton
-          state="passive"
-          size="medium"
-          layout="icon-left"
-          icon="key-outline"
-          onPress={() => navigateAfterClose("/join-group")}
-          style={styles.actionButton}
-        >
-          Koda Katıl
-        </GeliomButton>
+        {/* BouncyButton stili iç Animated.View'a verir; flex dış Pressable'a
+            ulaşmadığı için genişliği saran View belirler. */}
+        <View style={styles.actionButton}>
+          <GeliomButton
+            state="active"
+            size="medium"
+            layout="icon-left"
+            icon="add"
+            onPress={() => navigateAfterClose("/create-group")}
+          >
+            Yeni Grup
+          </GeliomButton>
+        </View>
+        <View style={styles.actionButton}>
+          <GeliomButton
+            state="passive"
+            size="medium"
+            layout="icon-left"
+            icon="key-outline"
+            onPress={() => navigateAfterClose("/join-group")}
+          >
+            Kod ile Katıl
+          </GeliomButton>
+        </View>
       </View>
     </View>
   );

@@ -81,7 +81,10 @@ Stack: React Native (Expo, expo-router), TypeScript, Zustand, TanStack Query, So
 
 ## Build / Çalıştırma
 
-- iOS build notları için hafızadaki kurala bak: Firebase config dosyaları gitignore'da, `ios/` CNG ile üretiliyor.
+- `ios/` ve `android/` CNG ile üretilir (prebuild). Firebase config dosyaları (`google-services.json`, `GoogleService-Info.plist`) repoda tutulur — EAS yalnızca git'teki dosyaları build'e alır, gitignore'a geri ekleme.
+- **Uygulama config'inin TEK kaynağı `app.json > expo.extra`** (`apiBaseUrl`, `oneSignalAppId`, `adaptySdkKey`); [config/app.config.ts](config/app.config.ts) yalnızca oradan okur. `.env` / `EXPO_PUBLIC_*` kullanma, değerleri iki yere dağıtma. `extra`'ya yalnızca istemciye gömülmesi sorun olmayan public değerler girer.
+- **Build-time secret'lar EAS env'de (secret visibility), repoda DEĞİL:** `SENTRY_AUTH_TOKEN` (production; scope `org:read`, `project:releases`) EAS'ta `@eoist/geliom` projesine secret olarak kayıtlı — source map upload için. Yeni secret'ı `eas env:create --visibility secret` ile ekle, `app.json`/`eas.json`'a yazma.
+- Preview profilinde Sentry source map upload kapalı (`eas.json` → `SENTRY_DISABLE_AUTO_UPLOAD=true`); token yalnızca production'da tanımlı.
 - `react-native-draggable-flatlist` KULLANMA — Reanimated 4 ile uyumsuz. Sürükleyerek sıralama için `components/ui/DraggableList` (Gesture Handler + Reanimated, shared value'larda `get()/set()`).
 - Tip kontrolü: `npx tsc --noEmit` — sıfır hata ile geçmelidir; yeni hata ekleme.
 
