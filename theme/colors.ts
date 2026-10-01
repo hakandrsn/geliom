@@ -16,6 +16,12 @@ export interface ThemeColors {
   // Gradyanlar
   linearGradient: string[];
 
+  // Premium — altın/amber vurgu. premiumGradient üstünde metin beyaz.
+  premium: string;
+  /** Premium vurgulu yüzeylerin soluk zemini (opak) */
+  premiumTint: string;
+  premiumGradient: string[];
+
   // Tipografi
   text: string;
   secondaryText: string;
@@ -73,6 +79,9 @@ export const lightColors: ThemeColors = {
   loadingState: '#E8783F',                // Canlı turuncu (Yükleniyor)
 
   linearGradient: ['#D9622B', '#F09A5A'], // Terracotta'dan kayısıya
+  premium: '#B8730F',
+  premiumTint: '#FBEBCD',
+  premiumGradient: ['#A8610A', '#D98A2B'], // Koyu amberden altına — beyaz metin okunur
 
   // Tipografi — sıcak kahve tonları
   text: '#2A1F1A',
@@ -135,6 +144,9 @@ export const darkColors: ThemeColors = {
   loadingState: '#E8783F',
 
   linearGradient: ['#D9622B', '#F08A55'],
+  premium: '#F2B84B',
+  premiumTint: '#3A2C17',
+  premiumGradient: ['#8F520A', '#C7802A'],
 
   // Tipografi
   text: '#F6EEE8',

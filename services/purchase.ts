@@ -2,6 +2,7 @@ import { apiClient } from "@/api/client";
 import type { User } from "@/api/types";
 import { appConfig } from "@/config/app.config";
 import { useAppStore } from "@/store/useAppStore";
+import NetInfo from "@react-native-community/netinfo";
 import { Linking } from "react-native";
 import { FIRST_SUBSCRIPTION_PLACEMENT } from "@/constants/adapty";
 import { adapty, createPaywallView } from "react-native-adapty";
@@ -32,7 +33,13 @@ export const activateAdapty = async (): Promise<void> => {
       isAdaptyActivated = true;
       console.log("✅ Adapty activated");
     } catch (error) {
-      console.error("Adapty activation error", error);
+      // Native SDK zaten aktif (Metro yeniden yüklemesi JS bayrağını sıfırlar,
+      // native taraf aktif kalır) — bu bir hata değil, aktif say.
+      if ((error as { adaptyCode?: string })?.adaptyCode === "activateOnceError") {
+        isAdaptyActivated = true;
+      } else {
+        console.error("Adapty activation error", error);
+      }
     } finally {
       isAdaptyActivating = false;
     }
@@ -116,13 +123,33 @@ export const checkSubscription = async (): Promise<boolean> => {
   }
 };
 
-export const restorePurchases = async (): Promise<boolean> => {
+export type RestoreResult = "restored" | "none" | "offline" | "error";
+
+/**
+ * "Bulunamadı" ile "kontrol edilemedi" ayrı döner: bağlantı hatasında
+ * kullanıcıya yanlışlıkla "aboneliğin yok" denmesin.
+ */
+export const restorePurchases = async (): Promise<RestoreResult> => {
+  const net = await NetInfo.fetch();
+  if (net.isConnected === false || net.isInternetReachable === false) {
+    return "offline";
+  }
+
   try {
-    await adapty.restorePurchases();
-    return await syncPremiumFromBackend();
+    if (!isAdaptyActivated) await activateAdapty();
+    if (!isAdaptyActivated) return "error";
+
+    const profile = await adapty.restorePurchases();
+    const storeActive = Object.values(profile.accessLevels || {}).some(
+      (l) => l.isActive,
+    );
+    if (!storeActive) return "none";
+
+    // Mağaza aboneliği doğruladı; sunucuya yansımasını bekle
+    return (await syncPremiumFromBackend()) ? "restored" : "error";
   } catch (error) {
     console.error("Restore error", error);
-    return false;
+    return "error";
   }
 };
 
@@ -178,6 +205,19 @@ export const showPaywall = async (options: ShowPaywallOptions = {}) => {
           view.dismiss();
         })();
         return true; // or whatever the expected return type is, often void or boolean
+      },
+      // Paywall çizilemedi ya da ürünler (fiyatlar) yüklenemedi — simülatörde,
+      // ürünler App Store Connect'te hazır değilken ya da Paid Apps Agreement
+      // eksikken olur. Boş paywall'u açık bırakmak yerine kapat ve sebebi bildir.
+      onRenderingFailed: (error) => {
+        console.warn("Paywall çizilemedi", error);
+        onUnavailable?.(error);
+        return true;
+      },
+      onLoadingProductsFailed: (error) => {
+        console.warn("Paywall ürünleri yüklenemedi", error);
+        onUnavailable?.(error);
+        return true;
       },
       onPurchaseFailed: (error) => {
         onFailure?.(error);

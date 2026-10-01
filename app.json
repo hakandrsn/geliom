@@ -2,7 +2,7 @@
   "expo": {
     "name": "Geliom",
     "slug": "geliom",
-    "version": "0.0.1",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "geliom",
@@ -19,7 +19,6 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "entitlements": {
         "aps-environment": "production",
-        "com.apple.developer.networking.wifi-info": true,
         "com.apple.security.application-groups": [
           "group.com.eoist.geliom.onesignal"
         ]
@@ -28,7 +27,8 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Geliom konumunuzu kullanmaz. Bu izin yalnızca ağ bağlantı durumunu kontrol eden sistem bileşenleri için gereklidir."
       },
       "appleTeamId": "NHKQ38KYTV"
     },
@@ -131,6 +131,12 @@
         "projectId": "f2d7bad9-aa20-473b-ba30-acbdf499245c"
       }
     },
-    "owner": "eoist"
+    "owner": "eoist",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f2d7bad9-aa20-473b-ba30-acbdf499245c"
+    }
   }
 }

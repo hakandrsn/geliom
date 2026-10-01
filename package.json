@@ -7,15 +7,13 @@
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
-    "preios": "node ./scripts/check-ios-toolchain.cjs",
-    "ios": "expo run:ios",
+    "ios": "node ./scripts/check-ios-toolchain.cjs && expo run:ios",
+    "dios": "node ./scripts/check-ios-toolchain.cjs && expo run:ios -d",
     "web": "expo start --web",
     "lint": "expo lint",
-    "predios": "node ./scripts/check-ios-toolchain.cjs",
-    "dios": "npx expo run:ios -d",
     "build:android:submit": "eas build --platform android --profile production --auto-submit",
-    "build:android": "set -a && . ./.env && set +a && eas build -p android --profile production --local",
-    "build:ios": "set -a && . ./.env && set +a && eas build -p ios --profile production --local"
+    "build:android": "bash ./scripts/eas-build-local.sh android",
+    "build:ios": "bash ./scripts/eas-build-local.sh ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -82,5 +80,6 @@
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
-  "private": true
+  "private": true,
+  "packageManager": "yarn@4.13.0"
 }

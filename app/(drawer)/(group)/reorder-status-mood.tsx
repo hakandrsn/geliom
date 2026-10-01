@@ -89,6 +89,7 @@ export default function GroupOptionsEditorScreen() {
       }
       openBottomSheet(
         <StatusMoodBottomSheet
+          key={`${tab}-${Date.now()}`}
           type={tab}
           onSave={async (text, emoji) => {
             const exists = items.some(
@@ -106,7 +107,8 @@ export default function GroupOptionsEditorScreen() {
           }}
           onCancel={closeBottomSheet}
         />,
-        { snapPoints: [tab === "status" ? "55%" : "50%"] },
+        // Emoji seçici kendi içinde kayar (BottomSheetScrollView)
+        { snapPoints: ["85%"], scrollable: true },
       );
     });
 

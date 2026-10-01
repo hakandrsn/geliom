@@ -18,6 +18,8 @@ import {
   useSegments,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import PremiumWelcomeModal from "@/components/monetization/PremiumWelcomeModal";
+import { useEmojiPrefetch } from "@/hooks/useEmojiPrefetch";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StatusBar } from "react-native";
 import Provider from "./Provider";
@@ -72,6 +74,9 @@ function RootLayoutContent() {
 
   // Fetch groups once authenticated
   const { refetch: refetchGroups } = useUserGroups();
+
+  // Emoji görselleri girişten hemen sonra arka planda insin — grup ekranı hazır olsun
+  useEmojiPrefetch(!!user);
   const segments = useSegments();
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
@@ -266,6 +271,8 @@ function RootLayoutContent() {
         translucent
       />
       <Slot />
+      {/* Abonelik yeni başladığında bir kez — kendi tetiğini store'dan dinler */}
+      <PremiumWelcomeModal />
     </>
   );
 }

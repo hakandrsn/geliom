@@ -22,3 +22,7 @@ export const statusKeys = {
   order: (kind: "status" | "mood", userId?: string, groupId?: string) =>
     [...statusKeys.all, "order", kind, userId, groupId] as const,
 };
+
+export const emojiKeys = {
+  catalog: ["emojis", "catalog"] as const,
+};

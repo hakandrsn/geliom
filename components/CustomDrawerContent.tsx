@@ -5,13 +5,16 @@ import { AvatarSelector, Typography } from "@/components/shared";
 import { Avatar, IconButton } from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { usePremiumGate } from "@/hooks/usePremiumGate";
 import { useAppStore } from "@/store/useAppStore";
-import { spacing } from "@/theme/tokens";
+import { PLAN_LIMITS } from "@/constants/premium";
+import { radius, spacing } from "@/theme/tokens";
 import { fonts } from "@/theme/typography";
 import { getAppVersionLabel } from "@/utils/app-info";
 import { openPrivacyPolicy, openTermsOfUse } from "@/utils/linking";
 import auth from "@react-native-firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   DrawerContentComponentProps,
@@ -30,6 +33,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
   const router = useRouter();
   const updateUserMutation = useUpdateUser();
   const updateAvatar = useUpdateUserAvatar();
+  const { isPremium, openPaywall } = usePremiumGate();
 
   const signOut = async () => {
     try {
@@ -56,6 +60,13 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
   const handleSettings = () => {
     props.navigation.closeDrawer();
     router.push("/(drawer)/settings");
+  };
+
+  // Premium değilse doğrudan paywall; premium ise avantajlar/abonelik sayfası
+  const handlePremium = () => {
+    props.navigation.closeDrawer();
+    if (isPremium) router.push("/(drawer)/premium");
+    else openPaywall();
   };
 
   const handleHelpSupport = () => {
@@ -125,12 +136,20 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Profil Bölümü */}
-      <View
+      {/* Profil Bölümü — premium ise altın gradient zemin */}
+      <LinearGradient
+        colors={
+          (isPremium ? colors.premiumGradient : [colors.background, colors.background]) as [
+            string,
+            string,
+          ]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={[
           styles.profileSection,
           {
-            borderBottomColor: colors.stroke,
+            borderBottomColor: isPremium ? "transparent" : colors.stroke,
             paddingTop: insets.top + 20,
           },
         ]}
@@ -138,7 +157,15 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
         {/* Avatara dokununca karakter seçici açılır */}
         <BouncyButton onPress={handleEditAvatar} style={styles.avatar}>
           <Avatar photoUrl={user?.photoUrl} name={user?.displayName} seed={user?.id} size={56} />
-          <View style={[styles.avatarEdit, { backgroundColor: colors.primary, borderColor: colors.background }]}>
+          <View
+            style={[
+              styles.avatarEdit,
+              {
+                backgroundColor: isPremium ? colors.premium : colors.primary,
+                borderColor: isPremium ? colors.white : colors.background,
+              },
+            ]}
+          >
             <Ionicons name="brush" size={10} color="#FFFFFF" />
           </View>
         </BouncyButton>
@@ -146,7 +173,7 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
           <View style={styles.nameContainer}>
             <Typography
               variant="h5"
-              color={colors.text}
+              color={isPremium ? colors.white : colors.text}
               numberOfLines={1}
               style={styles.profileName}
             >
@@ -157,17 +184,31 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
               variant="ghost"
               size={32}
               iconSize={16}
-              color={colors.secondaryText}
+              color={isPremium ? colors.white : colors.secondaryText}
               onPress={handleEditName}
             />
           </View>
-          {user?.customId && (
-            <Typography variant="caption" color={colors.lightText}>
-              @{user.customId}
-            </Typography>
-          )}
+          <View style={styles.metaRow}>
+            {user?.customId && (
+              <Typography
+                variant="caption"
+                color={isPremium ? colors.white : colors.lightText}
+                style={isPremium && styles.onGradientMuted}
+              >
+                @{user.customId}
+              </Typography>
+            )}
+            {isPremium && (
+              <View style={[styles.premiumBadge, { borderColor: colors.white }]}>
+                <Ionicons name="diamond" size={10} color={colors.white} />
+                <Typography variant="caption" fontWeight="bold" color={colors.white}>
+                  PREMIUM
+                </Typography>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Navigation Items */}
       <DrawerContentScrollView
@@ -185,31 +226,6 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
           activeTintColor={colors.primary}
           inactiveTintColor={colors.secondaryText}
         />
-
-        {/* Tema Değişikliği with Switch */}
-        <View style={[styles.themeItem, { backgroundColor: "transparent" }]}>
-          <View style={styles.themeLeft}>
-            <Ionicons
-              name={isDark ? "moon" : "sunny"}
-              size={22}
-              color={colors.secondaryText}
-              style={styles.themeIcon}
-            />
-            <Typography
-              variant="body"
-              color={colors.text}
-              style={styles.drawerLabel}
-            >
-              Tema
-            </Typography>
-          </View>
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColor={{ false: colors.stroke, true: colors.primary + "80" }}
-            thumbColor={isDark ? colors.primary : colors.white}
-          />
-        </View>
 
         <DrawerItem
           label="Gizlilik Politikası"
@@ -257,6 +273,61 @@ const CustomDrawerContent: React.FC<DrawerContentComponentProps> = (props) => {
           inactiveTintColor={colors.secondaryText}
         />
       </DrawerContentScrollView>
+
+      {/* Alta sabit: önce premium durumu, sonra tema — çizginin hemen üstünde */}
+      <View style={styles.pinned}>
+        <BouncyButton onPress={handlePremium} scaleTo={0.98}>
+          <View
+            style={[
+              styles.premiumCard,
+              {
+                backgroundColor: colors.premiumTint,
+                borderColor: isPremium ? colors.premium : "transparent",
+              },
+            ]}
+          >
+            <View style={[styles.premiumIcon, { backgroundColor: colors.premium }]}>
+              <Ionicons name={isPremium ? "checkmark" : "diamond"} size={16} color="#FFFFFF" />
+            </View>
+            <View style={styles.premiumText}>
+              <Typography variant="body" fontWeight="bold" color={colors.text}>
+                {isPremium ? "Premium Üyesin" : "Premium'a Geç"}
+              </Typography>
+              <Typography variant="caption" color={colors.secondaryText} numberOfLines={1}>
+                {isPremium
+                  ? "Tüm avantajlar açık · aboneliğini yönet"
+                  : `${PLAN_LIMITS.PREMIUM.MAX_MEMBERSHIPS} grup, ${PLAN_LIMITS.PREMIUM.MAX_GROUP_MEMBERS} kişilik gruplar`}
+              </Typography>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.premium} />
+          </View>
+        </BouncyButton>
+
+        {/* Tema Değişikliği with Switch */}
+        <View style={[styles.themeItem, { backgroundColor: "transparent" }]}>
+          <View style={styles.themeLeft}>
+            <Ionicons
+              name={isDark ? "moon" : "sunny"}
+              size={22}
+              color={colors.secondaryText}
+              style={styles.themeIcon}
+            />
+            <Typography
+              variant="body"
+              color={colors.text}
+              style={styles.drawerLabel}
+            >
+              Tema
+            </Typography>
+          </View>
+          <Switch
+            value={isDark}
+            onValueChange={toggleTheme}
+            trackColor={{ false: colors.stroke, true: colors.primary + "80" }}
+            thumbColor={isDark ? colors.primary : colors.white}
+          />
+        </View>
+      </View>
 
       {/* Alt Bölüm */}
       <View
@@ -323,6 +394,46 @@ const styles = StyleSheet.create({
   },
   profileName: {
     flexShrink: 1,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  onGradientMuted: {
+    opacity: 0.85,
+  },
+  premiumBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  pinned: {
+    paddingTop: spacing.sm,
+  },
+  premiumCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+  },
+  premiumIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  premiumText: {
+    flex: 1,
   },
   scrollContent: {
     paddingTop: 0,

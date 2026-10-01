@@ -5,13 +5,15 @@ import { ListItem } from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useNotificationSettings } from "@/hooks/useNotificationSettings";
+import { showPremiumWelcome } from "@/components/monetization/PremiumWelcomeModal";
+import { usePremiumGate } from "@/hooks/usePremiumGate";
 import { useAppStore } from "@/store/useAppStore";
 import { layout, radius, spacing } from "@/theme/tokens";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import auth from "@react-native-firebase/auth";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import { Alert, ScrollView, StyleSheet, Switch, View } from "react-native";
 
 const CONFIRM_SHEET_HEIGHT = 380;
@@ -24,6 +26,17 @@ export default function SettingsScreen() {
   const queryClient = useQueryClient();
   const { openBottomSheet, closeBottomSheet } = useBottomSheet();
   const { isNotificationsEnabled } = useNotificationSettings();
+  const { isPremium, restore } = usePremiumGate();
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleRestore = async () => {
+    setIsRestoring(true);
+    try {
+      await restore();
+    } finally {
+      setIsRestoring(false);
+    }
+  };
 
   const mutedCount = groups.filter((g) => g.notifications && !g.notifications.enabled).length;
   const notificationsSubtitle = !isNotificationsEnabled
@@ -107,6 +120,26 @@ export default function SettingsScreen() {
   return (
     <BaseLayout headerShow={false} backgroundColor={colors.background}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Premium */}
+        <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.sectionTitle}>
+          PREMIUM
+        </Typography>
+        <ListItem
+          icon="diamond-outline"
+          iconColor={colors.warning}
+          title="Premium Avantajları"
+          subtitle={isPremium ? "Aktif · aboneliğini yönet" : "Daha fazla grup, üye ve özel seçenek"}
+          onPress={() => router.push("/(drawer)/premium")}
+        />
+        <ListItem
+          icon="refresh-outline"
+          iconColor={colors.text}
+          title="Satın Alımları Geri Yükle"
+          subtitle={isRestoring ? "Kontrol ediliyor…" : "Önceki aboneliğini bu cihaza getir"}
+          onPress={handleRestore}
+          disabled={isRestoring}
+        />
+
         {/* Genel */}
         <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.sectionTitle}>
           GENEL
@@ -162,6 +195,22 @@ export default function SettingsScreen() {
           subtitle="SSS, bize yaz, e-posta"
           onPress={() => router.push("/(drawer)/help-support")}
         />
+
+        {/* Yalnızca geliştirmede — release build'de görünmez */}
+        {__DEV__ && (
+          <>
+            <Typography variant="label" fontWeight="semibold" color={colors.secondaryText} style={styles.sectionTitle}>
+              GELİŞTİRİCİ
+            </Typography>
+            <ListItem
+              icon="sparkles-outline"
+              iconColor={colors.text}
+              title="Premium karşılama modalını göster"
+              subtitle="Abonelik başlangıcı animasyonunu test et"
+              onPress={showPremiumWelcome}
+            />
+          </>
+        )}
 
         {/* Tehlikeli bölge — en altta, görsel olarak ayrılmış */}
         <View style={[styles.dangerZone, { borderColor: colors.error + "55" }]}>

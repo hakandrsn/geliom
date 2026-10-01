@@ -159,6 +159,13 @@ export default function DrawerLayout() {
         }}
       />
       <Drawer.Screen
+        name="premium"
+        options={{
+          title: "Premium",
+          drawerItemStyle: { display: "none" },
+        }}
+      />
+      <Drawer.Screen
         name="notifications"
         options={{
           title: "Bildirimler",

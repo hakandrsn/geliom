@@ -7,7 +7,9 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "development",
+      "corepack": true
     },
     "preview": {
       "distribution": "internal",
@@ -16,7 +18,9 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "preview",
+      "corepack": true
     },
     "production": {
       "autoIncrement": true,
@@ -26,7 +30,9 @@
       },
       "ios": {
         "image": "latest"
-      }
+      },
+      "channel": "production",
+      "corepack": true
     }
   },
   "submit": {

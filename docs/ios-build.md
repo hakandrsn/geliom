@@ -17,8 +17,8 @@ xcrun --find clang++
 ```
 
 `DEVELOPER_DIR` ortam değişkeni tanımlıysa `xcode-select` seçimini geçersiz kılar.
-`npm run ios` ve `npm run dios` derleme öncesinde sürümü ve lisans erişimini kontrol eder.
-Doğrudan `npx expo run:ios` kullanımı npm ön kontrolünü atlar.
+`yarn ios` ve `yarn dios` derleme öncesinde sürümü ve lisans erişimini kontrol eder.
+Doğrudan `npx expo run:ios` kullanımı bu ön kontrolü atlar.
 
 Xcode 27 için gereken UIKit scene desteği `app.json` içindeki
 `expo-build-properties.ios.enableSceneSupport` ile üretilir:
@@ -32,7 +32,7 @@ Toolchain kurulumu tamamlandıktan sonra, `mobile` dizininde:
 
 ```sh
 npx expo prebuild --platform ios
-npm run ios
+yarn ios
 ```
 
 Sentry ve RNFB scriptlerinin dependency-analysis uyarıları derlemeyi durdurmaz.

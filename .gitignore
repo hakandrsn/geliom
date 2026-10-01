@@ -57,3 +57,12 @@ app-example
 .env
 
 .env.local
+*.apk
+*.aab
+*.ipa
+# yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+.pnp.*

@@ -16,6 +16,34 @@ export const PLAN_LIMITS = {
   },
 } as const;
 
+/** Premium avantajları — Premium sayfası ve karşılama modalı aynı listeyi gösterir. */
+export const PREMIUM_BENEFITS = [
+  {
+    icon: "people-outline",
+    emoji: "🤝",
+    title: `${PLAN_LIMITS.PREMIUM.MAX_MEMBERSHIPS} gruba kadar üyelik`,
+    subtitle: `Ücretsiz planda ${PLAN_LIMITS.FREE.MAX_MEMBERSHIPS} grup`,
+  },
+  {
+    icon: "person-add-outline",
+    emoji: "🚀",
+    title: `Grup başına ${PLAN_LIMITS.PREMIUM.MAX_GROUP_MEMBERS} kişi`,
+    subtitle: `Ücretsiz planda ${PLAN_LIMITS.FREE.MAX_GROUP_MEMBERS} kişi · yönettiğin gruplar için`,
+  },
+  {
+    icon: "happy-outline",
+    emoji: "🎨",
+    title: `${PLAN_LIMITS.PREMIUM.MAX_CUSTOM_MOODS} özel ruh hali`,
+    subtitle: "Grubuna özel ruh hali seçenekleri oluştur",
+  },
+  {
+    icon: "swap-vertical-outline",
+    emoji: "✏️",
+    title: "Durum ve ruh hali listesini düzenle",
+    subtitle: "Seçenekleri sırala, gizle, grubuna göre uyarla",
+  },
+] as const;
+
 export const GROUP_NAME_RULES = {
   MIN_LENGTH: 3,
   MAX_LENGTH: 30,
