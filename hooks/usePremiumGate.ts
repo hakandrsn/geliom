@@ -1,5 +1,5 @@
 import { FIRST_SUBSCRIPTION_PLACEMENT } from "@/constants/adapty";
-import { restorePurchases, showPaywall, type RestoreResult } from "@/services/purchase";
+import { restorePurchases, showPaywall, type RestoreStatus } from "@/services/purchase";
 import { useAppStore } from "@/store/useAppStore";
 import { useCallback } from "react";
 import * as Device from "expo-device";
@@ -35,11 +35,15 @@ function paywallUnavailableMessage(error: unknown): [string, string] {
   ];
 }
 
-const RESTORE_MESSAGES: Record<RestoreResult, [string, string]> = {
+const RESTORE_MESSAGES: Record<RestoreStatus, [string, string]> = {
   restored: ["Premium geri yüklendi", "Premium özelliklerin yeniden aktif."],
   none: [
     "Aktif abonelik bulunamadı",
     "Bu Apple/Google hesabında geri yüklenecek aktif bir Premium aboneliği yok.",
+  ],
+  pending: [
+    "Aboneliğin bulundu",
+    "Premium hesabına işleniyor; birkaç dakika içinde aktif olur. Olmazsa Yardım & Destek'ten bize yaz.",
   ],
   offline: [
     "İnternet bağlantısı yok",
@@ -60,7 +64,8 @@ const RESTORE_MESSAGES: Record<RestoreResult, [string, string]> = {
  * - Paywall gösterilemezse (SDK key yok, ağ yok) kullanıcı sessizce
  *   bırakılmaz: bilgi verilir ve aksiyon ÇALIŞMAZ (kapı açık kalmaz).
  *
- * Premium'un doğruluk kaynağı backend'dir (store.isSubscribed = user.isPremium).
+ * Premium'un tek kaynağı Adapty; sunucu onu users.isPremium'a yazar ve
+ * store.isSubscribed = user.isPremium (bkz. services/purchase.ts).
  */
 export function usePremiumGate() {
   const isSubscribed = useAppStore((state) => state.isSubscribed);
@@ -95,10 +100,17 @@ export function usePremiumGate() {
 
   /** App Store 3.1.1: abonelikli uygulamada "Satın Alımları Geri Yükle" zorunlu. */
   const restore = useCallback(async () => {
-    const result = await restorePurchases();
-    const [title, message] = RESTORE_MESSAGES[result];
-    Alert.alert(title, message);
-    return result === "restored";
+    const { status, error } = await restorePurchases();
+    const [title, message] = RESTORE_MESSAGES[status];
+    // Simülatörde mağaza yok — "ulaşılamadı" yerine gerçek sebebi söyle
+    if (status === "error" && !Device.isDevice) {
+      Alert.alert(...paywallUnavailableMessage(error));
+      return false;
+    }
+    const code = (error as { adaptyCode?: string } | undefined)?.adaptyCode;
+    const detail = __DEV__ && error ? `\n\n[${code ?? "error"}] ${(error as Error).message ?? ""}` : "";
+    Alert.alert(title, message + detail);
+    return status === "restored";
   }, []);
 
   return { isPremium: isSubscribed, requirePremium, openPaywall, restore };

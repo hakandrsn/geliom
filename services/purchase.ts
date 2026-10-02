@@ -51,31 +51,31 @@ export const activateAdapty = async (): Promise<void> => {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Premium'un TEK doğruluk kaynağı backend'deki user.isPremium'dur (Adapty
- * webhook'u ile güncellenir; sunucu limitleri buna göre uygular). Adapty
- * profili yalnızca "webhook gecikti mi?" sinyali olarak kullanılır: Adapty
- * aktif diyor ama backend değilse backend birkaç kez yoklanır.
+ * Premium'un TEK kaynağı Adapty'dir; sunucu onu `/users/me/premium/sync` ile
+ * Adapty server API'sinden okuyup users.isPremium'a ve sahibi olunan gruplara
+ * yazar. Mobil premium'a kendi karar vermez — her zaman sunucunun döndürdüğü
+ * kullanıcıyı store'a koyar (drawer, paywall kapısı, sunucu limitleri aynı
+ * değeri görür).
+ *
+ * `expectPremium`: satın alma / geri yükleme sonrası Adapty'nin sunucu
+ * tarafına yansıması birkaç saniye sürebilir; bu sürede yeniden denenir.
  */
 export const syncPremiumFromBackend = async (
   retries = 5,
   delayMs = 2000,
+  expectPremium = true,
 ): Promise<boolean> => {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const { data } = await apiClient.get<User>("/users/me");
+      const { data } = await apiClient.post<User>("/users/me/premium/sync");
       useAppStore.getState().setUser(data);
-      if (data.isPremium) return true;
+      if (data.isPremium || !expectPremium) return data.isPremium;
     } catch (error) {
       console.error("Premium sync error", error);
     }
     if (attempt < retries - 1) await sleep(delayMs);
   }
-  return false;
-};
-
-const adaptyHasActiveAccess = async (): Promise<boolean> => {
-  const profile = await adapty.getProfile();
-  return Object.values(profile.accessLevels || {}).some((l) => l.isActive);
+  return !!useAppStore.getState().user?.isPremium;
 };
 
 /**
@@ -103,53 +103,46 @@ export const logoutAdapty = async (): Promise<void> => {
   }
 };
 
-export const checkSubscription = async (): Promise<boolean> => {
-  if (!isAdaptyActivated && !isAdaptyActivating) {
-    await activateAdapty();
-  }
+/** Açılışta: sunucuyu Adapty ile eşitle (tek istek, bekleme yok). */
+export const checkSubscription = async (): Promise<boolean> =>
+  syncPremiumFromBackend(1, 0, false);
 
-  try {
-    const adaptyActive = await adaptyHasActiveAccess();
-    const backendPremium = !!useAppStore.getState().user?.isPremium;
+export type RestoreStatus = "restored" | "none" | "pending" | "offline" | "error";
 
-    if (adaptyActive && !backendPremium) {
-      // Webhook henüz işlenmemiş olabilir — backend'i kısa süre yokla
-      return syncPremiumFromBackend(3, 2000);
-    }
-    return backendPremium;
-  } catch (error) {
-    console.error("Check subscription error", error);
-    return !!useAppStore.getState().user?.isPremium;
-  }
-};
-
-export type RestoreResult = "restored" | "none" | "offline" | "error";
+export interface RestoreResult {
+  status: RestoreStatus;
+  /** "error" durumunda gerçek sebep (geliştirmede kullanıcıya gösterilir) */
+  error?: unknown;
+}
 
 /**
- * "Bulunamadı" ile "kontrol edilemedi" ayrı döner: bağlantı hatasında
- * kullanıcıya yanlışlıkla "aboneliğin yok" denmesin.
+ * Her sonuç ayrı döner — kullanıcıya yanlış sebep söylenmesin:
+ *  - none:    mağaza da Adapty de aktif erişim görmüyor
+ *  - pending: mağaza/Adapty aktif diyor ama sunucu henüz işlemedi
+ *  - offline: bağlantı yok
+ *  - error:   SDK / mağaza hatası (sebep `error`da)
  */
 export const restorePurchases = async (): Promise<RestoreResult> => {
   const net = await NetInfo.fetch();
-  if (net.isConnected === false || net.isInternetReachable === false) {
-    return "offline";
-  }
+  // isInternetReachable ilk anda null/false gelebilir; yalnızca bağlantı yoksa çevrimdışı say
+  if (net.isConnected === false) return { status: "offline" };
 
   try {
     if (!isAdaptyActivated) await activateAdapty();
-    if (!isAdaptyActivated) return "error";
+    if (!isAdaptyActivated) return { status: "error", error: new Error("Adapty etkin değil") };
 
     const profile = await adapty.restorePurchases();
-    const storeActive = Object.values(profile.accessLevels || {}).some(
-      (l) => l.isActive,
-    );
-    if (!storeActive) return "none";
+    const storeActive = Object.values(profile.accessLevels || {}).some((l) => l.isActive);
 
-    // Mağaza aboneliği doğruladı; sunucuya yansımasını bekle
-    return (await syncPremiumFromBackend()) ? "restored" : "error";
+    // Sunucu her durumda Adapty ile eşitlenir — panelden verilen erişim de buradan gelir
+    const backendPremium = await syncPremiumFromBackend(storeActive ? 5 : 1, 2000, storeActive);
+    if (backendPremium) return { status: "restored" };
+    return { status: storeActive ? "pending" : "none" };
   } catch (error) {
     console.error("Restore error", error);
-    return "error";
+    // Mağaza hatası olsa bile sunucu Adapty'den premium görebilir
+    if (await syncPremiumFromBackend(1, 0, false)) return { status: "restored" };
+    return { status: "error", error };
   }
 };
 

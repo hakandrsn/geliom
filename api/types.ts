@@ -59,8 +59,10 @@ export interface GroupOption {
   id: string;
   text: string;
   emoji?: string | null;
-  /** Uygulamanın hazır seçeneği (metni değiştirilemez, silinebilir) */
+  /** Uygulamanın hazır seçeneği ve hiç düzenlenmedi */
   isDefault: boolean;
+  /** Yalnızca durum: bu duruma geçince üyelere bildirim gitsin mi (yoksa true) */
+  notifies?: boolean;
 }
 
 /** Ruh hali seçeneği — status kaydında `key` saklanır. */

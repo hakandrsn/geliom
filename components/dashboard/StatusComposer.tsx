@@ -1,7 +1,7 @@
 import type { DashboardMember } from "@/api/dashboard";
 import { useUpdateUserAvatar } from "@/api/users";
 import { AvatarSelector } from "@/components/shared";
-import { SegmentedControl } from "@/components/ui";
+import { DropdownTrigger } from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useAppStore } from "@/store/useAppStore";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -23,7 +23,7 @@ interface StatusComposerProps {
 
 /**
  * Ana ekranın aracı: kompakt kart. Üstte "şu an neredeyim" özeti, altında
- * Durum / Ruh hali sekmeleri. Seçenekler kartın altında yüzen panelde açılır
+ * birbirinden ayrı Durum / Ruh hali açılır butonları. Seçenekler kartın altında yüzen panelde açılır
  * (PickerDropdown), içerik aşağı itilmez.
  */
 export default function StatusComposer({
@@ -86,24 +86,20 @@ export default function StatusComposer({
         onPress={() => toggle(member.statusText ? "mood" : "status")}
       />
 
-      <SegmentedControl<PickerTab>
-        value={activeTab}
-        onChange={toggle}
-        items={[
-          {
-            key: "status",
-            label: "Durum",
-            hint: member.statusText ?? "Seçilmedi",
-            dot: !!member.statusText,
-          },
-          {
-            key: "mood",
-            label: "Ruh hali",
-            hint: member.moodText ?? "Seçilmedi",
-            dot: !!member.moodText,
-          },
-        ]}
-      />
+      <View style={styles.triggers}>
+        <DropdownTrigger
+          label="Durum"
+          value={member.statusText}
+          open={activeTab === "status"}
+          onPress={() => toggle("status")}
+        />
+        <DropdownTrigger
+          label="Ruh hali"
+          value={member.moodText}
+          open={activeTab === "mood"}
+          onPress={() => toggle("mood")}
+        />
+      </View>
     </View>
   );
 }
@@ -111,6 +107,10 @@ export default function StatusComposer({
 const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
+  },
+  triggers: {
+    flexDirection: "row",
+    gap: spacing.md,
   },
   card: {
     padding: spacing.lg,

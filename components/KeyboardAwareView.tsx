@@ -1,67 +1,51 @@
+import { spacing } from '@/theme/tokens';
 import React from 'react';
-import {
-  GestureResponderEvent,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleProp,
-  StyleSheet,
-  ViewStyle,
-} from 'react-native';
+import { GestureResponderEvent, StyleProp, StyleSheet, ViewStyle } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 interface KeyboardAwareViewProps {
-  /** İçeriği gösterir */
   children: React.ReactNode;
-  
-  /** KeyboardAvoidingView için stil */
   style?: StyleProp<ViewStyle>;
-  
-  /** ScrollView'in içindeki contentContainer için stil */
   contentContainerStyle?: StyleProp<ViewStyle>;
-  
-  /**
-   * Ekranın üst kısmındaki (örneğin header) boşluk miktarı.
-   * Bu bileşen bir header'ın altındaysa, header'ın yüksekliğini buraya girin.
-   */
+  /** Odaktaki input ile klavye arasında bırakılacak boşluk */
+  bottomOffset?: number;
+  /** @deprecated keyboard-controller header'ı kendisi hesaplar; geriye dönük uyumluluk için */
   keyboardVerticalOffset?: number;
-  
-  /**
-   * Dokunma olayını iletmek için opsiyonel bir prop.
-   * Bazen 'ScrollView' yerine dışarıdaki bir view'a dokunulduğunu bilmek istersiniz.
-   */
   onTouchStart?: (event: GestureResponderEvent) => void;
 }
 
 /**
- * Klavye açıldığında içeriğin klavyenin altında kalmasını engelleyen,
- * hem iOS hem de Android için tutarlı çalışan sarmalayıcı bileşen.
- * * Temelde 'KeyboardAvoidingView' ve 'ScrollView'i doğru ayarlarla birleştirir.
- * * En önemli özelliği: ScrollView'in 'contentContainerStyle'ına otomatik olarak
- * 'flexGrow: 1' ekler. Bu sayede içerik kısayken bile ekranı doldurur
- * (örn: 'justifyContent: 'space-between'' ile butonu en alta itmek için).
+ * KLAVYE KURALI — uygulamadaki her metin girişi bu iki yoldan biriyle çizilir:
+ *
+ *  1. Sayfa (ekran): içerik bu bileşenle sarılır. keyboard-controller'ın
+ *     KeyboardAwareScrollView'ı odaktaki input'u her platformda klavyenin
+ *     üstüne kaydırır. Android edge-to-edge'de pencere küçülmediği için
+ *     RN KeyboardAvoidingView / adjustResize'a GÜVENİLMEZ.
+ *  2. Bottom sheet: input `BottomSheetTextInput` olur ve sheet'in ÜST kısmına
+ *     konur. Ortak BottomSheetProvider sheet'i klavyenin üstüne taşır
+ *     (bkz. contexts/BottomSheetContext.tsx).
+ *
+ * Düz ScrollView / KeyboardAvoidingView içinde TextInput kullanılmaz.
  */
-export default function KeyboardAwareView({ children, style, contentContainerStyle, keyboardVerticalOffset = 0, onTouchStart }: KeyboardAwareViewProps) {
+export default function KeyboardAwareView({
+  children,
+  style,
+  contentContainerStyle,
+  bottomOffset = spacing.xl,
+  onTouchStart,
+}: KeyboardAwareViewProps) {
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={[styles.container, style]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
-      enabled={Platform.OS === 'ios'}
+      contentContainerStyle={[styles.contentContainer, contentContainerStyle]}
+      bottomOffset={bottomOffset}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      onTouchStart={onTouchStart}
+      bounces={false}
     >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.contentContainer,
-          contentContainerStyle,
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        onTouchStart={onTouchStart}
-        bounces={false}
-      >
-        {children}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {children}
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -70,16 +54,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
-  scrollView: {
-    flex: 1,
-  },
   contentContainer: {
-    /**
-     * BU ÇOK ÖNEMLİ!
-     * 'flexGrow: 1', içeriğin ScrollView'dan kısa olması durumunda bile
-     * tüm alanı kaplamasını sağlar. Bu, 'justifyContent' gibi stillerin
-     * (örn: butonu en alta yapıştırmak) çalışmasına olanak tanır.
-     */
+    // İçerik kısayken de ekranı doldursun (butonu alta itmek için)
     flexGrow: 1,
   },
 });

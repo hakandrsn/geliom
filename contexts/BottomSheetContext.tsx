@@ -15,6 +15,7 @@ import React, {
   useState,
 } from "react";
 import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "./ThemeContext";
 
 export interface BottomSheetOptions {
@@ -62,6 +63,7 @@ const DEFAULT_OPTIONS: Required<Pick<BottomSheetOptions, "enablePanDownToClose" 
  */
 export const BottomSheetProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { colors, shadows } = useTheme();
+  const insets = useSafeAreaInsets();
   const modalRef = useRef<BottomSheetModal>(null);
 
   const [content, setContent] = useState<ReactNode>(null);
@@ -183,9 +185,16 @@ export const BottomSheetProvider: React.FC<{ children: ReactNode }> = ({ childre
             shadows.floating,
             options.backgroundStyle,
           ]}
+          // Klavye kuralı: sheet her platformda klavyenin üstüne taşınır.
+          // adjustResize KULLANILMAZ — gorhom o modda sheet'i hiç kaydırmaz ve
+          // pencerenin küçülmesine güvenir; Android edge-to-edge'de (Expo 57 +
+          // keyboard-controller) pencere küçülmediği için input klavye altında
+          // kalıyordu. Inputlar sheet'in üst kısmında durur; topInset sheet'in
+          // status bar'ın altına girmesini engeller.
           keyboardBehavior="interactive"
           keyboardBlurBehavior="restore"
-          android_keyboardInputMode="adjustResize"
+          android_keyboardInputMode="adjustPan"
+          topInset={insets.top}
         >
           {options.scrollable ? (
             <View style={styles.contentContainer}>{content}</View>

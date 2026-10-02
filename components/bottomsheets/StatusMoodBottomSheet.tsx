@@ -1,37 +1,65 @@
+import { BouncyButton } from '@/components/anim/AnimatedComponents';
 import EmojiPicker from '@/components/business/EmojiPicker';
-import { GeliomButton, Typography } from '@/components/shared';
+import { Typography } from '@/components/shared';
 import { Emoji } from '@/components/ui';
+import { useTheme } from '@/contexts/ThemeContext';
 import { radius, spacing } from '@/theme/tokens';
 import { fonts } from '@/theme/typography';
-import { useTheme } from '@/contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import React, { useState } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Switch, View } from 'react-native';
+
+/** Sunucudaki OPTION_TEXT_MAX ile aynı */
+const TEXT_MAX = 40;
+
+/** Sheet bu yükseklikte açılmalı — çağıranlar aynı değeri kullanır. */
+export const STATUS_MOOD_SHEET_SNAP = '65%';
+
+export interface StatusMoodValue {
+  text: string;
+  emoji: string;
+  /** Yalnızca durum */
+  notifies: boolean;
+}
 
 interface StatusMoodBottomSheetProps {
   type: 'status' | 'mood';
-  onSave: (text: string, emoji: string, notifies?: boolean) => Promise<void>;
+  /** Verilirse düzenleme modu */
+  initial?: Partial<StatusMoodValue>;
+  onSave: (value: StatusMoodValue) => void | Promise<void>;
   onCancel: () => void;
 }
 
-/** Her açılışta yeni `key` ile render edilmeli — state açılışlar arasında taşınmasın. */
+/**
+ * Durum / ruh hali ekleme ve düzenleme sheet'i.
+ * Düzen (klavye kuralı): başlıkta İptal · başlık · Kaydet, hemen altında
+ * metin girişi — klavye açılınca sheet yukarı taşınır ve girdi her zaman
+ * görünür kalır; emoji ızgarası kalan alanı doldurur.
+ * Her açılışta yeni `key` ile render edilmeli.
+ */
 export default function StatusMoodBottomSheet({
   type,
+  initial,
   onSave,
   onCancel,
 }: StatusMoodBottomSheetProps) {
   const { colors } = useTheme();
-  const [text, setText] = useState('');
-  const [emoji, setEmoji] = useState(type === 'mood' ? '😊' : '');
-  const [notifies, setNotifies] = useState(false);
+  const isEdit = !!initial;
+  const [text, setText] = useState(initial?.text ?? '');
+  const [emoji, setEmoji] = useState(initial?.emoji ?? (type === 'mood' ? '😊' : ''));
+  const [notifies, setNotifies] = useState(initial?.notifies ?? true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async () => {
-    if (!text.trim()) return;
+  const trimmed = text.trim();
+  const canSave = !!trimmed && !isSaving;
+  const noun = type === 'status' ? 'Durum' : 'Ruh Hali';
 
+  const handleSave = async () => {
+    if (!canSave) return;
     setIsSaving(true);
     try {
-      await onSave(text.trim(), emoji, type === 'status' ? notifies : undefined);
+      await onSave({ text: trimmed, emoji, notifies });
     } finally {
       setIsSaving(false);
     }
@@ -39,47 +67,61 @@ export default function StatusMoodBottomSheet({
 
   return (
     <View style={styles.container}>
-      <Typography variant="h5" color={colors.text} style={styles.title}>
-        {type === 'status' ? 'Özel Durum Ekle' : 'Özel Mood Ekle'}
-      </Typography>
-
-      {/* Seçili emoji + metin */}
-      <View style={styles.inputContainer}>
-        <Typography variant="body" color={colors.secondaryText} style={{ marginBottom: 8 }}>
-          {type === 'status' ? 'Durum Metni' : 'Mood Adı'}
+      <View style={styles.header}>
+        <BouncyButton onPress={onCancel} disabled={isSaving} style={styles.headerSide}>
+          <Typography variant="body" color={colors.secondaryText}>
+            İptal
+          </Typography>
+        </BouncyButton>
+        <Typography variant="h5" color={colors.text} numberOfLines={1} style={styles.title}>
+          {isEdit ? `${noun} Düzenle` : `Yeni ${noun}`}
         </Typography>
-        <View style={styles.inputRow}>
-          <View style={[styles.preview, { borderColor: colors.stroke, backgroundColor: colors.background }]}>
-            {emoji ? (
-              <Emoji size={26}>{emoji}</Emoji>
-            ) : (
-              <Typography variant="caption" color={colors.lightText}>
-                Yok
-              </Typography>
-            )}
-          </View>
-          <BottomSheetTextInput
-            style={[
-              styles.input,
-              {
-                color: colors.text,
-                borderColor: colors.stroke,
-                backgroundColor: colors.background,
-              },
-            ]}
-            placeholder={type === 'status' ? 'Örn: Toplantıdayım' : 'Örn: Heyecanlı'}
-            placeholderTextColor={colors.secondaryText}
-            value={text}
-            onChangeText={setText}
-            maxLength={50}
-          />
-        </View>
+        <BouncyButton
+          onPress={handleSave}
+          disabled={!canSave}
+          style={[styles.headerSide, styles.headerRight]}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Typography
+              variant="body"
+              fontWeight="semibold"
+              color={canSave ? colors.primary : colors.lightText}
+            >
+              Kaydet
+            </Typography>
+          )}
+        </BouncyButton>
       </View>
 
-      {/* Notifies Switch (sadece status için) */}
+      <View style={styles.inputRow}>
+        <View style={[styles.preview, { borderColor: colors.stroke, backgroundColor: colors.background }]}>
+          {emoji ? (
+            <Emoji size={26}>{emoji}</Emoji>
+          ) : (
+            <Ionicons name="happy-outline" size={22} color={colors.lightText} />
+          )}
+        </View>
+        <BottomSheetTextInput
+          style={[
+            styles.input,
+            { color: colors.text, borderColor: colors.stroke, backgroundColor: colors.background },
+          ]}
+          placeholder={type === 'status' ? 'Örn: Kahve molasında' : 'Örn: Heyecanlı'}
+          placeholderTextColor={colors.lightText}
+          value={text}
+          onChangeText={setText}
+          maxLength={TEXT_MAX}
+          returnKeyType="done"
+          onSubmitEditing={handleSave}
+        />
+      </View>
+
       {type === 'status' && (
-        <View style={[styles.switchContainer, { borderColor: colors.stroke }]}>
-          <Typography variant="body" color={colors.text} style={{ flex: 1 }}>
+        <View style={styles.switchRow}>
+          <Ionicons name="notifications-outline" size={18} color={colors.secondaryText} />
+          <Typography variant="body" color={colors.text} style={styles.flex}>
             Bildirim gönder
           </Typography>
           <Switch
@@ -91,47 +133,36 @@ export default function StatusMoodBottomSheet({
         </View>
       )}
 
-      {/* Emoji Seçici — ortak katalog */}
-      <Typography variant="body" color={colors.secondaryText}>
-        {type === 'status' ? 'Emoji seç (opsiyonel)' : 'Emoji seç'}
-      </Typography>
       <EmojiPicker value={emoji} onChange={setEmoji} />
-
-      {/* Butonlar */}
-      <View style={styles.actions}>
-        <GeliomButton
-          state="passive"
-          size="medium"
-          onPress={onCancel}
-          style={styles.button}
-          disabled={isSaving}
-        >
-          İptal
-        </GeliomButton>
-        <GeliomButton
-          state={isSaving ? 'loading' : text.trim() ? 'active' : 'passive'}
-          size="medium"
-          onPress={handleSave}
-          style={styles.button}
-          disabled={isSaving || !text.trim()}
-        >
-          Oluştur
-        </GeliomButton>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     gap: spacing.md,
+  },
+  flex: {
     flex: 1,
   },
-  title: {
-    textAlign: 'center',
-    marginBottom: 8,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 36,
   },
-  inputContainer: {},
+  headerSide: {
+    minWidth: 64,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  title: {
+    flex: 1,
+    textAlign: 'center',
+  },
   inputRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -147,27 +178,15 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 48,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     fontSize: 16,
     fontFamily: fonts.regular,
   },
-  switchContainer: {
+  switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  button: {
-    flex: 1,
+    gap: spacing.sm,
   },
 });
-

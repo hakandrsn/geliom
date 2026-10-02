@@ -1,7 +1,17 @@
 import { useGroupOptions, useGroupSession, useUpdateGroupOptions } from "@/api";
 import { StatusMoodBottomSheet } from "@/components/bottomsheets";
+import {
+  STATUS_MOOD_SHEET_SNAP,
+  type StatusMoodValue,
+} from "@/components/bottomsheets/StatusMoodBottomSheet";
 import { BaseLayout, Button, Typography } from "@/components/shared";
-import { DraggableList, Emoji, EmptyState, IconButton, SegmentedControl } from "@/components/ui";
+import {
+  DraggableList,
+  Emoji,
+  EmptyState,
+  IconButton,
+  SegmentedControl,
+} from "@/components/ui";
 import { useBottomSheet } from "@/contexts/BottomSheetContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePremiumGate } from "@/hooks/usePremiumGate";
@@ -11,7 +21,7 @@ import { getApiErrorMessage, getPremiumLimitCode } from "@/utils/api-error";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -23,18 +33,23 @@ interface DraftItem {
   text: string;
   emoji?: string | null;
   isDefault: boolean;
+  /** Yalnızca durum: bu duruma geçince bildirim gitsin mi */
+  notifies?: boolean;
   isNew?: boolean;
+  isEdited?: boolean;
 }
 
-/** Sunucudaki MAX_CUSTOM_OPTIONS ile aynı */
-const MAX_CUSTOM = 10;
+/** Sunucudaki MAX_OPTIONS ile aynı — liste başına TOPLAM seçenek hakkı */
+const MAX_OPTIONS = 10;
 const ROW_HEIGHT = 56;
 
 /**
  * Grubun durum ve ruh hali listesini düzenleme — yalnızca grup sahibi.
- * Aynı ekranda: + ile ekle, soldaki tutamaçla sürükleyerek sırala, sağdaki
- * kırmızı çarpıyla sil. Değişiklikler "Kaydet" ile tek seferde yazılır ve
- * gruptaki herkese canlı yansır. Düzenleme Premium gerektirir.
+ * Her liste toplam MAX_OPTIONS seçenek tutar; varsayılanlar dahil her
+ * seçenek düzenlenebilir. Aynı ekranda: + ile ekle, satıra dokunarak düzenle,
+ * soldaki tutamaçla sürükleyerek sırala, sağdaki çarpıyla sil. Değişiklikler
+ * "Kaydet" ile tek seferde yazılır ve gruptaki herkese canlı yansır.
+ * Düzenleme Premium gerektirir.
  */
 export default function GroupOptionsEditorScreen() {
   const { colors } = useTheme();
@@ -49,9 +64,13 @@ export default function GroupOptionsEditorScreen() {
   const updateOptions = useUpdateGroupOptions();
 
   useGroupSession(selectedGroup?.id);
-  const { statusOptions, moodOptions, isLoaded } = useGroupOptions(selectedGroup?.id);
+  const { statusOptions, moodOptions, isLoaded } = useGroupOptions(
+    selectedGroup?.id,
+  );
 
-  const [tab, setTab] = useState<Tab>(params.tab === "mood" ? "mood" : "status");
+  const [tab, setTab] = useState<Tab>(
+    params.tab === "mood" ? "mood" : "status",
+  );
   const [draft, setDraft] = useState<Record<Tab, DraftItem[]> | null>(null);
   const [dirty, setDirty] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -66,7 +85,7 @@ export default function GroupOptionsEditorScreen() {
   }
 
   const items = useMemo(() => draft?.[tab] ?? [], [draft, tab]);
-  const customCount = items.filter((i) => !i.isDefault).length;
+  const overLimit = items.length > MAX_OPTIONS;
 
   const setItems = (next: DraftItem[]) => {
     setDraft((d) => (d ? { ...d, [tab]: next } : d));
@@ -81,36 +100,75 @@ export default function GroupOptionsEditorScreen() {
     setItems(items.filter((i) => i.id !== id));
   };
 
+  const isDuplicate = (text: string, exceptId?: string) =>
+    items.some(
+      (i) =>
+        i.id !== exceptId &&
+        i.text.toLocaleLowerCase("tr-TR") === text.toLocaleLowerCase("tr-TR"),
+    );
+
+  const openSheet = (item?: DraftItem) =>
+    openBottomSheet(
+      <StatusMoodBottomSheet
+        key={`${tab}-${item?.id ?? "new"}-${Date.now()}`}
+        type={tab}
+        initial={
+          item
+            ? {
+                text: item.text,
+                emoji: item.emoji ?? "",
+                notifies: item.notifies !== false,
+              }
+            : undefined
+        }
+        onSave={({ text, emoji, notifies }: StatusMoodValue) => {
+          if (isDuplicate(text, item?.id)) {
+            Alert.alert("Zaten var", `"${text}" listede zaten var.`);
+            return;
+          }
+          const fields = {
+            text,
+            emoji: emoji || undefined,
+            ...(tab === "status" && { notifies }),
+          };
+          setItems(
+            item
+              ? items.map((i) =>
+                  i.id === item.id
+                    ? { ...i, ...fields, isEdited: !i.isNew }
+                    : i,
+                )
+              : [
+                  ...items,
+                  {
+                    id: `new-${Date.now()}`,
+                    isDefault: false,
+                    isNew: true,
+                    ...fields,
+                  },
+                ],
+          );
+          closeBottomSheet();
+        }}
+        onCancel={closeBottomSheet}
+      />,
+      // Emoji ızgarası kendi içinde kayar (BottomSheetFlatList)
+      { snapPoints: [STATUS_MOOD_SHEET_SNAP], scrollable: true },
+    );
+
   const handleAdd = () =>
     requirePremium(() => {
-      if (customCount >= MAX_CUSTOM) {
-        Alert.alert("Limit doldu", `Bir listeye en fazla ${MAX_CUSTOM} özel seçenek eklenebilir.`);
+      if (items.length >= MAX_OPTIONS) {
+        Alert.alert(
+          "Liste dolu",
+          `Bir listede en fazla ${MAX_OPTIONS} seçenek olabilir. Yer açmak için birini kaldır ya da var olanı düzenle.`,
+        );
         return;
       }
-      openBottomSheet(
-        <StatusMoodBottomSheet
-          key={`${tab}-${Date.now()}`}
-          type={tab}
-          onSave={async (text, emoji) => {
-            const exists = items.some(
-              (i) => i.text.toLocaleLowerCase("tr-TR") === text.toLocaleLowerCase("tr-TR"),
-            );
-            if (exists) {
-              Alert.alert("Zaten var", `"${text}" listede zaten var.`);
-              return;
-            }
-            setItems([
-              ...items,
-              { id: `new-${Date.now()}`, text, emoji: emoji || undefined, isDefault: false, isNew: true },
-            ]);
-            closeBottomSheet();
-          }}
-          onCancel={closeBottomSheet}
-        />,
-        // Emoji seçici kendi içinde kayar (BottomSheetScrollView)
-        { snapPoints: ["85%"], scrollable: true },
-      );
+      openSheet();
     });
+
+  const handleEdit = (item: DraftItem) => requirePremium(() => openSheet(item));
 
   const save = async () => {
     if (!selectedGroup || !draft) return;
@@ -119,12 +177,15 @@ export default function GroupOptionsEditorScreen() {
         id: i.isNew ? undefined : i.id,
         text: i.text,
         emoji: i.emoji ?? undefined,
+        notifies: i.notifies,
       }));
     try {
       await updateOptions.mutateAsync({
         groupId: selectedGroup.id,
         statusOptions: toInput(draft.status),
-        moodOptions: toInput(draft.mood),
+        moodOptions: toInput(draft.mood).map(
+          ({ notifies: _n, ...rest }) => rest,
+        ),
       });
       setDirty(false);
       router.back();
@@ -133,7 +194,10 @@ export default function GroupOptionsEditorScreen() {
         openPaywall();
         return;
       }
-      Alert.alert("Kaydedilemedi", getApiErrorMessage(error, "Liste kaydedilemedi."));
+      Alert.alert(
+        "Kaydedilemedi",
+        getApiErrorMessage(error, "Liste kaydedilemedi."),
+      );
     }
   };
 
@@ -148,14 +212,21 @@ export default function GroupOptionsEditorScreen() {
       </Typography>
     ),
     rightIcon: isOwner
-      ? { icon: <Ionicons name="add" size={26} color={colors.primary} />, onPress: handleAdd }
+      ? {
+          icon: <Ionicons name="add" size={26} color={colors.primary} />,
+          onPress: handleAdd,
+        }
       : undefined,
     backgroundColor: colors.background,
   };
 
   if (!isOwner) {
     return (
-      <BaseLayout headerShow header={header} backgroundColor={colors.background}>
+      <BaseLayout
+        headerShow
+        header={header}
+        backgroundColor={colors.background}
+      >
         <EmptyState
           fullScreen
           icon="lock-closed-outline"
@@ -170,7 +241,10 @@ export default function GroupOptionsEditorScreen() {
     <BaseLayout headerShow header={header} backgroundColor={colors.background}>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 96 },
+        ]}
         scrollEnabled={!dragging}
         showsVerticalScrollIndicator={false}
       >
@@ -178,30 +252,89 @@ export default function GroupOptionsEditorScreen() {
           value={tab}
           onChange={setTab}
           items={[
-            { key: "status", label: "Durum", hint: `${draft?.status.length ?? 0} seçenek` },
-            { key: "mood", label: "Ruh hali", hint: `${draft?.mood.length ?? 0} seçenek` },
+            {
+              key: "status",
+              label: "Durum",
+              hint: `${draft?.status.length ?? 0} seçenek`,
+            },
+            {
+              key: "mood",
+              label: "Ruh hali",
+              hint: `${draft?.mood.length ?? 0} seçenek`,
+            },
           ]}
         />
 
         <View style={styles.metaRow}>
-          <Typography variant="caption" color={colors.secondaryText} style={styles.flex}>
-            Tutamaçtan sürükleyerek sırala, çarpıyla kaldır. Gruptaki herkes bu sırayı görür.
+          <Typography
+            variant="caption"
+            color={colors.secondaryText}
+            style={styles.flex}
+          >
+            Dokunarak düzenle, tutamaçtan sürükleyerek sırala, çarpıyla kaldır.
+            Gruptaki herkes bu listeyi görür.
           </Typography>
-          <Typography variant="caption" fontWeight="semibold" color={colors.secondaryText}>
-            Özel {customCount}/{MAX_CUSTOM}
+          <Typography
+            variant="caption"
+            fontWeight="semibold"
+            color={overLimit ? colors.error : colors.secondaryText}
+          >
+            {items.length}/{MAX_OPTIONS}
           </Typography>
         </View>
 
-        {!isPremium && (
-          <View style={[styles.premiumNote, { backgroundColor: colors.passiveState }]}>
-            <Ionicons name="diamond-outline" size={16} color={colors.primary} />
-            <Typography variant="caption" color={colors.text} style={styles.flex}>
-              Listeyi düzenlemek Premium özelliğidir. Değişiklikleri kaydederken satın alma ekranı açılır.
+        {overLimit && (
+          <View
+            style={[
+              styles.premiumNote,
+              { backgroundColor: colors.passiveState },
+            ]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={16}
+              color={colors.error}
+            />
+            <Typography
+              variant="caption"
+              color={colors.text}
+              style={styles.flex}
+            >
+              Bu listede {items.length} seçenek var; en fazla {MAX_OPTIONS}{" "}
+              olabilir. Kaydetmeden önce {items.length - MAX_OPTIONS} tanesini
+              kaldır.
             </Typography>
           </View>
         )}
 
-        <View style={[styles.listCard, { backgroundColor: colors.sheetBackground, borderColor: colors.stroke }]}>
+        {!isPremium && (
+          <View
+            style={[
+              styles.premiumNote,
+              { backgroundColor: colors.passiveState },
+            ]}
+          >
+            <Ionicons name="diamond-outline" size={16} color={colors.primary} />
+            <Typography
+              variant="caption"
+              color={colors.text}
+              style={styles.flex}
+            >
+              Listeyi düzenlemek Premium özelliğidir. Eklemek ya da düzenlemek
+              istediğinde satın alma ekranı açılır.
+            </Typography>
+          </View>
+        )}
+
+        <View
+          style={[
+            styles.listCard,
+            {
+              backgroundColor: colors.sheetBackground,
+              borderColor: colors.stroke,
+            },
+          ]}
+        >
           <DraggableList
             data={items}
             keyExtractor={(i) => i.id}
@@ -221,26 +354,52 @@ export default function GroupOptionsEditorScreen() {
               >
                 {handle(
                   <View style={styles.handle}>
-                    <Ionicons name="reorder-three" size={24} color={colors.lightText} />
+                    <Ionicons
+                      name="reorder-three"
+                      size={24}
+                      color={colors.lightText}
+                    />
                   </View>,
                 )}
-                <View style={styles.emoji}>
-                  {item.emoji ? (
-                    <Emoji size={20}>{item.emoji}</Emoji>
-                  ) : (
-                    <Ionicons name="ellipse-outline" size={16} color={colors.lightText} />
-                  )}
-                </View>
-                <View style={styles.flex}>
-                  <Typography variant="body" fontWeight="medium" color={colors.text} numberOfLines={1}>
-                    {item.text}
-                  </Typography>
-                  {(item.isDefault || item.isNew) && (
-                    <Typography variant="caption" color={item.isNew ? colors.primary : colors.lightText}>
-                      {item.isNew ? "Yeni" : "Varsayılan"}
+                {/* Pressable doğrudan satırın esnek gövdesi: genişliği satırdan
+                    alır, metin sütunu kalan alanın tamamını kaplar */}
+                <Pressable
+                  onPress={() => handleEdit(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.text} düzenle`}
+                  style={({ pressed }) => [
+                    styles.rowBody,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.emoji}>
+                    {item.emoji ? (
+                      <Emoji size={20}>{item.emoji}</Emoji>
+                    ) : (
+                      <Ionicons
+                        name="ellipse-outline"
+                        size={16}
+                        color={colors.lightText}
+                      />
+                    )}
+                  </View>
+                  <View style={styles.flex}>
+                    <Typography
+                      variant="body"
+                      fontWeight="medium"
+                      color={colors.text}
+                      numberOfLines={1}
+                    >
+                      {item.text}
                     </Typography>
-                  )}
-                </View>
+                    <RowMeta item={item} tab={tab} />
+                  </View>
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color={colors.lightText}
+                  />
+                </Pressable>
                 <IconButton
                   icon="close"
                   variant="ghost"
@@ -268,7 +427,7 @@ export default function GroupOptionsEditorScreen() {
         <Button
           variant="gradient"
           title={dirty ? "Kaydet" : "Değişiklik yok"}
-          disabled={!dirty}
+          disabled={!dirty || overLimit}
           loading={updateOptions.isPending}
           onPress={() => requirePremium(() => void save())}
         />
@@ -313,6 +472,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  rowBody: {
+    flex: 1,
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingRight: spacing.xs,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
   emoji: {
     width: 28,
     alignItems: "center",
@@ -327,3 +497,23 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 });
+
+/** Satır alt bilgisi: Yeni / Düzenlendi / Varsayılan · bildirim kapalı */
+function RowMeta({ item, tab }: { item: DraftItem; tab: Tab }) {
+  const { colors } = useTheme();
+  const parts: string[] = [];
+  if (item.isNew) parts.push("Yeni");
+  else if (item.isEdited) parts.push("Düzenlendi");
+  else if (item.isDefault) parts.push("Varsayılan");
+  if (tab === "status" && item.notifies === false)
+    parts.push("Bildirim kapalı");
+  if (parts.length === 0) return null;
+  return (
+    <Typography
+      variant="caption"
+      color={item.isNew || item.isEdited ? colors.primary : colors.lightText}
+    >
+      {parts.join(" · ")}
+    </Typography>
+  );
+}

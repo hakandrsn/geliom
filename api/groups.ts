@@ -329,7 +329,7 @@ export const useUpdateGroupOptions = () =>
       moodOptions,
     }: {
       groupId: string;
-      statusOptions?: { id?: string; text: string; emoji?: string }[];
+      statusOptions?: { id?: string; text: string; emoji?: string; notifies?: boolean }[];
       moodOptions?: { id?: string; text: string; emoji?: string }[];
     }): Promise<UpdateGroupOptionsResponse> => {
       const response = await apiClient.put(`/groups/${groupId}/options`, {

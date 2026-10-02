@@ -10,4 +10,5 @@ export { default as NetworkToast } from './NetworkToast';
 export { default as OptionRow, type OptionRowProps } from './OptionRow';
 export { default as SectionHeader, type SectionHeaderProps } from './SectionHeader';
 export { default as SegmentedControl, type SegmentItem } from './SegmentedControl';
+export { default as DropdownTrigger } from './DropdownTrigger';
 export { default as Skeleton, type SkeletonProps } from './Skeleton';

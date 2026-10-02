@@ -47,7 +47,11 @@ export function formatRelativeTime(iso?: string | null, now = Date.now()): strin
  */
 export function humanizeKey(key?: string | null): string | undefined {
   if (!key) return undefined;
-  const spaced = key.replace(/[_-]+/g, " ").trim();
+  // Özel ruh hali key'leri "<slug>_<id son 4>" biçimindedir ("heyecan_7b31");
+  // id parçası ve metinden üretilemeyen "mood" slug'ı asla ekrana düşmez
+  const base = key.replace(/_[0-9a-f]{4}$/, "");
+  if (!base || base === "mood") return undefined;
+  const spaced = base.replace(/[_-]+/g, " ").trim();
   if (!spaced) return undefined;
   return spaced.charAt(0).toLocaleUpperCase("tr-TR") + spaced.slice(1);
 }

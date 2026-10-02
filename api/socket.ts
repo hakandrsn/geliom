@@ -2,6 +2,7 @@ import { appConfig } from "@/config/app.config";
 import { useAppStore } from "@/store/useAppStore";
 import NetInfo from "@react-native-community/netinfo";
 import { AppState, type NativeEventSubscription } from "react-native";
+import { checkSubscription } from "@/services/purchase";
 import { io, Socket } from "socket.io-client";
 import { groupKeys } from "./keys";
 import { queryClient } from "./queryClient";
@@ -171,6 +172,9 @@ export const initSocket = (getToken: () => Promise<string>) => {
   // Kendi premium durumun değiştiğinde (session gerekmez)
   socket.on("premium:update", ({ isPremium }: PremiumUpdatePayload) => {
     useAppStore.getState().setPremium(isPremium);
+    // Sahibi olunan grupların ownerIsPremium / duraklatma durumu da değişti
+    if (activeGroupId) emitSessionOpen(activeGroupId);
+    queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
   });
 
   // Uygulama yaşam döngüsü:
@@ -192,6 +196,8 @@ export const initSocket = (getToken: () => Promise<string>) => {
           emitSessionOpen(activeGroupId);
         }
         queryClient.invalidateQueries({ queryKey: groupKeys.lists() });
+        // Arka plandayken abonelik değişmiş olabilir (yenileme, iptal, panel)
+        void checkSubscription();
       }
     });
   }

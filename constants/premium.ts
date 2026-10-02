@@ -7,12 +7,14 @@ export const PLAN_LIMITS = {
   FREE: {
     MAX_MEMBERSHIPS: 1,
     MAX_GROUP_MEMBERS: 5,
-    MAX_CUSTOM_MOODS: 0,
+    /** Liste düzenleme (ekle / düzenle / sırala) yalnızca Premium */
+    MAX_LIST_OPTIONS: 0,
   },
   PREMIUM: {
     MAX_MEMBERSHIPS: 7,
     MAX_GROUP_MEMBERS: 20,
-    MAX_CUSTOM_MOODS: 10,
+    /** Durum ve ruh hali listelerinin her biri toplam bu kadar seçenek — API MAX_OPTIONS */
+    MAX_LIST_OPTIONS: 10,
   },
 } as const;
 
@@ -33,8 +35,8 @@ export const PREMIUM_BENEFITS = [
   {
     icon: "happy-outline",
     emoji: "🎨",
-    title: `${PLAN_LIMITS.PREMIUM.MAX_CUSTOM_MOODS} özel ruh hali`,
-    subtitle: "Grubuna özel ruh hali seçenekleri oluştur",
+    title: `Listede ${PLAN_LIMITS.PREMIUM.MAX_LIST_OPTIONS} seçenek, hepsi senin`,
+    subtitle: "Grubuna özel durum ve ruh hali ekle, hazır olanları bile düzenle",
   },
   {
     icon: "swap-vertical-outline",
